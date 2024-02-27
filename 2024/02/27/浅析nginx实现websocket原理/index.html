@@ -1,21 +1,23 @@
 
+
 <!DOCTYPE html>
-<html lang="zh-CN">
-    
+<html lang="zh-CN" data-default-color-scheme=auto>
+
+
+
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="generator" content="ZJfans Blog">
-    <title> - ZJfans Blog</title>
-    <meta name="author" content="张三疯">
-    
-        <meta name="keywords" content="nginx,openresty,网关,HTTP/HTTPS,Websocket,">
-    
-    
-    
-    <script type="application/ld+json">{"@context":"http://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"张三疯","sameAs":["https://github.com/","http://stackoverflow.com/users","https://twitter.com/","https://facebook.com/","https://plus.google.com/","https://www.linkedin.com/profile/","mailto"]},"articleBody":"浅析nginx实现websocket原理前言：​\t\t传统的HTTP协议是一种无状态的请求&#x2F;响应协议，每次请求都需要重新建立连接。在一些特殊的业务场景下，服务端需要主动发送数据到客户端，例如行情推送、监控告警推送等。然而，HTTP协议不支持双向通信，因此需要将HTTP协议“升级”为WebSocket协议。WebSocket协议可以在建立连接后保持连接状态，双方可以通过一个持久的连接通道进行实时通信。WebSocket连接在建立时通过HTTP协议进行握手，之后的数据传输就可以使用WebSocket协议进行。\nNginx作为中间层的Web服务器，支持使用多种协议与上下游进行通信，包括TCP、HTTP、WebSocket等协议，如下图所示。\n\n1、nginx升级http为websocket的过程​\t\tHTTP&#x2F;1.1提供了一种特殊的机制，这一机制允许将一个已建立的连接升级成新的、不相容的协议。具体过程如下：\n\n1.客户端发起 WebSocket 连接请求到 Nginx，Nginx 作为反向代理服务器，将请求转发给上游 WebSocket 服务器。客户端发送的请求类似于下图所示：\n1234567GET ws://10.40.2.63:58088/wss/socket.io HTTP/1.1Host: 10.40.2.63:58088Connection: UpgradeUpgrade: websocketSec-WebSocket-Version: 13Sec-WebSocket-Key: 3baOagQNXoc1Cd1dJ4pBiA==Sec-WebSocket-Extensions:permessage-deflate;client_max_window_bits\n\n2.上游 WebSocket 服务器响应连接请求并完成握手协议，如果允许升级，将响应状态码101返回给 Nginx。服务端的响应类似于下图所示：\n1234567HTTP/1.1 101 Switching ProtocolsServer:hsiarDate:Wed,22 Feb 2023 06:23:49 GMTconnection:upgradeupgrade:websocketSec-WebSocket-accept:VVN2Pd9jkG7b8ur3otAk+Ah3bsg=Sec-WebSocket-Extensions:permessage-deflate\n\n3.Nginx 收到上游 WebSocket 服务器的响应结果后，将其转发给客户端，建立起客户端与上游 WebSocket 服务器的连接。\n4.客户端和上游 WebSocket 服务器之间开始进行实时数据传输。\n5.当客户端或上游 WebSocket 服务器需要发送数据时，数据将通过 WebSocket 协议封装成帧（frame）并发送到对方。\n6.数据通过 Nginx 进行转发时，Nginx 会根据实际情况选择合适的负载均衡算法，将数据传输到适当的上游 WebSocket 服务器。\n7.上游 WebSocket 服务器收到数据后，解析数据帧并处理数据，然后将响应结果封装成帧并发送回客户端。\n8.客户端收到上游 WebSocket 服务器的响应结果后，解析数据帧并处理数据，完成一次数据交互。\n2、nginx核心代码实现2.1、连接升级​\t\t当服务端同意升级为 WebSocket 时，会将响应状态码设置为 “101 Switching Protocols”，表示服务器正在切换协议。如下代码所示，在处理 HTTP 协议时，首先会检查连接是否已升级到另一个协议。其中，NGX_HTTP_SWITCHING_PROTOCOLS 是一个宏，值为 101。然后，会检查客户端的请求是否携带 Upgrade 头部。如果请求携带了该头部，就会将 u-&gt;upgrade 的值设为 1，表示该连接是一个升级连接。\n12345678//检查响应的状态码if (u-&gt;headers_in.status_n == NGX_HTTP_SWITCHING_PROTOCOLS) &#123;                u-&gt;keepalive = 0;                //客户端请求头是否含有upgrade头部                if (r-&gt;headers_in.upgrade) &#123;                    u-&gt;upgrade = 1;                &#125;            &#125;\n\n2.2、上下游数据处理​\t\tnginx基于事件驱动模型，当有事件触发时，就会调用对应的回调函数。\n下游：\n12345if (ev-&gt;write) &#123;    r-&gt;write_event_handler(r);&#125; else &#123;    r-&gt;read_event_handler(r);&#125;\n\n上游：\n12345if (ev-&gt;write) &#123;        u-&gt;write_event_handler(r, u);    &#125; else &#123;        u-&gt;read_event_handler(r, u);    &#125;\n\n​\t\t每个连接都根据类型(http、websocket等)的不同，设置不同的回调，下面的代码展示了当连接的u-&gt;upgrade &#x3D; 1，即为websocket协议时，设置的上下游读写回调函数。当此连接再有读写事件时，就会回调下面设置的函数\n12345678//接收来自upstream的数据 u-&gt;read_event_handler = ngx_http_upstream_upgraded_read_upstream;//向upstream发送数据u-&gt;write_event_handler = ngx_http_upstream_upgraded_write_upstream;//接收来自客户端的数据r-&gt;read_event_handler = ngx_http_upstream_upgraded_read_downstream;//向客户端发送数据r-&gt;write_event_handler = ngx_http_upstream_upgraded_write_downstream;\n\n​\t\t实际上，这四个回调函数都调用了同一个处理函数。但是，它们分别传入了不同的参数，因此函数的处理方式也不同，对应四种不同的类型。\n12345678910111213141516171819202122static voidngx_http_upstream_upgraded_read_upstream(ngx_http_request_t *r,    ngx_http_upstream_t *u)&#123;    ngx_http_upstream_process_upgraded(r, 1, 0);&#125;static voidngx_http_upstream_upgraded_write_upstream(ngx_http_request_t *r,    ngx_http_upstream_t *u)&#123;    ngx_http_upstream_process_upgraded(r, 0, 1);&#125;static voidngx_http_upstream_upgraded_read_downstream(ngx_http_request_t *r)&#123;    ngx_http_upstream_process_upgraded(r, 0, 0);&#125;static voidngx_http_upstream_upgraded_write_downstream(ngx_http_request_t *r)&#123;    ngx_http_upstream_process_upgraded(r, 1, 1);&#125;\n\n​\t\t此处的设计非常巧妙（部分代码），使用了不同参数复用了同一个函数。下面的核心代码展示了 Nginx 如何处理事件。\n当数据来自于服务端时，from_upstream 为真，do_write 表示需要发送数据。根据下面的代码，可以看出 src 表示服务端的连接，dst 表示客户端的连接。当 do_write 为 1 且 dst 准备好写入操作（并且需要发送的数据长度不为 0）时，dst 就会发送数据；当 src 准备好读取操作时，src 就会读取数据。\n比较有意思的是，当数据来自于客户端时，只需要将 dst 和 src 交换即可。\n12345678910111213141516171819202122232425262728293031323334353637383940static voidngx_http_upstream_process_upgraded(ngx_http_request_t *r,    ngx_uint_t from_upstream, ngx_uint_t do_write)&#123;    //客户端连接    downstream = r-&gt;connection;    //服务端连接    upstream = r-&gt;upstream-&gt;peer.connection;        // 如果数据来自于后端服务器    if (from_upstream) &#123;        src = upstream;        dst = downstream;        b = &amp;u-&gt;buffer;    // 如果数据来自于客户端    &#125; else &#123;        src = downstream;        dst = upstream;        b = &amp;u-&gt;from_client;    &#125;    for ( ;; ) &#123;        // 判断是否需要发送数据        if (do_write) &#123;            // 获取当前要发送的数据长度            size = b-&gt;last - b-&gt;pos;            // 如果要发送的数据长度不为 0，且连接已经准备好进行写操作            if (size &amp;&amp; dst-&gt;write-&gt;ready) &#123;                // 发送数据                n = dst-&gt;send(dst, b-&gt;pos, size);            &#125;        &#125;        size = b-&gt;end - b-&gt;last;        // 如果要接收的数据长度不为 0，且连接已经准备好读操作        if (size &amp;&amp; src-&gt;read-&gt;ready) &#123;            // 接收数据            n = src-&gt;recv(src, b-&gt;last, size);        &#125;        break;    &#125;&#125;\n\n3、使用实例本节将通过 HSIAR（基于 Nginx 开发）和 WebSocket 客户端&#x2F;服务端的实例，展示如何在实际业务中使用 WebSocket 进行消息推送。\n首先，需要对 HSIAR 进行路由配置，如下图所示。即，所有以 uri 前缀为 wss 的 HTTP 客户端请求都会被升级为 WebSocket。在代理过程中，HSIAR 还需要将 Connection 和 Upgrade 头部携带给后端服务，告知后端需要将 Nginx 与后端的连接升级为 WebSocket。\n\n\n2、建立连接的过程如下图所示，可以看到与2.1节所述过程一致\n\n\n3、连接建立成功后，点击订阅，即接收消息的推送\n\n4、后端推送消息\n可以看到消息由后端成功推送到了客户端\n\n4、总结在实际的生产中，消息推送是一种常用的技术。然而，如果在 WebSocket 客户端和服务端之间的链路中加入代理，尤其是多级代理后，情况就会变得更加复杂。为了确保链路上的每一条连接都是 WebSocket 长连接，需要避免中间出现 HTTP 短链接。否则，推送就可能因连接提前断开而失败。了解该技术的原理和细节，可以帮助快速排查问题并进行修复。同时，研究 Nginx 对 WebSocket 的支持技术实现，不仅能够提高对该技术的理解，也能够为今后开发相关系统提供有益的借鉴。\n","dateCreated":"2024-02-27T15:33:29+08:00","dateModified":"2024-02-27T15:32:47+08:00","datePublished":"2024-02-27T15:33:29+08:00","description":"","headline":"","image":[],"mainEntityOfPage":{"@type":"WebPage","@id":"https://zjfans.github.io/2024/02/27/%E6%B5%85%E6%9E%90nginx%E5%AE%9E%E7%8E%B0websocket%E5%8E%9F%E7%90%86/"},"publisher":{"@type":"Organization","name":"张三疯","sameAs":["https://github.com/","http://stackoverflow.com/users","https://twitter.com/","https://facebook.com/","https://plus.google.com/","https://www.linkedin.com/profile/","mailto"]},"url":"https://zjfans.github.io/2024/02/27/%E6%B5%85%E6%9E%90nginx%E5%AE%9E%E7%8E%B0websocket%E5%8E%9F%E7%90%86/"}</script>
+  <meta charset="UTF-8">
+  <link rel="apple-touch-icon" sizes="76x76" href="/img/fluid.png">
+  <link rel="icon" href="/img/fluid.png">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, shrink-to-fit=no">
+  <meta http-equiv="x-ua-compatible" content="ie=edge">
+  
+  <meta name="theme-color" content="#2f4154">
+  <meta name="author" content="张三疯">
+  <meta name="keywords" content="nginx,openresty,网关,HTTP/HTTPS,Websocket">
+  
     <meta name="description" content="浅析nginx实现websocket原理前言：​		传统的HTTP协议是一种无状态的请求&#x2F;响应协议，每次请求都需要重新建立连接。在一些特殊的业务场景下，服务端需要主动发送数据到客户端，例如行情推送、监控告警推送等。然而，HTTP协议不支持双向通信，因此需要将HTTP协议“升级”为WebSocket协议。WebSocket协议可以在建立连接后保持连接状态，双方可以通过一个持久的连接通道进行">
-<meta property="og:type" content="blog">
+<meta property="og:type" content="article">
 <meta property="og:title" content="ZJfans Blog">
 <meta property="og:url" content="https://zjfans.github.io/2024/02/27/%E6%B5%85%E6%9E%90nginx%E5%AE%9E%E7%8E%B0websocket%E5%8E%9F%E7%90%86/index.html">
 <meta property="og:site_name" content="ZJfans Blog">
@@ -31,341 +33,263 @@
 <meta property="article:modified_time" content="2024-02-27T07:32:47.876Z">
 <meta property="article:author" content="张三疯">
 <meta property="article:tag" content="nginx,openresty,网关,HTTP&#x2F;HTTPS,Websocket">
-<meta name="twitter:card" content="summary">
+<meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:image" content="c:\Users\zhangjie42067\Desktop\%E6%96%87%E7%AB%A0\nginx%E5%A6%82%E4%BD%95%E6%94%AF%E6%8C%81websocket\%E6%B5%85%E6%9E%90nginx%E5%AE%9E%E7%8E%B0websocket%E5%8E%9F%E7%90%86\%E5%9B%BE1.png">
+  
+  
+  
+  <title>ZJfans Blog</title>
+
+  <link  rel="stylesheet" href="https://lib.baomitu.com/twitter-bootstrap/4.6.1/css/bootstrap.min.css" />
+
+
+
+  <link  rel="stylesheet" href="https://lib.baomitu.com/github-markdown-css/4.0.0/github-markdown.min.css" />
+
+  <link  rel="stylesheet" href="https://lib.baomitu.com/hint.css/2.7.0/hint.min.css" />
+
+  <link  rel="stylesheet" href="https://lib.baomitu.com/fancybox/3.5.7/jquery.fancybox.min.css" />
+
+
+
+<!-- 主题依赖的图标库，不要自行修改 -->
+<!-- Do not modify the link that theme dependent icons -->
+
+<link rel="stylesheet" href="//at.alicdn.com/t/font_1749284_hj8rtnfg7um.css">
+
+
+
+<link rel="stylesheet" href="//at.alicdn.com/t/font_1736178_lbnruvf0jn.css">
+
+
+<link  rel="stylesheet" href="/css/main.css" />
+
+
+  <link id="highlight-css" rel="stylesheet" href="/css/highlight.css" />
+  
+    <link id="highlight-css-dark" rel="stylesheet" href="/css/highlight-dark.css" />
+  
+
+
+
+
+  <script id="fluid-configs">
+    var Fluid = window.Fluid || {};
+    Fluid.ctx = Object.assign({}, Fluid.ctx)
+    var CONFIG = {"hostname":"zjfans.github.io","root":"/","version":"1.9.7","typing":{"enable":true,"typeSpeed":70,"cursorChar":"_","loop":false,"scope":[]},"anchorjs":{"enable":true,"element":"h1,h2,h3,h4,h5,h6","placement":"left","visible":"hover","icon":""},"progressbar":{"enable":true,"height_px":3,"color":"#29d","options":{"showSpinner":false,"trickleSpeed":100}},"code_language":{"enable":true,"default":"TEXT"},"copy_btn":true,"image_caption":{"enable":true},"image_zoom":{"enable":true,"img_url_replace":["",""]},"toc":{"enable":true,"placement":"right","headingSelector":"h1,h2,h3,h4,h5,h6","collapseDepth":0},"lazyload":{"enable":true,"loading_img":"/img/loading.gif","onlypost":false,"offset_factor":2},"web_analytics":{"enable":false,"follow_dnt":true,"baidu":null,"google":{"measurement_id":null},"tencent":{"sid":null,"cid":null},"woyaola":null,"cnzz":null,"leancloud":{"app_id":null,"app_key":null,"server_url":null,"path":"window.location.pathname","ignore_local":false}},"search_path":"/local-search.xml","include_content_in_search":true};
+
+    if (CONFIG.web_analytics.follow_dnt) {
+      var dntVal = navigator.doNotTrack || window.doNotTrack || navigator.msDoNotTrack;
+      Fluid.ctx.dnt = dntVal && (dntVal.startsWith('1') || dntVal.startsWith('yes') || dntVal.startsWith('on'));
+    }
+  </script>
+  <script  src="/js/utils.js" ></script>
+  <script  src="/js/color-schema.js" ></script>
+  
+
+
+  
+<meta name="generator" content="Hexo 6.3.0"></head>
+
+
+<body>
+  
+
+  <header>
     
-    
+
+<div class="header-inner" style="height: 70vh;">
+  <nav id="navbar" class="navbar fixed-top  navbar-expand-lg navbar-dark scrolling-navbar">
+  <div class="container">
+    <a class="navbar-brand" href="/">
+      <strong>ZJfans Blog</strong>
+    </a>
+
+    <button id="navbar-toggler-btn" class="navbar-toggler" type="button" data-toggle="collapse"
+            data-target="#navbarSupportedContent"
+            aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+      <div class="animated-icon"><span></span><span></span><span></span></div>
+    </button>
+
+    <!-- Collapsible content -->
+    <div class="collapse navbar-collapse" id="navbarSupportedContent">
+      <ul class="navbar-nav ml-auto text-center">
         
-    
-    
-    
-    
-    
-    <!--STYLES-->
-    
-<link rel="stylesheet" href="/assets/css/all.css">
-
-    
-<link rel="stylesheet" href="/assets/css/jquery.fancybox.css">
-
-    
-<link rel="stylesheet" href="/assets/css/thumbs.css">
-
-    
-<link rel="stylesheet" href="/assets/css/tranquilpeak.css">
-
-    <!--STYLES END-->
-    
-
-    
-
-    
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/" target="_self">
+                <i class="iconfont icon-home-fill"></i>
+                <span>首页</span>
+              </a>
+            </li>
+          
         
-    
-</head>
-
-    <body>
-        <div id="blog">
-            <!-- Define author's picture -->
-
-
-    
-
-<header id="header" data-behavior="4">
-    <i id="btn-open-sidebar" class="fa fa-lg fa-bars"></i>
-    <div class="header-title">
-        <a
-            class="header-title-link"
-            href="/"
-            aria-label=""
-        >
-            ZJfans Blog
-        </a>
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/archives/" target="_self">
+                <i class="iconfont icon-archive-fill"></i>
+                <span>归档</span>
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/categories/" target="_self">
+                <i class="iconfont icon-category-fill"></i>
+                <span>分类</span>
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/tags/" target="_self">
+                <i class="iconfont icon-tags-fill"></i>
+                <span>标签</span>
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/about/" target="_self">
+                <i class="iconfont icon-user-fill"></i>
+                <span>关于</span>
+              </a>
+            </li>
+          
+        
+        
+          <li class="nav-item" id="search-btn">
+            <a class="nav-link" target="_self" href="javascript:;" data-toggle="modal" data-target="#modalSearch" aria-label="Search">
+              <i class="iconfont icon-search"></i>
+            </a>
+          </li>
+          
+        
+        
+          <li class="nav-item" id="color-toggle-btn">
+            <a class="nav-link" target="_self" href="javascript:;" aria-label="Color Toggle">
+              <i class="iconfont icon-dark" id="color-toggle-icon"></i>
+            </a>
+          </li>
+        
+      </ul>
     </div>
-    
-        
-            <a
-                class="header-right-picture "
-                href="#about"
-                aria-label="Open the link: /#about"
-            >
-        
-        
-        </a>
-    
-</header>
-
-            <!-- Define author's picture -->
-
-
-<nav id="sidebar" data-behavior="4">
-    <div class="sidebar-container">
-        
-        
-            <ul class="sidebar-buttons">
-            
-                <li class="sidebar-button">
-                    
-                        <a
-                            class="sidebar-button-link "
-                            href="/"
-                            
-                            rel="noopener"
-                            title="Home"
-                        >
-                        <i class="sidebar-button-icon fa fa-home" aria-hidden="true"></i>
-                        <span class="sidebar-button-desc">Home</span>
-                    </a>
-            </li>
-            
-                <li class="sidebar-button">
-                    
-                        <a
-                            class="sidebar-button-link "
-                            href="/all-categories"
-                            
-                            rel="noopener"
-                            title="Categories"
-                        >
-                        <i class="sidebar-button-icon fa fa-bookmark" aria-hidden="true"></i>
-                        <span class="sidebar-button-desc">Categories</span>
-                    </a>
-            </li>
-            
-                <li class="sidebar-button">
-                    
-                        <a
-                            class="sidebar-button-link "
-                            href="/all-tags"
-                            
-                            rel="noopener"
-                            title="Tags"
-                        >
-                        <i class="sidebar-button-icon fa fa-tags" aria-hidden="true"></i>
-                        <span class="sidebar-button-desc">Tags</span>
-                    </a>
-            </li>
-            
-                <li class="sidebar-button">
-                    
-                        <a
-                            class="sidebar-button-link "
-                            href="/all-archives"
-                            
-                            rel="noopener"
-                            title="Archives"
-                        >
-                        <i class="sidebar-button-icon fa fa-archive" aria-hidden="true"></i>
-                        <span class="sidebar-button-desc">Archives</span>
-                    </a>
-            </li>
-            
-                <li class="sidebar-button">
-                    
-                        <a
-                            class="sidebar-button-link open-algolia-search"
-                            href="#search"
-                            
-                            rel="noopener"
-                            title="Search"
-                        >
-                        <i class="sidebar-button-icon fa fa-search" aria-hidden="true"></i>
-                        <span class="sidebar-button-desc">Search</span>
-                    </a>
-            </li>
-            
-                <li class="sidebar-button">
-                    
-                        <a
-                            class="sidebar-button-link "
-                            href="#about"
-                            
-                            rel="noopener"
-                            title="About"
-                        >
-                        <i class="sidebar-button-icon fa fa-question" aria-hidden="true"></i>
-                        <span class="sidebar-button-desc">About</span>
-                    </a>
-            </li>
-            
-        </ul>
-        
-            <ul class="sidebar-buttons">
-            
-                <li class="sidebar-button">
-                    
-                        <a
-                            class="sidebar-button-link "
-                            href="https://github.com/"
-                            
-                                target="_blank"
-                            
-                            rel="noopener"
-                            title="GitHub"
-                        >
-                        <i class="sidebar-button-icon fab fa-github" aria-hidden="true"></i>
-                        <span class="sidebar-button-desc">GitHub</span>
-                    </a>
-            </li>
-            
-                <li class="sidebar-button">
-                    
-                        <a
-                            class="sidebar-button-link "
-                            href="http://stackoverflow.com/users"
-                            
-                                target="_blank"
-                            
-                            rel="noopener"
-                            title="Stack Overflow"
-                        >
-                        <i class="sidebar-button-icon fab fa-stack-overflow" aria-hidden="true"></i>
-                        <span class="sidebar-button-desc">Stack Overflow</span>
-                    </a>
-            </li>
-            
-                <li class="sidebar-button">
-                    
-                        <a
-                            class="sidebar-button-link "
-                            href="https://twitter.com/"
-                            
-                                target="_blank"
-                            
-                            rel="noopener"
-                            title="Twitter"
-                        >
-                        <i class="sidebar-button-icon fab fa-twitter" aria-hidden="true"></i>
-                        <span class="sidebar-button-desc">Twitter</span>
-                    </a>
-            </li>
-            
-                <li class="sidebar-button">
-                    
-                        <a
-                            class="sidebar-button-link "
-                            href="https://facebook.com/"
-                            
-                                target="_blank"
-                            
-                            rel="noopener"
-                            title="Facebook"
-                        >
-                        <i class="sidebar-button-icon fab fa-facebook" aria-hidden="true"></i>
-                        <span class="sidebar-button-desc">Facebook</span>
-                    </a>
-            </li>
-            
-                <li class="sidebar-button">
-                    
-                        <a
-                            class="sidebar-button-link "
-                            href="https://plus.google.com/"
-                            
-                                target="_blank"
-                            
-                            rel="noopener"
-                            title="Google +"
-                        >
-                        <i class="sidebar-button-icon fab fa-google-plus" aria-hidden="true"></i>
-                        <span class="sidebar-button-desc">Google +</span>
-                    </a>
-            </li>
-            
-                <li class="sidebar-button">
-                    
-                        <a
-                            class="sidebar-button-link "
-                            href="https://www.linkedin.com/profile/"
-                            
-                                target="_blank"
-                            
-                            rel="noopener"
-                            title="LinkedIn"
-                        >
-                        <i class="sidebar-button-icon fab fa-linkedin" aria-hidden="true"></i>
-                        <span class="sidebar-button-desc">LinkedIn</span>
-                    </a>
-            </li>
-            
-                <li class="sidebar-button">
-                    
-                        <a
-                            class="sidebar-button-link "
-                            href="/mailto"
-                            
-                            rel="noopener"
-                            title="Mail"
-                        >
-                        <i class="sidebar-button-icon fa fa-envelope" aria-hidden="true"></i>
-                        <span class="sidebar-button-desc">Mail</span>
-                    </a>
-            </li>
-            
-        </ul>
-        
-            <ul class="sidebar-buttons">
-            
-                <li class="sidebar-button">
-                    
-                        <a
-                            class="sidebar-button-link "
-                            href="/atom.xml"
-                            
-                            rel="noopener"
-                            title="RSS"
-                        >
-                        <i class="sidebar-button-icon fa fa-rss" aria-hidden="true"></i>
-                        <span class="sidebar-button-desc">RSS</span>
-                    </a>
-            </li>
-            
-        </ul>
-        
-    </div>
+  </div>
 </nav>
 
+  
+
+<div id="banner" class="banner" parallax=true
+     style="background: url('/img/default.png') no-repeat center center; background-size: cover;">
+  <div class="full-bg-img">
+    <div class="mask flex-center" style="background-color: rgba(0, 0, 0, 0.3)">
+      <div class="banner-text text-center fade-in-up">
+        <div class="h2">
+          
+            <span id="subtitle" data-typed-text=""></span>
+          
+        </div>
+
+        
+          
+  <div class="mt-3">
+    
+    
+      <span class="post-meta">
+        <i class="iconfont icon-date-fill" aria-hidden="true"></i>
+        <time datetime="2024-02-27 15:33" pubdate>
+          2024年2月27日 下午
+        </time>
+      </span>
+    
+  </div>
+
+  <div class="mt-1">
+    
+      <span class="post-meta mr-2">
+        <i class="iconfont icon-chart"></i>
+        
+          1.9k 字
+        
+      </span>
+    
+
+    
+      <span class="post-meta mr-2">
+        <i class="iconfont icon-clock-fill"></i>
+        
+        
+        
+          16 分钟
+        
+      </span>
+    
+
+    
+    
+  </div>
+
+
+        
+      </div>
+
+      
+    </div>
+  </div>
+</div>
+
+</div>
+
+  </header>
+
+  <main>
+    
+      
+
+<div class="container-fluid nopadding-x">
+  <div class="row nomargin-x">
+    <div class="side-col d-none d-lg-block col-lg-2">
+      
+
+    </div>
+
+    <div class="col-lg-8 nopadding-x-md">
+      <div class="container nopadding-x-md" id="board-ctn">
+        <div id="board">
+          <article class="post-content mx-auto">
+            <h1 id="seo-header"></h1>
             
-            <div id="main" data-behavior="4"
-                 class="
-                        hasCoverMetaIn
-                        ">
+            
+              <div class="markdown-body">
                 
-<article class="post">
-    
-    
-        <div class="post-header main-content-wrap text-left">
-    
-        <h1 class="post-title">
-            (no title)
-        </h1>
-    
-    
-        <div class="post-meta">
-    <time datetime="2024-02-27T15:33:29+08:00">
-	
-		    2月 27, 2024
-    	
-    </time>
-    
-</div>
-
-    
-</div>
-
-    
-    <div class="post-content markdown">
-        <div class="main-content-wrap">
-            <h1 id="浅析nginx实现websocket原理"><a href="#浅析nginx实现websocket原理" class="headerlink" title="浅析nginx实现websocket原理"></a>浅析nginx实现websocket原理</h1><h2 id="前言："><a href="#前言：" class="headerlink" title="前言："></a>前言：</h2><p>​		传统的HTTP协议是一种无状态的请求&#x2F;响应协议，每次请求都需要重新建立连接。在一些特殊的业务场景下，服务端需要主动发送数据到客户端，例如行情推送、监控告警推送等。然而，HTTP协议不支持双向通信，因此需要将HTTP协议“升级”为WebSocket协议。WebSocket协议可以在建立连接后保持连接状态，双方可以通过一个持久的连接通道进行实时通信。WebSocket连接在建立时通过HTTP协议进行握手，之后的数据传输就可以使用WebSocket协议进行。</p>
+                <h1 id="浅析nginx实现websocket原理"><a href="#浅析nginx实现websocket原理" class="headerlink" title="浅析nginx实现websocket原理"></a>浅析nginx实现websocket原理</h1><h2 id="前言："><a href="#前言：" class="headerlink" title="前言："></a>前言：</h2><p>​		传统的HTTP协议是一种无状态的请求&#x2F;响应协议，每次请求都需要重新建立连接。在一些特殊的业务场景下，服务端需要主动发送数据到客户端，例如行情推送、监控告警推送等。然而，HTTP协议不支持双向通信，因此需要将HTTP协议“升级”为WebSocket协议。WebSocket协议可以在建立连接后保持连接状态，双方可以通过一个持久的连接通道进行实时通信。WebSocket连接在建立时通过HTTP协议进行握手，之后的数据传输就可以使用WebSocket协议进行。</p>
 <p>Nginx作为中间层的Web服务器，支持使用多种协议与上下游进行通信，包括TCP、HTTP、WebSocket等协议，如下图所示。</p>
-<p><img src="C:\Users\zhangjie42067\Desktop\文章\nginx如何支持websocket\浅析nginx实现websocket原理\图1.png" alt="图1"></p>
+<p><img src="C:\Users\zhangjie42067\Desktop\文章\nginx如何支持websocket\浅析nginx实现websocket原理\图1.png" srcset="/img/loading.gif" lazyload alt="图1"></p>
 <h2 id="1、nginx升级http为websocket的过程"><a href="#1、nginx升级http为websocket的过程" class="headerlink" title="1、nginx升级http为websocket的过程"></a>1、nginx升级http为websocket的过程</h2><p>​		HTTP&#x2F;1.1提供了一种特殊的机制，这一机制允许将一个已建立的连接升级成新的、不相容的协议。具体过程如下：</p>
-<p><img src="C:\Users\zhangjie42067\Desktop\文章\nginx如何支持websocket\浅析nginx实现websocket原理\图2.png" alt="图2"></p>
+<p><img src="C:\Users\zhangjie42067\Desktop\文章\nginx如何支持websocket\浅析nginx实现websocket原理\图2.png" srcset="/img/loading.gif" lazyload alt="图2"></p>
 <p>1.客户端发起 WebSocket 连接请求到 Nginx，Nginx 作为反向代理服务器，将请求转发给上游 WebSocket 服务器。客户端发送的请求类似于下图所示：</p>
-<figure class="highlight css"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">GET ws://<span class="number">10.40</span>.<span class="number">2.63</span>:<span class="number">58088</span>/wss/socket.io HTTP/<span class="number">1.1</span></span><br><span class="line">Host: <span class="number">10.40</span>.<span class="number">2.63</span>:<span class="number">58088</span></span><br><span class="line">Connection: Upgrade</span><br><span class="line">Upgrade: websocket</span><br><span class="line">Sec-WebSocket-Version: <span class="number">13</span></span><br><span class="line">Sec-WebSocket-Key: <span class="number">3</span>baOagQNXoc1Cd1dJ4pBiA==</span><br><span class="line">Sec-WebSocket-Extensions:permessage-deflate;client_max_window_bits</span><br></pre></td></tr></table></figure>
+<figure class="highlight css"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><code class="hljs css">GET ws://<span class="hljs-number">10.40</span>.<span class="hljs-number">2.63</span>:<span class="hljs-number">58088</span>/wss/socket.io HTTP/<span class="hljs-number">1.1</span><br>Host: <span class="hljs-number">10.40</span>.<span class="hljs-number">2.63</span>:<span class="hljs-number">58088</span><br>Connection: Upgrade<br>Upgrade: websocket<br>Sec-WebSocket-Version: <span class="hljs-number">13</span><br>Sec-WebSocket-Key: <span class="hljs-number">3</span>baOagQNXoc1Cd1dJ4pBiA==<br>Sec-WebSocket-Extensions:permessage-deflate;client_max_window_bits<br></code></pre></td></tr></table></figure>
 
 <p>2.上游 WebSocket 服务器响应连接请求并完成握手协议，如果允许升级，将响应状态码101返回给 Nginx。服务端的响应类似于下图所示：</p>
-<figure class="highlight css"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">HTTP/<span class="number">1.1</span> <span class="number">101</span> Switching Protocols</span><br><span class="line">Server:hsiar</span><br><span class="line">Date:Wed,<span class="number">22</span> Feb <span class="number">2023</span> <span class="number">06</span>:<span class="number">23</span>:<span class="number">49</span> GMT</span><br><span class="line">connection:upgrade</span><br><span class="line">upgrade:websocket</span><br><span class="line">Sec-WebSocket-accept:VVN2Pd9jkG7b8ur3otAk+Ah3bsg=</span><br><span class="line">Sec-WebSocket-Extensions:permessage-deflate</span><br></pre></td></tr></table></figure>
+<figure class="highlight css"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><code class="hljs css">HTTP/<span class="hljs-number">1.1</span> <span class="hljs-number">101</span> Switching Protocols<br>Server:hsiar<br>Date:Wed,<span class="hljs-number">22</span> Feb <span class="hljs-number">2023</span> <span class="hljs-number">06</span>:<span class="hljs-number">23</span>:<span class="hljs-number">49</span> GMT<br>connection:upgrade<br>upgrade:websocket<br>Sec-WebSocket-accept:VVN2Pd9jkG7b8ur3otAk+Ah3bsg=<br>Sec-WebSocket-Extensions:permessage-deflate<br></code></pre></td></tr></table></figure>
 
 <p>3.Nginx 收到上游 WebSocket 服务器的响应结果后，将其转发给客户端，建立起客户端与上游 WebSocket 服务器的连接。</p>
 <p>4.客户端和上游 WebSocket 服务器之间开始进行实时数据传输。</p>
@@ -374,348 +298,366 @@
 <p>7.上游 WebSocket 服务器收到数据后，解析数据帧并处理数据，然后将响应结果封装成帧并发送回客户端。</p>
 <p>8.客户端收到上游 WebSocket 服务器的响应结果后，解析数据帧并处理数据，完成一次数据交互。</p>
 <h2 id="2、nginx核心代码实现"><a href="#2、nginx核心代码实现" class="headerlink" title="2、nginx核心代码实现"></a>2、nginx核心代码实现</h2><h3 id="2-1、连接升级"><a href="#2-1、连接升级" class="headerlink" title="2.1、连接升级"></a>2.1、连接升级</h3><p>​		当服务端同意升级为 WebSocket 时，会将响应状态码设置为 “101 Switching Protocols”，表示服务器正在切换协议。如下代码所示，在处理 HTTP 协议时，首先会检查连接是否已升级到另一个协议。其中，NGX_HTTP_SWITCHING_PROTOCOLS 是一个宏，值为 101。然后，会检查客户端的请求是否携带 Upgrade 头部。如果请求携带了该头部，就会将 u-&gt;upgrade 的值设为 1，表示该连接是一个升级连接。</p>
-<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//检查响应的状态码</span></span><br><span class="line"><span class="keyword">if</span> (u-&gt;headers_in.status_n == NGX_HTTP_SWITCHING_PROTOCOLS) &#123;</span><br><span class="line">                u-&gt;keepalive = <span class="number">0</span>;</span><br><span class="line">                <span class="comment">//客户端请求头是否含有upgrade头部</span></span><br><span class="line">                <span class="keyword">if</span> (r-&gt;headers_in.upgrade) &#123;</span><br><span class="line">                    u-&gt;upgrade = <span class="number">1</span>;</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;</span><br></pre></td></tr></table></figure>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-comment">//检查响应的状态码</span><br><span class="hljs-keyword">if</span> (u-&gt;headers_in.status_n == NGX_HTTP_SWITCHING_PROTOCOLS) &#123;<br>                u-&gt;keepalive = <span class="hljs-number">0</span>;<br>                <span class="hljs-comment">//客户端请求头是否含有upgrade头部</span><br>                <span class="hljs-keyword">if</span> (r-&gt;headers_in.upgrade) &#123;<br>                    u-&gt;upgrade = <span class="hljs-number">1</span>;<br>                &#125;<br>            &#125;<br></code></pre></td></tr></table></figure>
 
 <h3 id="2-2、上下游数据处理"><a href="#2-2、上下游数据处理" class="headerlink" title="2.2、上下游数据处理"></a>2.2、上下游数据处理</h3><p>​		nginx基于事件驱动模型，当有事件触发时，就会调用对应的回调函数。</p>
 <p>下游：</p>
-<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span> (ev-&gt;write) &#123;</span><br><span class="line">    r-&gt;write_event_handler(r);</span><br><span class="line">&#125; <span class="keyword">else</span> &#123;</span><br><span class="line">    r-&gt;read_event_handler(r);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-keyword">if</span> (ev-&gt;write) &#123;<br>    r-&gt;write_event_handler(r);<br>&#125; <span class="hljs-keyword">else</span> &#123;<br>    r-&gt;read_event_handler(r);<br>&#125;<br></code></pre></td></tr></table></figure>
 
 <p>上游：</p>
-<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span> (ev-&gt;write) &#123;</span><br><span class="line">        u-&gt;write_event_handler(r, u);</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        u-&gt;read_event_handler(r, u);</span><br><span class="line">    &#125;</span><br></pre></td></tr></table></figure>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-keyword">if</span> (ev-&gt;write) &#123;<br>        u-&gt;write_event_handler(r, u);<br>    &#125; <span class="hljs-keyword">else</span> &#123;<br>        u-&gt;read_event_handler(r, u);<br>    &#125;<br></code></pre></td></tr></table></figure>
 
 <p>​		每个连接都根据类型(http、websocket等)的不同，设置不同的回调，下面的代码展示了当连接的u-&gt;upgrade &#x3D; 1，即为websocket协议时，设置的上下游读写回调函数。当此连接再有读写事件时，就会回调下面设置的函数</p>
-<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//接收来自upstream的数据 </span></span><br><span class="line">u-&gt;read_event_handler = ngx_http_upstream_upgraded_read_upstream;</span><br><span class="line"><span class="comment">//向upstream发送数据</span></span><br><span class="line">u-&gt;write_event_handler = ngx_http_upstream_upgraded_write_upstream;</span><br><span class="line"><span class="comment">//接收来自客户端的数据</span></span><br><span class="line">r-&gt;read_event_handler = ngx_http_upstream_upgraded_read_downstream;</span><br><span class="line"><span class="comment">//向客户端发送数据</span></span><br><span class="line">r-&gt;write_event_handler = ngx_http_upstream_upgraded_write_downstream;</span><br></pre></td></tr></table></figure>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-comment">//接收来自upstream的数据 </span><br>u-&gt;read_event_handler = ngx_http_upstream_upgraded_read_upstream;<br><span class="hljs-comment">//向upstream发送数据</span><br>u-&gt;write_event_handler = ngx_http_upstream_upgraded_write_upstream;<br><span class="hljs-comment">//接收来自客户端的数据</span><br>r-&gt;read_event_handler = ngx_http_upstream_upgraded_read_downstream;<br><span class="hljs-comment">//向客户端发送数据</span><br>r-&gt;write_event_handler = ngx_http_upstream_upgraded_write_downstream;<br></code></pre></td></tr></table></figure>
 
 <p>​		实际上，这四个回调函数都调用了同一个处理函数。但是，它们分别传入了不同的参数，因此函数的处理方式也不同，对应四种不同的类型。</p>
-<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">static</span> <span class="type">void</span></span><br><span class="line"><span class="title function_">ngx_http_upstream_upgraded_read_upstream</span><span class="params">(<span class="type">ngx_http_request_t</span> *r,</span></span><br><span class="line"><span class="params">    <span class="type">ngx_http_upstream_t</span> *u)</span></span><br><span class="line">&#123;</span><br><span class="line">    ngx_http_upstream_process_upgraded(r, <span class="number">1</span>, <span class="number">0</span>);</span><br><span class="line">&#125;</span><br><span class="line"><span class="type">static</span> <span class="type">void</span></span><br><span class="line"><span class="title function_">ngx_http_upstream_upgraded_write_upstream</span><span class="params">(<span class="type">ngx_http_request_t</span> *r,</span></span><br><span class="line"><span class="params">    <span class="type">ngx_http_upstream_t</span> *u)</span></span><br><span class="line">&#123;</span><br><span class="line">    ngx_http_upstream_process_upgraded(r, <span class="number">0</span>, <span class="number">1</span>);</span><br><span class="line">&#125;</span><br><span class="line"><span class="type">static</span> <span class="type">void</span></span><br><span class="line"><span class="title function_">ngx_http_upstream_upgraded_read_downstream</span><span class="params">(<span class="type">ngx_http_request_t</span> *r)</span></span><br><span class="line">&#123;</span><br><span class="line">    ngx_http_upstream_process_upgraded(r, <span class="number">0</span>, <span class="number">0</span>);</span><br><span class="line">&#125;</span><br><span class="line"><span class="type">static</span> <span class="type">void</span></span><br><span class="line"><span class="title function_">ngx_http_upstream_upgraded_write_downstream</span><span class="params">(<span class="type">ngx_http_request_t</span> *r)</span></span><br><span class="line">&#123;</span><br><span class="line">    ngx_http_upstream_process_upgraded(r, <span class="number">1</span>, <span class="number">1</span>);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-type">static</span> <span class="hljs-type">void</span><br><span class="hljs-title function_">ngx_http_upstream_upgraded_read_upstream</span><span class="hljs-params">(<span class="hljs-type">ngx_http_request_t</span> *r,</span><br><span class="hljs-params">    <span class="hljs-type">ngx_http_upstream_t</span> *u)</span><br>&#123;<br>    ngx_http_upstream_process_upgraded(r, <span class="hljs-number">1</span>, <span class="hljs-number">0</span>);<br>&#125;<br><span class="hljs-type">static</span> <span class="hljs-type">void</span><br><span class="hljs-title function_">ngx_http_upstream_upgraded_write_upstream</span><span class="hljs-params">(<span class="hljs-type">ngx_http_request_t</span> *r,</span><br><span class="hljs-params">    <span class="hljs-type">ngx_http_upstream_t</span> *u)</span><br>&#123;<br>    ngx_http_upstream_process_upgraded(r, <span class="hljs-number">0</span>, <span class="hljs-number">1</span>);<br>&#125;<br><span class="hljs-type">static</span> <span class="hljs-type">void</span><br><span class="hljs-title function_">ngx_http_upstream_upgraded_read_downstream</span><span class="hljs-params">(<span class="hljs-type">ngx_http_request_t</span> *r)</span><br>&#123;<br>    ngx_http_upstream_process_upgraded(r, <span class="hljs-number">0</span>, <span class="hljs-number">0</span>);<br>&#125;<br><span class="hljs-type">static</span> <span class="hljs-type">void</span><br><span class="hljs-title function_">ngx_http_upstream_upgraded_write_downstream</span><span class="hljs-params">(<span class="hljs-type">ngx_http_request_t</span> *r)</span><br>&#123;<br>    ngx_http_upstream_process_upgraded(r, <span class="hljs-number">1</span>, <span class="hljs-number">1</span>);<br>&#125;<br></code></pre></td></tr></table></figure>
 
 <p>​		此处的设计非常巧妙（部分代码），使用了不同参数复用了同一个函数。下面的核心代码展示了 Nginx 如何处理事件。</p>
 <p>当数据来自于服务端时，from_upstream 为真，do_write 表示需要发送数据。根据下面的代码，可以看出 src 表示服务端的连接，dst 表示客户端的连接。当 do_write 为 1 且 dst 准备好写入操作（并且需要发送的数据长度不为 0）时，dst 就会发送数据；当 src 准备好读取操作时，src 就会读取数据。</p>
 <p>比较有意思的是，当数据来自于客户端时，只需要将 dst 和 src 交换即可。</p>
-<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">static</span> <span class="type">void</span></span><br><span class="line"><span class="title function_">ngx_http_upstream_process_upgraded</span><span class="params">(<span class="type">ngx_http_request_t</span> *r,</span></span><br><span class="line"><span class="params">    <span class="type">ngx_uint_t</span> from_upstream, <span class="type">ngx_uint_t</span> do_write)</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="comment">//客户端连接</span></span><br><span class="line">    downstream = r-&gt;connection;</span><br><span class="line">    <span class="comment">//服务端连接</span></span><br><span class="line">    upstream = r-&gt;upstream-&gt;peer.connection;</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 如果数据来自于后端服务器</span></span><br><span class="line">    <span class="keyword">if</span> (from_upstream) &#123;</span><br><span class="line">        src = upstream;</span><br><span class="line">        dst = downstream;</span><br><span class="line">        b = &amp;u-&gt;buffer;</span><br><span class="line">    <span class="comment">// 如果数据来自于客户端</span></span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        src = downstream;</span><br><span class="line">        dst = upstream;</span><br><span class="line">        b = &amp;u-&gt;from_client;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">for</span> ( ;; ) &#123;</span><br><span class="line">        <span class="comment">// 判断是否需要发送数据</span></span><br><span class="line">        <span class="keyword">if</span> (do_write) &#123;</span><br><span class="line">            <span class="comment">// 获取当前要发送的数据长度</span></span><br><span class="line">            size = b-&gt;last - b-&gt;pos;</span><br><span class="line">            <span class="comment">// 如果要发送的数据长度不为 0，且连接已经准备好进行写操作</span></span><br><span class="line">            <span class="keyword">if</span> (size &amp;&amp; dst-&gt;write-&gt;ready) &#123;</span><br><span class="line">                <span class="comment">// 发送数据</span></span><br><span class="line">                n = dst-&gt;send(dst, b-&gt;pos, size);</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        size = b-&gt;end - b-&gt;last;</span><br><span class="line">        <span class="comment">// 如果要接收的数据长度不为 0，且连接已经准备好读操作</span></span><br><span class="line">        <span class="keyword">if</span> (size &amp;&amp; src-&gt;read-&gt;ready) &#123;</span><br><span class="line">            <span class="comment">// 接收数据</span></span><br><span class="line">            n = src-&gt;recv(src, b-&gt;last, size);</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">break</span>;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-type">static</span> <span class="hljs-type">void</span><br><span class="hljs-title function_">ngx_http_upstream_process_upgraded</span><span class="hljs-params">(<span class="hljs-type">ngx_http_request_t</span> *r,</span><br><span class="hljs-params">    <span class="hljs-type">ngx_uint_t</span> from_upstream, <span class="hljs-type">ngx_uint_t</span> do_write)</span><br>&#123;<br>    <span class="hljs-comment">//客户端连接</span><br>    downstream = r-&gt;connection;<br>    <span class="hljs-comment">//服务端连接</span><br>    upstream = r-&gt;upstream-&gt;peer.connection;<br>    <br>    <span class="hljs-comment">// 如果数据来自于后端服务器</span><br>    <span class="hljs-keyword">if</span> (from_upstream) &#123;<br>        src = upstream;<br>        dst = downstream;<br>        b = &amp;u-&gt;buffer;<br>    <span class="hljs-comment">// 如果数据来自于客户端</span><br>    &#125; <span class="hljs-keyword">else</span> &#123;<br>        src = downstream;<br>        dst = upstream;<br>        b = &amp;u-&gt;from_client;<br>    &#125;<br>    <span class="hljs-keyword">for</span> ( ;; ) &#123;<br>        <span class="hljs-comment">// 判断是否需要发送数据</span><br>        <span class="hljs-keyword">if</span> (do_write) &#123;<br>            <span class="hljs-comment">// 获取当前要发送的数据长度</span><br>            size = b-&gt;last - b-&gt;pos;<br>            <span class="hljs-comment">// 如果要发送的数据长度不为 0，且连接已经准备好进行写操作</span><br>            <span class="hljs-keyword">if</span> (size &amp;&amp; dst-&gt;write-&gt;ready) &#123;<br>                <span class="hljs-comment">// 发送数据</span><br>                n = dst-&gt;send(dst, b-&gt;pos, size);<br>            &#125;<br>        &#125;<br>        size = b-&gt;end - b-&gt;last;<br>        <span class="hljs-comment">// 如果要接收的数据长度不为 0，且连接已经准备好读操作</span><br>        <span class="hljs-keyword">if</span> (size &amp;&amp; src-&gt;read-&gt;ready) &#123;<br>            <span class="hljs-comment">// 接收数据</span><br>            n = src-&gt;recv(src, b-&gt;last, size);<br>        &#125;<br>        <span class="hljs-keyword">break</span>;<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
 
 <h2 id="3、使用实例"><a href="#3、使用实例" class="headerlink" title="3、使用实例"></a>3、使用实例</h2><p>本节将通过 HSIAR（基于 Nginx 开发）和 WebSocket 客户端&#x2F;服务端的实例，展示如何在实际业务中使用 WebSocket 进行消息推送。</p>
 <p>首先，需要对 HSIAR 进行路由配置，如下图所示。即，所有以 uri 前缀为 wss 的 HTTP 客户端请求都会被升级为 WebSocket。在代理过程中，HSIAR 还需要将 Connection 和 Upgrade 头部携带给后端服务，告知后端需要将 Nginx 与后端的连接升级为 WebSocket。</p>
-<img src="C:\Users\zhangjie42067\AppData\Roaming\Typora\typora-user-images\image-20230222193739016.png" alt="image-20230222193739016"  />
+<img src="C:\Users\zhangjie42067\AppData\Roaming\Typora\typora-user-images\image-20230222193739016.png" srcset="/img/loading.gif" lazyload alt="image-20230222193739016"  />
 
 <p>2、建立连接的过程如下图所示，可以看到与2.1节所述过程一致</p>
-<img src="C:\Users\zhangjie42067\AppData\Roaming\Typora\typora-user-images\image-20230222193356359.png" alt="image-20230222193356359"  />
+<img src="C:\Users\zhangjie42067\AppData\Roaming\Typora\typora-user-images\image-20230222193356359.png" srcset="/img/loading.gif" lazyload alt="image-20230222193356359"  />
 
 <p>3、连接建立成功后，点击订阅，即接收消息的推送</p>
-<p><img src="C:\Users\zhangjie42067\AppData\Roaming\Typora\typora-user-images\image-20230222194518750.png" alt="image-20230222194518750"></p>
+<p><img src="C:\Users\zhangjie42067\AppData\Roaming\Typora\typora-user-images\image-20230222194518750.png" srcset="/img/loading.gif" lazyload alt="image-20230222194518750"></p>
 <p>4、后端推送消息</p>
 <p>可以看到消息由后端成功推送到了客户端</p>
-<p><img src="C:\Users\zhangjie42067\AppData\Roaming\Typora\typora-user-images\image-20230222195347832.png" alt="image-20230222195347832"></p>
+<p><img src="C:\Users\zhangjie42067\AppData\Roaming\Typora\typora-user-images\image-20230222195347832.png" srcset="/img/loading.gif" lazyload alt="image-20230222195347832"></p>
 <h2 id="4、总结"><a href="#4、总结" class="headerlink" title="4、总结"></a>4、总结</h2><p>在实际的生产中，消息推送是一种常用的技术。然而，如果在 WebSocket 客户端和服务端之间的链路中加入代理，尤其是多级代理后，情况就会变得更加复杂。为了确保链路上的每一条连接都是 WebSocket 长连接，需要避免中间出现 HTTP 短链接。否则，推送就可能因连接提前断开而失败。了解该技术的原理和细节，可以帮助快速排查问题并进行修复。同时，研究 Nginx 对 WebSocket 的支持技术实现，不仅能够提高对该技术的理解，也能够为今后开发相关系统提供有益的借鉴。</p>
 
+                
+              </div>
             
+            <hr/>
+            <div>
+              <div class="post-metas my-3">
+  
+  
+</div>
 
 
+              
+  
+
+  <div class="license-box my-3">
+    <div class="license-title">
+      <div></div>
+      <div>https://zjfans.github.io/2024/02/27/浅析nginx实现websocket原理/</div>
+    </div>
+    <div class="license-meta">
+      
+        <div class="license-meta-item">
+          <div>作者</div>
+          <div>张三疯</div>
         </div>
+      
+      
+        <div class="license-meta-item license-meta-date">
+          <div>发布于</div>
+          <div>2024年2月27日</div>
+        </div>
+      
+      
+      
+        <div class="license-meta-item">
+          <div>许可协议</div>
+          <div>
+            
+              
+              
+                <a class="print-no-link" target="_blank" href="https://creativecommons.org/licenses/by/4.0/">
+                  <span class="hint--top hint--rounded" aria-label="BY - 署名">
+                    <i class="iconfont icon-by"></i>
+                  </span>
+                </a>
+              
+            
+          </div>
+        </div>
+      
     </div>
-    <div id="post-footer" class="post-footer main-content-wrap">
-        
-        
-            <div class="post-actions-wrap">
-    <nav>
-        <ul class="post-actions post-action-nav">
-            <li class="post-action">
-                
-                    <a
-                        class="post-action-btn btn btn--disabled"
-                        aria-hidden="true"
-                    >
-                        
-                        <i class="fa fa-angle-left" aria-hidden="true"></i>
-                        <span class="hide-xs hide-sm text-small icon-ml">PREVIOUS</span>
-                    </a>
-            </li>
-            <li class="post-action">
-                
-                    <a
-                        class="post-action-btn btn btn--disabled"
-                        aria-hidden="true"
-                    >
-                        
-                        <span class="hide-xs hide-sm text-small icon-mr">NEXT</span>
-                        <i class="fa fa-angle-right" aria-hidden="true"></i>
-                    </a>
-            </li>
-        </ul>
-    </nav>
-    <ul class="post-actions post-action-share">
-        <li class="post-action hide-lg hide-md hide-sm">
-            <a
-                class="post-action-btn btn btn--default btn-open-shareoptions"
-                href="#btn-open-shareoptions"
-                aria-label="Share this post"
-            >
-                <i class="fa fa-share-alt" aria-hidden="true"></i>
-            </a>
-        </li>
-        
-            
-            
-            <li class="post-action hide-xs">
-                <a
-                    class="post-action-btn btn btn--default"
-                    target="new" href="https://www.facebook.com/sharer/sharer.php?u=https://zjfans.github.io/2024/02/27/%E6%B5%85%E6%9E%90nginx%E5%AE%9E%E7%8E%B0websocket%E5%8E%9F%E7%90%86/"
-                    title="Share on Facebook"
-                    aria-label="Share on Facebook"
-                >
-                    <i class="fab fa-facebook" aria-hidden="true"></i>
-                </a>
-            </li>
-        
-            
-            
-            <li class="post-action hide-xs">
-                <a
-                    class="post-action-btn btn btn--default"
-                    target="new" href="https://twitter.com/intent/tweet?text=https://zjfans.github.io/2024/02/27/%E6%B5%85%E6%9E%90nginx%E5%AE%9E%E7%8E%B0websocket%E5%8E%9F%E7%90%86/"
-                    title="Share on Twitter"
-                    aria-label="Share on Twitter"
-                >
-                    <i class="fab fa-twitter" aria-hidden="true"></i>
-                </a>
-            </li>
-        
-            
-            
-            <li class="post-action hide-xs">
-                <a
-                    class="post-action-btn btn btn--default"
-                    target="new" href="https://plus.google.com/share?url=https://zjfans.github.io/2024/02/27/%E6%B5%85%E6%9E%90nginx%E5%AE%9E%E7%8E%B0websocket%E5%8E%9F%E7%90%86/"
-                    title="Share on Google+"
-                    aria-label="Share on Google+"
-                >
-                    <i class="fab fa-google-plus" aria-hidden="true"></i>
-                </a>
-            </li>
-        
-        
-            
-        
-        <li class="post-action">
-            
-                <a class="post-action-btn btn btn--default" href="#" aria-label="Back to top">
-            
-                <i class="fa fa-list" aria-hidden="true"></i>
-            </a>
-        </li>
-    </ul>
-</div>
-
-
-        
-        
-            
-        
-    </div>
-</article>
+    <div class="license-icon iconfont"></div>
+  </div>
 
 
 
-                <footer id="footer" class="main-content-wrap">
-    <span class="copyrights">
-        Copyrights &copy; 2024 张三疯. All Rights Reserved.
-    </span>
-</footer>
-
-            </div>
-            
-                <div id="bottom-bar" class="post-bottom-bar" data-behavior="4">
-                    <div class="post-actions-wrap">
-    <nav>
-        <ul class="post-actions post-action-nav">
-            <li class="post-action">
-                
-                    <a
-                        class="post-action-btn btn btn--disabled"
-                        aria-hidden="true"
-                    >
-                        
-                        <i class="fa fa-angle-left" aria-hidden="true"></i>
-                        <span class="hide-xs hide-sm text-small icon-ml">PREVIOUS</span>
-                    </a>
-            </li>
-            <li class="post-action">
-                
-                    <a
-                        class="post-action-btn btn btn--disabled"
-                        aria-hidden="true"
-                    >
-                        
-                        <span class="hide-xs hide-sm text-small icon-mr">NEXT</span>
-                        <i class="fa fa-angle-right" aria-hidden="true"></i>
-                    </a>
-            </li>
-        </ul>
-    </nav>
-    <ul class="post-actions post-action-share">
-        <li class="post-action hide-lg hide-md hide-sm">
-            <a
-                class="post-action-btn btn btn--default btn-open-shareoptions"
-                href="#btn-open-shareoptions"
-                aria-label="Share this post"
-            >
-                <i class="fa fa-share-alt" aria-hidden="true"></i>
-            </a>
-        </li>
-        
-            
-            
-            <li class="post-action hide-xs">
-                <a
-                    class="post-action-btn btn btn--default"
-                    target="new" href="https://www.facebook.com/sharer/sharer.php?u=https://zjfans.github.io/2024/02/27/%E6%B5%85%E6%9E%90nginx%E5%AE%9E%E7%8E%B0websocket%E5%8E%9F%E7%90%86/"
-                    title="Share on Facebook"
-                    aria-label="Share on Facebook"
-                >
-                    <i class="fab fa-facebook" aria-hidden="true"></i>
-                </a>
-            </li>
-        
-            
-            
-            <li class="post-action hide-xs">
-                <a
-                    class="post-action-btn btn btn--default"
-                    target="new" href="https://twitter.com/intent/tweet?text=https://zjfans.github.io/2024/02/27/%E6%B5%85%E6%9E%90nginx%E5%AE%9E%E7%8E%B0websocket%E5%8E%9F%E7%90%86/"
-                    title="Share on Twitter"
-                    aria-label="Share on Twitter"
-                >
-                    <i class="fab fa-twitter" aria-hidden="true"></i>
-                </a>
-            </li>
-        
-            
-            
-            <li class="post-action hide-xs">
-                <a
-                    class="post-action-btn btn btn--default"
-                    target="new" href="https://plus.google.com/share?url=https://zjfans.github.io/2024/02/27/%E6%B5%85%E6%9E%90nginx%E5%AE%9E%E7%8E%B0websocket%E5%8E%9F%E7%90%86/"
-                    title="Share on Google+"
-                    aria-label="Share on Google+"
-                >
-                    <i class="fab fa-google-plus" aria-hidden="true"></i>
-                </a>
-            </li>
-        
-        
-            
-        
-        <li class="post-action">
-            
-                <a class="post-action-btn btn btn--default" href="#" aria-label="Back to top">
-            
-                <i class="fa fa-list" aria-hidden="true"></i>
-            </a>
-        </li>
-    </ul>
-</div>
-
-
+              
+                <div class="post-prevnext my-3">
+                  <article class="post-prev col-6">
+                    
+                    
+                  </article>
+                  <article class="post-next col-6">
+                    
+                    
+                  </article>
                 </div>
-                
-    <div id="share-options-bar" class="share-options-bar" data-behavior="4">
-        <i id="btn-close-shareoptions" class="fa fa-times"></i>
-        <ul class="share-options">
-            
-                
-                
-                <li class="share-option">
-                    <a
-                        class="share-option-btn"
-                        target="new"
-                        href="https://www.facebook.com/sharer/sharer.php?u=https://zjfans.github.io/2024/02/27/%E6%B5%85%E6%9E%90nginx%E5%AE%9E%E7%8E%B0websocket%E5%8E%9F%E7%90%86/"
-                        aria-label="Share on Facebook"
-                    >
-                        <i class="fab fa-facebook" aria-hidden="true"></i><span>Share on Facebook</span>
-                    </a>
-                </li>
-            
-                
-                
-                <li class="share-option">
-                    <a
-                        class="share-option-btn"
-                        target="new"
-                        href="https://twitter.com/intent/tweet?text=https://zjfans.github.io/2024/02/27/%E6%B5%85%E6%9E%90nginx%E5%AE%9E%E7%8E%B0websocket%E5%8E%9F%E7%90%86/"
-                        aria-label="Share on Twitter"
-                    >
-                        <i class="fab fa-twitter" aria-hidden="true"></i><span>Share on Twitter</span>
-                    </a>
-                </li>
-            
-                
-                
-                <li class="share-option">
-                    <a
-                        class="share-option-btn"
-                        target="new"
-                        href="https://plus.google.com/share?url=https://zjfans.github.io/2024/02/27/%E6%B5%85%E6%9E%90nginx%E5%AE%9E%E7%8E%B0websocket%E5%8E%9F%E7%90%86/"
-                        aria-label="Share on Google+"
-                    >
-                        <i class="fab fa-google-plus" aria-hidden="true"></i><span>Share on Google+</span>
-                    </a>
-                </li>
-            
-        </ul>
-    </div>
-
-
-            
-        </div>
-        
-
-
-<div id="about">
-    <div id="about-card">
-        <div id="about-btn-close">
-            <i class="fa fa-times"></i>
-        </div>
-        
-            <h4 id="about-card-name">张三疯</h4>
-        
-            <div id="about-card-bio"><p>author.bio</p>
-</div>
-        
-        
-            <div id="about-card-job">
-                <i class="fa fa-briefcase"></i>
-                <br/>
-                <p>author.job</p>
-
+              
             </div>
-        
-        
+
+            
+          </article>
+        </div>
+      </div>
     </div>
+
+    <div class="side-col d-none d-lg-block col-lg-2">
+      
+  <aside class="sidebar" style="margin-left: -1rem">
+    <div id="toc">
+  <p class="toc-header">
+    <i class="iconfont icon-list"></i>
+    <span>目录</span>
+  </p>
+  <div class="toc-body" id="toc-body"></div>
 </div>
 
-        
-        
-<div id="cover" style="background-image:url('/assets/images/cover.jpg');"></div>
-        <!--SCRIPTS-->
-
-<script src="/assets/js/jquery.js"></script>
 
 
-<script src="/assets/js/jquery.fancybox.js"></script>
+  </aside>
 
 
-<script src="/assets/js/thumbs.js"></script>
+    </div>
+  </div>
+</div>
 
 
-<script src="/assets/js/tranquilpeak.js"></script>
 
-<!--SCRIPTS END-->
+
+
+  
+
+
+
+  
+
+
+
+  
+
+
+
+  
+
+
+
+  
+
+
+
+
+
 
 
     
 
+    
+      <a id="scroll-top-button" aria-label="TOP" href="#" role="button">
+        <i class="iconfont icon-arrowup" aria-hidden="true"></i>
+      </a>
+    
+
+    
+      <div class="modal fade" id="modalSearch" tabindex="-1" role="dialog" aria-labelledby="ModalLabel"
+     aria-hidden="true">
+  <div class="modal-dialog modal-dialog-scrollable modal-lg" role="document">
+    <div class="modal-content">
+      <div class="modal-header text-center">
+        <h4 class="modal-title w-100 font-weight-bold">搜索</h4>
+        <button type="button" id="local-search-close" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body mx-3">
+        <div class="md-form mb-5">
+          <input type="text" id="local-search-input" class="form-control validate">
+          <label data-error="x" data-success="v" for="local-search-input">关键词</label>
+        </div>
+        <div class="list-group" id="local-search-result"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+    
+
+    
+  </main>
+
+  <footer>
+    <div class="footer-inner">
+  
+    <div class="footer-content">
+       <a href="https://hexo.io" target="_blank" rel="nofollow noopener"><span>Hexo</span></a> <i class="iconfont icon-love"></i> <a href="https://github.com/fluid-dev/hexo-theme-fluid" target="_blank" rel="nofollow noopener"><span>Fluid</span></a> 
+    </div>
+  
+  
+  
+  
+</div>
+
+  </footer>
+
+  <!-- Scripts -->
+  
+  <script  src="https://lib.baomitu.com/nprogress/0.2.0/nprogress.min.js" ></script>
+  <link  rel="stylesheet" href="https://lib.baomitu.com/nprogress/0.2.0/nprogress.min.css" />
+
+  <script>
+    NProgress.configure({"showSpinner":false,"trickleSpeed":100})
+    NProgress.start()
+    window.addEventListener('load', function() {
+      NProgress.done();
+    })
+  </script>
+
+
+<script  src="https://lib.baomitu.com/jquery/3.6.4/jquery.min.js" ></script>
+<script  src="https://lib.baomitu.com/twitter-bootstrap/4.6.1/js/bootstrap.min.js" ></script>
+<script  src="/js/events.js" ></script>
+<script  src="/js/plugins.js" ></script>
+
+
+  <script  src="https://lib.baomitu.com/typed.js/2.0.12/typed.min.js" ></script>
+  <script>
+    (function (window, document) {
+      var typing = Fluid.plugins.typing;
+      var subtitle = document.getElementById('subtitle');
+      if (!subtitle || !typing) {
+        return;
+      }
+      var text = subtitle.getAttribute('data-typed-text');
+      
+        typing(text);
+      
+    })(window, document);
+  </script>
 
 
 
-    </body>
+
+  
+    <script  src="/js/img-lazyload.js" ></script>
+  
+
+
+
+
+  
+<script>
+  Fluid.utils.createScript('https://lib.baomitu.com/tocbot/4.20.1/tocbot.min.js', function() {
+    var toc = jQuery('#toc');
+    if (toc.length === 0 || !window.tocbot) { return; }
+    var boardCtn = jQuery('#board-ctn');
+    var boardTop = boardCtn.offset().top;
+
+    window.tocbot.init(Object.assign({
+      tocSelector     : '#toc-body',
+      contentSelector : '.markdown-body',
+      linkClass       : 'tocbot-link',
+      activeLinkClass : 'tocbot-active-link',
+      listClass       : 'tocbot-list',
+      isCollapsedClass: 'tocbot-is-collapsed',
+      collapsibleClass: 'tocbot-is-collapsible',
+      scrollSmooth    : true,
+      includeTitleTags: true,
+      headingsOffset  : -boardTop,
+    }, CONFIG.toc));
+    if (toc.find('.toc-list-item').length > 0) {
+      toc.css('visibility', 'visible');
+    }
+
+    Fluid.events.registerRefreshCallback(function() {
+      if ('tocbot' in window) {
+        tocbot.refresh();
+        var toc = jQuery('#toc');
+        if (toc.length === 0 || !tocbot) {
+          return;
+        }
+        if (toc.find('.toc-list-item').length > 0) {
+          toc.css('visibility', 'visible');
+        }
+      }
+    });
+  });
+</script>
+
+
+  <script src=https://lib.baomitu.com/clipboard.js/2.0.11/clipboard.min.js></script>
+
+  <script>Fluid.plugins.codeWidget();</script>
+
+
+  
+<script>
+  Fluid.utils.createScript('https://lib.baomitu.com/anchor-js/4.3.1/anchor.min.js', function() {
+    window.anchors.options = {
+      placement: CONFIG.anchorjs.placement,
+      visible  : CONFIG.anchorjs.visible
+    };
+    if (CONFIG.anchorjs.icon) {
+      window.anchors.options.icon = CONFIG.anchorjs.icon;
+    }
+    var el = (CONFIG.anchorjs.element || 'h1,h2,h3,h4,h5,h6').split(',');
+    var res = [];
+    for (var item of el) {
+      res.push('.markdown-body > ' + item.trim());
+    }
+    if (CONFIG.anchorjs.placement === 'left') {
+      window.anchors.options.class = 'anchorjs-link-left';
+    }
+    window.anchors.add(res.join(', '));
+
+    Fluid.events.registerRefreshCallback(function() {
+      if ('anchors' in window) {
+        anchors.removeAll();
+        var el = (CONFIG.anchorjs.element || 'h1,h2,h3,h4,h5,h6').split(',');
+        var res = [];
+        for (var item of el) {
+          res.push('.markdown-body > ' + item.trim());
+        }
+        if (CONFIG.anchorjs.placement === 'left') {
+          anchors.options.class = 'anchorjs-link-left';
+        }
+        anchors.add(res.join(', '));
+      }
+    });
+  });
+</script>
+
+
+  
+<script>
+  Fluid.utils.createScript('https://lib.baomitu.com/fancybox/3.5.7/jquery.fancybox.min.js', function() {
+    Fluid.plugins.fancyBox();
+  });
+</script>
+
+
+  <script>Fluid.plugins.imageCaption();</script>
+
+  <script  src="/js/local-search.js" ></script>
+
+
+
+
+
+<!-- 主题的启动项，将它保持在最底部 -->
+<!-- the boot of the theme, keep it at the bottom -->
+<script  src="/js/boot.js" ></script>
+
+
+  
+
+  <noscript>
+    <div class="noscript-warning">博客在允许 JavaScript 运行的环境下浏览效果更佳</div>
+  </noscript>
+</body>
 </html>
