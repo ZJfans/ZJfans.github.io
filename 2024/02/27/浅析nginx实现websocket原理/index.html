@@ -24,13 +24,13 @@
 <meta property="og:description" content="前言：​		传统的HTTP协议是一种无状态的请求&#x2F;响应协议，每次请求都需要重新建立连接。在一些特殊的业务场景下，服务端需要主动发送数据到客户端，例如行情推送、监控告警推送等。然而，HTTP协议不支持双向通信，因此需要将HTTP协议“升级”为WebSocket协议。WebSocket协议可以在建立连接后保持连接状态，双方可以通过一个持久的连接通道进行实时通信。WebSocket连接在建立时">
 <meta property="og:locale" content="zh_CN">
 <meta property="og:image" content="https://zjfans.github.io/img/%E5%9B%BE1-17090239248095.png">
-<meta property="og:image" content="https://zjfans.github.io/img/%E5%9B%BE2-17090239375736.png">
+<meta property="og:image" content="https://zjfans.github.io/%5Cimg%5C%E5%9B%BE2.png">
 <meta property="og:image" content="https://zjfans.github.io/%E6%B5%85%E6%9E%90nginx%E5%AE%9E%E7%8E%B0websocket%E5%8E%9F%E7%90%86/%E5%9B%BE3-17090239571517.png">
 <meta property="og:image" content="https://zjfans.github.io/%E6%B5%85%E6%9E%90nginx%E5%AE%9E%E7%8E%B0websocket%E5%8E%9F%E7%90%86/%E5%9B%BE4-17090239695698.png">
 <meta property="og:image" content="https://zjfans.github.io/%E6%B5%85%E6%9E%90nginx%E5%AE%9E%E7%8E%B0websocket%E5%8E%9F%E7%90%86/%E5%9B%BE5-17090239875539.png">
 <meta property="og:image" content="https://zjfans.github.io/%E6%B5%85%E6%9E%90nginx%E5%AE%9E%E7%8E%B0websocket%E5%8E%9F%E7%90%86/%E5%9B%BE6-170902400365810.png">
 <meta property="article:published_time" content="2024-02-27T07:33:29.773Z">
-<meta property="article:modified_time" content="2024-02-27T09:07:55.875Z">
+<meta property="article:modified_time" content="2024-02-27T09:20:18.523Z">
 <meta property="article:author" content="张三疯">
 <meta property="article:tag" content="nginx,openresty,网关,HTTP&#x2F;HTTPS,Websocket">
 <meta name="twitter:card" content="summary_large_image">
@@ -284,7 +284,7 @@
 <p>Nginx作为中间层的Web服务器，支持使用多种协议与上下游进行通信，包括TCP、HTTP、WebSocket等协议，如下图所示。</p>
 <p><img src="/img/%E5%9B%BE1-17090239248095.png" srcset="/img/loading.gif" lazyload alt="图1"></p>
 <h2 id="1、nginx升级http为websocket的过程"><a href="#1、nginx升级http为websocket的过程" class="headerlink" title="1、nginx升级http为websocket的过程"></a>1、nginx升级http为websocket的过程</h2><p>​		HTTP&#x2F;1.1提供了一种特殊的机制，这一机制允许将一个已建立的连接升级成新的、不相容的协议。具体过程如下：</p>
-<p><img src="/img/%E5%9B%BE2-17090239375736.png" srcset="/img/loading.gif" lazyload alt="图2"></p>
+<p><img src="/%5Cimg%5C%E5%9B%BE2.png" srcset="/img/loading.gif" lazyload alt="图2"></p>
 <p>1.客户端发起 WebSocket 连接请求到 Nginx，Nginx 作为反向代理服务器，将请求转发给上游 WebSocket 服务器。客户端发送的请求类似于下图所示：</p>
 <figure class="highlight css"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><code class="hljs css">GET ws://<span class="hljs-number">10.40</span>.<span class="hljs-number">2.63</span>:<span class="hljs-number">58088</span>/wss/socket.io HTTP/<span class="hljs-number">1.1</span><br>Host: <span class="hljs-number">10.40</span>.<span class="hljs-number">2.63</span>:<span class="hljs-number">58088</span><br>Connection: Upgrade<br>Upgrade: websocket<br>Sec-WebSocket-Version: <span class="hljs-number">13</span><br>Sec-WebSocket-Key: <span class="hljs-number">3</span>baOagQNXoc1Cd1dJ4pBiA==<br>Sec-WebSocket-Extensions:permessage-deflate;client_max_window_bits<br></code></pre></td></tr></table></figure>
 
