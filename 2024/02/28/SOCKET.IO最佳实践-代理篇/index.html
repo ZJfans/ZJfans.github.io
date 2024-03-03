@@ -25,7 +25,7 @@
 <meta property="og:locale" content="zh_CN">
 <meta property="og:image" content="https://zjfans.github.io/img/neom-DMGDdksVoWI-unsplash.jpg">
 <meta property="article:published_time" content="2024-02-28T11:46:51.274Z">
-<meta property="article:modified_time" content="2024-02-29T01:15:03.825Z">
+<meta property="article:modified_time" content="2024-03-03T05:19:41.430Z">
 <meta property="article:author" content="张三疯">
 <meta property="article:tag" content="websocket">
 <meta property="article:tag" content="socket.io">
@@ -327,7 +327,7 @@
 <p>心跳间隔为25s，与”pingInterval”: 25000是一致的</p>
 <p><img src="/img/socket-%E5%9B%BE8.png" srcset="/img/loading.gif" lazyload alt="socket-图8"></p>
 <h3 id="3-2、此websocket非常规的websocket"><a href="#3-2、此websocket非常规的websocket" class="headerlink" title="3.2、此websocket非常规的websocket"></a>3.2、此websocket非常规的websocket</h3><p>Socket.IO 可以使用 WebSocket 协议，但它为每个数据包添加了额外的元数据。所以 WebSocket 客户端将无法成功连接到 Socket.IO 服务器，而 Socket.IO 客户端也将无法连接到普通 WebSocket 服务器。</p>
-<p>JRES团队提供的wss组件，虽然支持了socket.io与普通的websocket，但是同一时刻也只能支持其中的一种，即使用socket.io的客户端和websocket客户端连接wss，总有一个会失败。</p>
+<p>我们团队提供的wss组件，虽然支持了socket.io与普通的websocket，但是同一时刻也只能支持其中的一种，即使用socket.io的客户端和websocket客户端连接wss，总有一个会失败。</p>
 <h2 id="4、代理"><a href="#4、代理" class="headerlink" title="4、代理"></a>4、代理</h2><p>由于会话id的存在，每个携带唯一会话id的HTTP请求都必须路由到对应的socket.io服务端，尤其是socket.io服务端为多节点时。本节着重讲解如何正确配置代理节点，使得socket.io客户端与服务端可以使用HTTP长轮询与websocket进行正常通信。</p>
 <h3 id="1、socket-io为单节点"><a href="#1、socket-io为单节点" class="headerlink" title="1、socket.io为单节点"></a>1、socket.io为单节点</h3><ul>
 <li>HTTP长轮询</li>
@@ -337,7 +337,7 @@
 <li>websocket</li>
 </ul>
 <p>中间节点都需要升级HTTP协议为websocket，如果是四层负载，那就不需要做任何改动，websocket只针对<strong>七层负载。</strong></p>
-<h3 id="2、socket-io多节点"><a href="#2、socket-io多节点" class="headerlink" title="2、socket.io多节点"></a>2、socket.io多节点</h3><h4 id="1、一级代理"><a href="#1、一级代理" class="headerlink" title="1、一级代理"></a>1、一级代理</h4><p><strong>1****、代理为单节点</strong></p>
+<h3 id="2、socket-io多节点"><a href="#2、socket-io多节点" class="headerlink" title="2、socket.io多节点"></a>2、socket.io多节点</h3><h4 id="1、一级代理"><a href="#1、一级代理" class="headerlink" title="1、一级代理"></a>1、一级代理</h4><p>1、代理为单节点</p>
 <p><img src="/img/socket-%E5%9B%BE9.png" srcset="/img/loading.gif" lazyload alt="socket-图9"></p>
 <ul>
 <li>HTTP长轮询</li>
@@ -349,7 +349,6 @@
 </ul>
 <p>如果nginx配置了协议升级，client到nginx、nginx到socket.io的连接都是websocket协议的连接，即长连接，nginx保证了client与服务端一一对应</p>
 <p><img src="/img/socket-%E5%9B%BE11.png" srcset="/img/loading.gif" lazyload alt="socket-图11"></p>
-<p>2、代理为集群</p>
 <h4 id="2、多级代理"><a href="#2、多级代理" class="headerlink" title="2、多级代理"></a>2、多级代理</h4><h5 id="1、单-单"><a href="#1、单-单" class="headerlink" title="1、单-单"></a>1、单-单</h5><p>l HTTP长轮询</p>
 <p>如果代理是单节点-单节点，如下图。为了保证客户端与服务端一一对应，那么需要在<strong>第二个nginx配置会话保持</strong>。</p>
 <p><img src="/img/socket-%E5%9B%BE12.png" srcset="/img/loading.gif" lazyload alt="socket-图12"></p>
@@ -373,15 +372,14 @@
 <p>毫无疑问，如果每个nginx都配置了websocket协议升级，将不会出现任何问题</p>
 <h5 id="3、多-多"><a href="#3、多-多" class="headerlink" title="3、多-多"></a>3、多-多</h5><p>这种场景和单-多的场景没有任何区别，因为集群前面肯定有一个单节点的负载均衡器做负载，本质也是单-多。有些人可能好奇，双活难道不是每个节点都是集群吗，整条链路如果存在单节点，这个单节点挂掉之后，整条链路随之挂掉，事实上就是这样的，所以在负载的最前面，都是用DNS做分发。</p>
 <h5 id="4、多-单"><a href="#4、多-单" class="headerlink" title="4、多-单"></a>4、多-单</h5><p>同上，本质和单-多没有区别</p>
-<p>3、HTTP长轮询与websocket同时存在</p>
-<p>Socket.io的机制会同时存在HTTP长轮询与websocket协议的请求，所以代理节点需要<strong>同时配置会话保持与协议升级的配置</strong>。</p>
+<h4 id="3、HTTP长轮询与websocket同时存在"><a href="#3、HTTP长轮询与websocket同时存在" class="headerlink" title="3、HTTP长轮询与websocket同时存在"></a>3、HTTP长轮询与websocket同时存在</h4><p>Socket.io的机制会同时存在HTTP长轮询与websocket协议的请求，所以代理节点需要<strong>同时配置会话保持与协议升级的配置</strong>。</p>
 <h2 id="5、总结"><a href="#5、总结" class="headerlink" title="5、总结"></a>5、总结</h2><p>1、首先回答第4节的2个问题</p>
 <p>1、第一个nginx真的需要配置ip_hash吗？</p>
 <p>ip_hash是将某一ip的客户端，固定路由到后台的某一台服务器。所以假设client-A、client-B与某个socket.io建立了会话,，那么后续请求也需要一一对应，我们可以推测nginx-M是否设置ip_hash的路由场景</p>
 <ul>
 <li>nginx-M设置了ip_hash</li>
 </ul>
-<p>因为client-A与client-B的ip不一样，nginx-M又设置了ip_hash，所以client-A的请求都会走到nginx-A（这是假设，事实上不走A，就会走B，这里假设走A），client-B的请求都会走到nginx-B。重点来了，<strong>nginx-M的ip是固定的，所以对于nginx-A和nginx-B而言，一样的ip，他们都会路由到同一个服务端，假设都路由到了socket.io-A，因此socket.io-B其实一直是空闲的！</strong></p>
+<p>因为client-A与client-B的ip不一样，nginx-M又设置了ip_hash，所以client-A的请求都会走到nginx-A（这是假设，事实上不走A，就会走B，这里假设走A），client-B的请求都会走到nginx-B。重点来了，<strong>nginx-M的ip是固定的，所以对于nginx-A和nginx-B而言，一样的ip，他们都会路由到同一个服务端（ip_hash的算法决定），假设都路由到了socket.io-A，因此socket.io-B其实一直是空闲的！</strong></p>
 <ul>
 <li>nginx-M没有设置ip_hash</li>
 </ul>

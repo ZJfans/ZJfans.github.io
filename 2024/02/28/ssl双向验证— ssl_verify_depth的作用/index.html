@@ -25,7 +25,7 @@
 <meta property="og:locale" content="zh_CN">
 <meta property="og:image" content="https://zjfans.github.io/img/danny-greenberg-lMtnNNv9aaU-unsplash.jpg">
 <meta property="article:published_time" content="2024-02-28T07:23:48.072Z">
-<meta property="article:modified_time" content="2024-02-28T12:31:50.701Z">
+<meta property="article:modified_time" content="2024-03-03T05:08:41.364Z">
 <meta property="article:author" content="张三疯">
 <meta property="article:tag" content="ssl">
 <meta property="article:tag" content="证书">
@@ -223,7 +223,7 @@
       <span class="post-meta mr-2">
         <i class="iconfont icon-chart"></i>
         
-          601 字
+          677 字
         
       </span>
     
@@ -280,11 +280,12 @@
 <h2 id="根证书与中间证书"><a href="#根证书与中间证书" class="headerlink" title="根证书与中间证书"></a>根证书与中间证书</h2><p>在进行ssl验证前，服务器一般会向CA申请公钥证书，即将自己的公开密钥交给CA，CA用自己的私钥向服务器的公钥数字签名并返回公钥证书，在数字签名的过程中，CA一般会用根目录颁发证书，这种证书叫做根证书。</p>
 <p>问题是，万一根目录颁发错了证书，或者需要撤销根，这时所有根目录颁发的证书都将失效，这样代价是巨大的，因此出现了<strong>中间根</strong>，顾名思义，CA用私钥对中间根进行签名，使它可信，因此由中间根颁发的证书也是可信的，即中间证书。当发生撤销时，只需要撤销中间根颁发的证书就可以。</p>
 <p>这里需要解释一下根证书，个人理解为客户端在验证服务器的公钥证书时，需要拿CA的公钥来解密服务器公钥证书的签名，CA的<strong>根公钥</strong>需要提前拿到手，一般内置到浏览器中，存放的地方视为根目录，存放中间证书即为中间目录。有中间证书的情况下，应该是先从中间目录取到对应<strong>中间公钥</strong>解密，然后循环此过程，直到从根目录拿到公钥验证成功，这时可以算是验证通过。</p>
+<p>同时，在实际生产中，我们拥有私有协议，会存在私有协议的客户端，这些客户端也支持<strong>私有协议</strong>+<strong>ssl</strong>，因此这些客户端也需要内置根证书。</p>
 <h2 id="验证深度"><a href="#验证深度" class="headerlink" title="验证深度"></a>验证深度</h2><p>在CA的证书体系中，证书从根目录出发，像一条链一样，有很多的中间根，也叫做证书链，我觉得更像一棵二叉树。</p>
 <p>在ssl验证的过程中，直接尝试中间证书进行客户端认证是无法通过的，需要一层一层回溯验证，直到找到根。</p>
 <p>这个验证深度就相当于当前中间证书在整棵树中的深度。</p>
 <h2 id="ssl-verify-depth"><a href="#ssl-verify-depth" class="headerlink" title="ssl_verify_depth"></a>ssl_verify_depth</h2><p>上面已经提到了，验证需要层层回溯，向上可以回溯多少次由ssl_verify_depth决定，当<code>ssl_verify_depth = 1</code>时，回溯层数为0，即任何中间证书都不会通过验证，除非是根证书。简而言之，中间证书的深度要小于ssl_verify_depth的值，才会验证通过。</p>
-<p>在nginx中<code>ssl_verify_depth</code>的值默认是为1的。</p>
+<p>在nginx中<code>ssl_verify_depth</code>的值默认是为1的。所以如果使用了中间证书，就需要适当调整这个值。</p>
 <figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><code class="hljs c">句法：    ssl_verify_depth number;<br>默认：    ssl_verify_depth <span class="hljs-number">1</span>;<br>语境：    http， server<br></code></pre></td></tr></table></figure>
 
                 
