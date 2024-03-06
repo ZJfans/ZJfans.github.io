@@ -16,12 +16,12 @@
   <meta name="author" content="张三疯">
   <meta name="keywords" content="nginx,openresty,网关,HTTP/HTTPS,Websocket">
   
-    <meta name="description" content="title: 协商缓存在nginx的应用与实践tags: [websocket, nginx]index_img:  1、前言缓存是一个高效减轻网络与服务器压力的机制，具有减少冗余数据传输、缓解网络瓶颈以及降低时延等优点。通常客户端在请求数据时，会发送请求到原始服务器获取，重复的数据可能会在网络中多次传输，但是如果有缓存，客户端就可以直接从缓存中获取数据，减少重复的流量。例如在浏览器首次请求某些静">
+    <meta name="description" content="1、前言缓存是一个高效减轻网络与服务器压力的机制，具有减少冗余数据传输、缓解网络瓶颈以及降低时延等优点。通常客户端在请求数据时，会发送请求到原始服务器获取，重复的数据可能会在网络中多次传输，但是如果有缓存，客户端就可以直接从缓存中获取数据，减少重复的流量。例如在浏览器首次请求某些静态资源时，状态码会是200 ok，但是刷新页面，状态码就会变为200 ok ( from memory cache)，">
 <meta property="og:type" content="article">
-<meta property="og:title" content="ZJfans Blog">
+<meta property="og:title" content="协商缓存在nginx的应用与实践">
 <meta property="og:url" content="https://zjfans.github.io/2024/03/06/%E5%8D%8F%E5%95%86%E7%BC%93%E5%AD%98%E5%9C%A8nginx%E7%9A%84%E5%BA%94%E7%94%A8%E4%B8%8E%E5%AE%9E%E8%B7%B5/index.html">
 <meta property="og:site_name" content="ZJfans Blog">
-<meta property="og:description" content="title: 协商缓存在nginx的应用与实践tags: [websocket, nginx]index_img:  1、前言缓存是一个高效减轻网络与服务器压力的机制，具有减少冗余数据传输、缓解网络瓶颈以及降低时延等优点。通常客户端在请求数据时，会发送请求到原始服务器获取，重复的数据可能会在网络中多次传输，但是如果有缓存，客户端就可以直接从缓存中获取数据，减少重复的流量。例如在浏览器首次请求某些静">
+<meta property="og:description" content="1、前言缓存是一个高效减轻网络与服务器压力的机制，具有减少冗余数据传输、缓解网络瓶颈以及降低时延等优点。通常客户端在请求数据时，会发送请求到原始服务器获取，重复的数据可能会在网络中多次传输，但是如果有缓存，客户端就可以直接从缓存中获取数据，减少重复的流量。例如在浏览器首次请求某些静态资源时，状态码会是200 ok，但是刷新页面，状态码就会变为200 ok ( from memory cache)，">
 <meta property="og:locale" content="zh_CN">
 <meta property="og:image" content="file:///C:/Users/ZHANGJ~1/AppData/Local/Temp/msohtmlclip1/01/clip_image002.gif">
 <meta property="og:image" content="file:///C:/Users/ZHANGJ~1/AppData/Local/Temp/msohtmlclip1/01/clip_image004.gif">
@@ -40,15 +40,16 @@
 <meta property="og:image" content="file:///C:/Users/ZHANGJ~1/AppData/Local/Temp/msohtmlclip1/01/clip_image030.jpg">
 <meta property="og:image" content="file:///C:/Users/ZHANGJ~1/AppData/Local/Temp/msohtmlclip1/01/clip_image032.gif">
 <meta property="article:published_time" content="2024-03-06T10:38:39.757Z">
-<meta property="article:modified_time" content="2024-03-06T10:40:37.869Z">
+<meta property="article:modified_time" content="2024-03-06T10:46:05.639Z">
 <meta property="article:author" content="张三疯">
-<meta property="article:tag" content="nginx,openresty,网关,HTTP&#x2F;HTTPS,Websocket">
+<meta property="article:tag" content="websocket">
+<meta property="article:tag" content="nginx">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:image" content="file:///C:/Users/ZHANGJ~1/AppData/Local/Temp/msohtmlclip1/01/clip_image002.gif">
   
   
   
-  <title>ZJfans Blog</title>
+  <title>协商缓存在nginx的应用与实践 - ZJfans Blog</title>
 
   <link  rel="stylesheet" href="https://lib.baomitu.com/twitter-bootstrap/4.6.1/css/bootstrap.min.css" />
 
@@ -214,7 +215,7 @@
       <div class="banner-text text-center fade-in-up">
         <div class="h2">
           
-            <span id="subtitle" data-typed-text=""></span>
+            <span id="subtitle" data-typed-text="协商缓存在nginx的应用与实践"></span>
           
         </div>
 
@@ -237,7 +238,7 @@
       <span class="post-meta mr-2">
         <i class="iconfont icon-chart"></i>
         
-          2.7k 字
+          2.6k 字
         
       </span>
     
@@ -285,13 +286,12 @@
       <div class="container nopadding-x-md" id="board-ctn">
         <div id="board">
           <article class="post-content mx-auto">
-            <h1 id="seo-header"></h1>
+            <h1 id="seo-header">协商缓存在nginx的应用与实践</h1>
             
             
               <div class="markdown-body">
                 
-                <p>title: 协商缓存在nginx的应用与实践<br>tags: [websocket, nginx]<br>index_img: </p>
-<h2 id="1、前言"><a href="#1、前言" class="headerlink" title="1、前言"></a>1、前言</h2><p>缓存是一个高效减轻网络与服务器压力的机制，具有减少冗余数据传输、缓解网络瓶颈以及降低时延等优点。通常客户端在请求数据时，会发送请求到原始服务器获取，重复的数据可能会在网络中多次传输，但是如果有缓存，客户端就可以直接从缓存中获取数据，减少重复的流量。例如在浏览器首次请求某些静态资源时，状态码会是200 ok，但是刷新页面，状态码就会变为200 ok ( from memory cache)，这是因为浏览器对这些资源进行了缓存，客户端的数据并不是发送请求到原始服务器获取的，而是从缓存中获取的。</p>
+                <h2 id="1、前言"><a href="#1、前言" class="headerlink" title="1、前言"></a>1、前言</h2><p>缓存是一个高效减轻网络与服务器压力的机制，具有减少冗余数据传输、缓解网络瓶颈以及降低时延等优点。通常客户端在请求数据时，会发送请求到原始服务器获取，重复的数据可能会在网络中多次传输，但是如果有缓存，客户端就可以直接从缓存中获取数据，减少重复的流量。例如在浏览器首次请求某些静态资源时，状态码会是200 ok，但是刷新页面，状态码就会变为200 ok ( from memory cache)，这是因为浏览器对这些资源进行了缓存，客户端的数据并不是发送请求到原始服务器获取的，而是从缓存中获取的。</p>
 <p><img src="file:///C:/Users/ZHANGJ~1/AppData/Local/Temp/msohtmlclip1/01/clip_image002.gif" srcset="/img/loading.gif" lazyload alt="img"></p>
 <p>但是问题也是显而易见的，如果原始服务器的数据发生了改变，而缓存并没有及时更新数据，在客户端请求时返回了过期的数据，这就会导致了数据的不准确。已缓存的数据应当与原始服务器的数据保持一致，更准确的来说，是缓存返回的数据应当与原始服务器的数据保持一致。那么如何在缓存的基础上，避免这个问题呢？事实上，HTTP协议是提供了多种机制来保证数据一致性的。</p>
 <h2 id="2、“使用期”与“新鲜度“"><a href="#2、“使用期”与“新鲜度“" class="headerlink" title="2、“使用期”与“新鲜度“"></a>2、“使用期”与“新鲜度“</h2><p>使用期是指数据在服务器响应返回后的总时间，可以简单理解为数据在缓存使用的时间，从服务器将数据发出去开始计时；新鲜度是指数据在服务器响应发出去后，缓存可以使用的时间。如果使用期小于新鲜度，说明数据是“新鲜的”，缓存可以继续使用。反之，缓存需要判断数据是否发生了更新，是否需要重新拉取数据，如何更新这取决于服务端采用的HTTP缓存策略。</p>
@@ -366,6 +366,15 @@
               <div class="post-metas my-3">
   
   
+    <div class="post-meta">
+      <i class="iconfont icon-tags"></i>
+      
+        <a href="/tags/websocket/" class="print-no-link">#websocket</a>
+      
+        <a href="/tags/nginx/" class="print-no-link">#nginx</a>
+      
+    </div>
+  
 </div>
 
 
@@ -374,7 +383,7 @@
 
   <div class="license-box my-3">
     <div class="license-title">
-      <div></div>
+      <div>协商缓存在nginx的应用与实践</div>
       <div>https://zjfans.github.io/2024/03/06/协商缓存在nginx的应用与实践/</div>
     </div>
     <div class="license-meta">
