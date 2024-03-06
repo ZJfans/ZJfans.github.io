@@ -1,0 +1,695 @@
+
+
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-color-scheme=auto>
+
+
+
+<head>
+  <meta charset="UTF-8">
+  <link rel="apple-touch-icon" sizes="76x76" href="/img/fluid.png">
+  <link rel="icon" href="/img/fluid.png">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, shrink-to-fit=no">
+  <meta http-equiv="x-ua-compatible" content="ie=edge">
+  
+  <meta name="theme-color" content="#2f4154">
+  <meta name="author" content="张三疯">
+  <meta name="keywords" content="nginx,openresty,网关,HTTP/HTTPS,Websocket">
+  
+    <meta name="description" content="title: 协商缓存在nginx的应用与实践tags: [websocket, nginx]index_img:  1、前言缓存是一个高效减轻网络与服务器压力的机制，具有减少冗余数据传输、缓解网络瓶颈以及降低时延等优点。通常客户端在请求数据时，会发送请求到原始服务器获取，重复的数据可能会在网络中多次传输，但是如果有缓存，客户端就可以直接从缓存中获取数据，减少重复的流量。例如在浏览器首次请求某些静">
+<meta property="og:type" content="article">
+<meta property="og:title" content="ZJfans Blog">
+<meta property="og:url" content="https://zjfans.github.io/2024/03/06/%E5%8D%8F%E5%95%86%E7%BC%93%E5%AD%98%E5%9C%A8nginx%E7%9A%84%E5%BA%94%E7%94%A8%E4%B8%8E%E5%AE%9E%E8%B7%B5/index.html">
+<meta property="og:site_name" content="ZJfans Blog">
+<meta property="og:description" content="title: 协商缓存在nginx的应用与实践tags: [websocket, nginx]index_img:  1、前言缓存是一个高效减轻网络与服务器压力的机制，具有减少冗余数据传输、缓解网络瓶颈以及降低时延等优点。通常客户端在请求数据时，会发送请求到原始服务器获取，重复的数据可能会在网络中多次传输，但是如果有缓存，客户端就可以直接从缓存中获取数据，减少重复的流量。例如在浏览器首次请求某些静">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="file:///C:/Users/ZHANGJ~1/AppData/Local/Temp/msohtmlclip1/01/clip_image002.gif">
+<meta property="og:image" content="file:///C:/Users/ZHANGJ~1/AppData/Local/Temp/msohtmlclip1/01/clip_image004.gif">
+<meta property="og:image" content="file:///C:/Users/ZHANGJ~1/AppData/Local/Temp/msohtmlclip1/01/clip_image006.jpg">
+<meta property="og:image" content="file:///C:/Users/ZHANGJ~1/AppData/Local/Temp/msohtmlclip1/01/clip_image008.jpg">
+<meta property="og:image" content="file:///C:/Users/ZHANGJ~1/AppData/Local/Temp/msohtmlclip1/01/clip_image010.jpg">
+<meta property="og:image" content="file:///C:/Users/ZHANGJ~1/AppData/Local/Temp/msohtmlclip1/01/clip_image012.jpg">
+<meta property="og:image" content="file:///C:/Users/ZHANGJ~1/AppData/Local/Temp/msohtmlclip1/01/clip_image014.jpg">
+<meta property="og:image" content="file:///C:/Users/ZHANGJ~1/AppData/Local/Temp/msohtmlclip1/01/clip_image016.jpg">
+<meta property="og:image" content="file:///C:/Users/ZHANGJ~1/AppData/Local/Temp/msohtmlclip1/01/clip_image018.jpg">
+<meta property="og:image" content="file:///C:/Users/ZHANGJ~1/AppData/Local/Temp/msohtmlclip1/01/clip_image020.jpg">
+<meta property="og:image" content="file:///C:/Users/ZHANGJ~1/AppData/Local/Temp/msohtmlclip1/01/clip_image022.jpg">
+<meta property="og:image" content="file:///C:/Users/ZHANGJ~1/AppData/Local/Temp/msohtmlclip1/01/clip_image024.jpg">
+<meta property="og:image" content="file:///C:/Users/ZHANGJ~1/AppData/Local/Temp/msohtmlclip1/01/clip_image026.jpg">
+<meta property="og:image" content="file:///C:/Users/ZHANGJ~1/AppData/Local/Temp/msohtmlclip1/01/clip_image028.jpg">
+<meta property="og:image" content="file:///C:/Users/ZHANGJ~1/AppData/Local/Temp/msohtmlclip1/01/clip_image030.jpg">
+<meta property="og:image" content="file:///C:/Users/ZHANGJ~1/AppData/Local/Temp/msohtmlclip1/01/clip_image032.gif">
+<meta property="article:published_time" content="2024-03-06T10:38:39.757Z">
+<meta property="article:modified_time" content="2024-03-06T10:40:37.869Z">
+<meta property="article:author" content="张三疯">
+<meta property="article:tag" content="nginx,openresty,网关,HTTP&#x2F;HTTPS,Websocket">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="file:///C:/Users/ZHANGJ~1/AppData/Local/Temp/msohtmlclip1/01/clip_image002.gif">
+  
+  
+  
+  <title>ZJfans Blog</title>
+
+  <link  rel="stylesheet" href="https://lib.baomitu.com/twitter-bootstrap/4.6.1/css/bootstrap.min.css" />
+
+
+
+  <link  rel="stylesheet" href="https://lib.baomitu.com/github-markdown-css/4.0.0/github-markdown.min.css" />
+
+  <link  rel="stylesheet" href="https://lib.baomitu.com/hint.css/2.7.0/hint.min.css" />
+
+  <link  rel="stylesheet" href="https://lib.baomitu.com/fancybox/3.5.7/jquery.fancybox.min.css" />
+
+
+
+<!-- 主题依赖的图标库，不要自行修改 -->
+<!-- Do not modify the link that theme dependent icons -->
+
+<link rel="stylesheet" href="//at.alicdn.com/t/font_1749284_hj8rtnfg7um.css">
+
+
+
+<link rel="stylesheet" href="//at.alicdn.com/t/font_1736178_lbnruvf0jn.css">
+
+
+<link  rel="stylesheet" href="/css/main.css" />
+
+
+  <link id="highlight-css" rel="stylesheet" href="/css/highlight.css" />
+  
+    <link id="highlight-css-dark" rel="stylesheet" href="/css/highlight-dark.css" />
+  
+
+
+
+
+  <script id="fluid-configs">
+    var Fluid = window.Fluid || {};
+    Fluid.ctx = Object.assign({}, Fluid.ctx)
+    var CONFIG = {"hostname":"zjfans.github.io","root":"/","version":"1.9.7","typing":{"enable":true,"typeSpeed":70,"cursorChar":"_","loop":false,"scope":[]},"anchorjs":{"enable":true,"element":"h1,h2,h3,h4,h5,h6","placement":"left","visible":"hover","icon":""},"progressbar":{"enable":true,"height_px":3,"color":"#29d","options":{"showSpinner":false,"trickleSpeed":100}},"code_language":{"enable":true,"default":"TEXT"},"copy_btn":true,"image_caption":{"enable":true},"image_zoom":{"enable":true,"img_url_replace":["",""]},"toc":{"enable":true,"placement":"right","headingSelector":"h1,h2,h3,h4,h5,h6","collapseDepth":0},"lazyload":{"enable":true,"loading_img":"/img/loading.gif","onlypost":false,"offset_factor":2},"web_analytics":{"enable":false,"follow_dnt":true,"baidu":null,"google":{"measurement_id":null},"tencent":{"sid":null,"cid":null},"woyaola":null,"cnzz":null,"leancloud":{"app_id":null,"app_key":null,"server_url":null,"path":"window.location.pathname","ignore_local":false}},"search_path":"/local-search.xml","include_content_in_search":true};
+
+    if (CONFIG.web_analytics.follow_dnt) {
+      var dntVal = navigator.doNotTrack || window.doNotTrack || navigator.msDoNotTrack;
+      Fluid.ctx.dnt = dntVal && (dntVal.startsWith('1') || dntVal.startsWith('yes') || dntVal.startsWith('on'));
+    }
+  </script>
+  <script  src="/js/utils.js" ></script>
+  <script  src="/js/color-schema.js" ></script>
+  
+
+
+  
+<meta name="generator" content="Hexo 6.3.0"></head>
+
+
+<body>
+  
+
+  <header>
+    
+
+<div class="header-inner" style="height: 70vh;">
+  <nav id="navbar" class="navbar fixed-top  navbar-expand-lg navbar-dark scrolling-navbar">
+  <div class="container">
+    <a class="navbar-brand" href="/">
+      <strong>ZJfans Blog</strong>
+    </a>
+
+    <button id="navbar-toggler-btn" class="navbar-toggler" type="button" data-toggle="collapse"
+            data-target="#navbarSupportedContent"
+            aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+      <div class="animated-icon"><span></span><span></span><span></span></div>
+    </button>
+
+    <!-- Collapsible content -->
+    <div class="collapse navbar-collapse" id="navbarSupportedContent">
+      <ul class="navbar-nav ml-auto text-center">
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/" target="_self">
+                <i class="iconfont icon-home-fill"></i>
+                <span>首页</span>
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/archives/" target="_self">
+                <i class="iconfont icon-archive-fill"></i>
+                <span>归档</span>
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/categories/" target="_self">
+                <i class="iconfont icon-category-fill"></i>
+                <span>分类</span>
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/tags/" target="_self">
+                <i class="iconfont icon-tags-fill"></i>
+                <span>标签</span>
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/about/" target="_self">
+                <i class="iconfont icon-user-fill"></i>
+                <span>关于</span>
+              </a>
+            </li>
+          
+        
+        
+          <li class="nav-item" id="search-btn">
+            <a class="nav-link" target="_self" href="javascript:;" data-toggle="modal" data-target="#modalSearch" aria-label="Search">
+              <i class="iconfont icon-search"></i>
+            </a>
+          </li>
+          
+        
+        
+          <li class="nav-item" id="color-toggle-btn">
+            <a class="nav-link" target="_self" href="javascript:;" aria-label="Color Toggle">
+              <i class="iconfont icon-dark" id="color-toggle-icon"></i>
+            </a>
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+</nav>
+
+  
+
+<div id="banner" class="banner" parallax=true
+     style="background: url('/img/default.png') no-repeat center center; background-size: cover;">
+  <div class="full-bg-img">
+    <div class="mask flex-center" style="background-color: rgba(0, 0, 0, 0.3)">
+      <div class="banner-text text-center fade-in-up">
+        <div class="h2">
+          
+            <span id="subtitle" data-typed-text=""></span>
+          
+        </div>
+
+        
+          
+  <div class="mt-3">
+    
+    
+      <span class="post-meta">
+        <i class="iconfont icon-date-fill" aria-hidden="true"></i>
+        <time datetime="2024-03-06 18:38" pubdate>
+          2024年3月6日 晚上
+        </time>
+      </span>
+    
+  </div>
+
+  <div class="mt-1">
+    
+      <span class="post-meta mr-2">
+        <i class="iconfont icon-chart"></i>
+        
+          2.7k 字
+        
+      </span>
+    
+
+    
+      <span class="post-meta mr-2">
+        <i class="iconfont icon-clock-fill"></i>
+        
+        
+        
+          23 分钟
+        
+      </span>
+    
+
+    
+    
+  </div>
+
+
+        
+      </div>
+
+      
+    </div>
+  </div>
+</div>
+
+</div>
+
+  </header>
+
+  <main>
+    
+      
+
+<div class="container-fluid nopadding-x">
+  <div class="row nomargin-x">
+    <div class="side-col d-none d-lg-block col-lg-2">
+      
+
+    </div>
+
+    <div class="col-lg-8 nopadding-x-md">
+      <div class="container nopadding-x-md" id="board-ctn">
+        <div id="board">
+          <article class="post-content mx-auto">
+            <h1 id="seo-header"></h1>
+            
+            
+              <div class="markdown-body">
+                
+                <p>title: 协商缓存在nginx的应用与实践<br>tags: [websocket, nginx]<br>index_img: </p>
+<h2 id="1、前言"><a href="#1、前言" class="headerlink" title="1、前言"></a>1、前言</h2><p>缓存是一个高效减轻网络与服务器压力的机制，具有减少冗余数据传输、缓解网络瓶颈以及降低时延等优点。通常客户端在请求数据时，会发送请求到原始服务器获取，重复的数据可能会在网络中多次传输，但是如果有缓存，客户端就可以直接从缓存中获取数据，减少重复的流量。例如在浏览器首次请求某些静态资源时，状态码会是200 ok，但是刷新页面，状态码就会变为200 ok ( from memory cache)，这是因为浏览器对这些资源进行了缓存，客户端的数据并不是发送请求到原始服务器获取的，而是从缓存中获取的。</p>
+<p><img src="file:///C:/Users/ZHANGJ~1/AppData/Local/Temp/msohtmlclip1/01/clip_image002.gif" srcset="/img/loading.gif" lazyload alt="img"></p>
+<p>但是问题也是显而易见的，如果原始服务器的数据发生了改变，而缓存并没有及时更新数据，在客户端请求时返回了过期的数据，这就会导致了数据的不准确。已缓存的数据应当与原始服务器的数据保持一致，更准确的来说，是缓存返回的数据应当与原始服务器的数据保持一致。那么如何在缓存的基础上，避免这个问题呢？事实上，HTTP协议是提供了多种机制来保证数据一致性的。</p>
+<h2 id="2、“使用期”与“新鲜度“"><a href="#2、“使用期”与“新鲜度“" class="headerlink" title="2、“使用期”与“新鲜度“"></a>2、“使用期”与“新鲜度“</h2><p>使用期是指数据在服务器响应返回后的总时间，可以简单理解为数据在缓存使用的时间，从服务器将数据发出去开始计时；新鲜度是指数据在服务器响应发出去后，缓存可以使用的时间。如果使用期小于新鲜度，说明数据是“新鲜的”，缓存可以继续使用。反之，缓存需要判断数据是否发生了更新，是否需要重新拉取数据，如何更新这取决于服务端采用的HTTP缓存策略。</p>
+<p><strong>使用期：</strong></p>
+<p>服务器用HTTP协议的响应头部date表示发送数据时的时间，如果客户端与服务端使用同样的、完全精确的时钟，已缓存数据的使用期（data_age）就可以是当前时间（current_time）减去服务器发送数据时（Date_header_value）的时间。</p>
+<p>data_age &#x3D; current_time – date_header_value</p>
+<p>但是并不是所有的计算机都实现了时钟同步，当服务器和客户端的时钟不同步时，使用期可能是很大或者甚至是负的，如果是负的，就需要将其设置为零。</p>
+<p>data_age &#x3D; max(0，current_time – date_header_value)</p>
+<p>date_header_value的值代表着原始服务器发出数据的时间，所以在经过代理时，一定不能进行修改。</p>
+<p><strong>新鲜度：</strong></p>
+<figure class="highlight css"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><code class="hljs css">Expires : Fri, <span class="hljs-number">09</span> Sep <span class="hljs-number">2022</span>, <span class="hljs-number">05</span>:<span class="hljs-number">27</span>:<span class="hljs-number">57</span> GMT<br><br>Cache-Control : max-age=<span class="hljs-number">3600</span><br></code></pre></td></tr></table></figure>
+
+<p>服务器用HTTP&#x2F;1.0+的Expires或HTTP&#x2F;1.1的Cache-Control:max-age响应头部指定数据的过期时间。Expires指定的是绝对时间，即数据到这个时间就过期了。而Cache-Control:max-age指定的是相对时间，表示缓存收到数据后可以在缓存存活的时间。由于Expires依靠于时钟的准确性，因此目前更多的使用后者。</p>
+<p>通过比对使用期与新鲜度，缓存可以判断当前存储的数据是否足够新鲜，如果足够新鲜，则直接返回缓存中的数据，不然就只能重新从原始服务器拉取数据。但是数据在缓存中已经过期，而原始服务器中并未发生更新，缓存依旧需要发送请求获取数据，这会消耗大量不必要的网络资源。对于网络传输而言，应当遵守以最小数据量传输而保证最大信息量传输的原则，因此为了减少冗余数据的传输，HTTP协议提供了协商缓存机制，用以减少数据的传输。</p>
+<p><img src="file:///C:/Users/ZHANGJ~1/AppData/Local/Temp/msohtmlclip1/01/clip_image004.gif" srcset="/img/loading.gif" lazyload alt="使用期与新鲜度"></p>
+<h2 id="3、协商缓存：no-store、no-cache与must-revalidate"><a href="#3、协商缓存：no-store、no-cache与must-revalidate" class="headerlink" title="3、协商缓存：no-store、no-cache与must-revalidate"></a>3、协商缓存：no-store、no-cache与must-revalidate</h2><figure class="highlight https"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><code class="hljs https">HTTP/1.0:<br><br>    Pragma: no-cache<br><br>HTTP/1.1:<br><br>    Cache-Control: no-store<br><br>    Cache-Control: no-cache<br><br>    Cache-Control: must-revalidate<br></code></pre></td></tr></table></figure>
+
+<p>服务器可以通过no-store来禁止缓存对数据进行存储，因此每次客户端请求数据时，缓存都需要发送请求到原始服务器获取，这样就可以保证客户端获取数据的新鲜度。</p>
+<p>no-cache与no-store不同，no-cache允许缓存对数据进行存储，缓存需要在原始服务器验证新鲜度之后，才能将数据返回给客户端。通常，如果数据发生了更新，原始服务器会返回更新后的数据；反之，会返回304，表示缓存的数据并没有发生改变，可以把缓存的数据返回给客户端。</p>
+<p>而must-revalidate与no-cache类似，同样允许缓存对数据进行存储。如果缓存的数据过期，则must-revalidate与no-cache的行为一致；但是如果数据未过期，则可以直接返回给客户端数据而无需验证。因此must-revalidate通常需要与Expires、max-age进行配合使用。例如：</p>
+<p><img src="file:///C:/Users/ZHANGJ~1/AppData/Local/Temp/msohtmlclip1/01/clip_image006.jpg" srcset="/img/loading.gif" lazyload alt="img"></p>
+<p>现在让我们总结一下这3种缓存机制的特点：</p>
+<p>no-store：缓存不可以存储数据，每次请求都需要到服务器获取数据，因此可以保证数据的新鲜度，但是大量冗余数据的传输，会增大网络与服务器的压力，降低系统的整体性能。</p>
+<p>no-cache：缓存可以存储数据，每次请求都需要到服务器进行新鲜度的验证，因此可以保证数据的新鲜度。相比于no-store，减少了大量数据的传输。</p>
+<p>must-revalidate：缓存可以存储数据，如果数据过期，则需要到服务器进行新鲜度的验证，反之，则可以直接返回给客户端数据。相比于no-cache，减少一定数量的新鲜度验证请求，进一步减少网络与服务器的压力，但是不能保证数据的新鲜度，有一定时间的误差，这取决于新鲜度的设置。</p>
+<p>3种机制各有优劣，应该根据具体的业务需求选择合适的缓存机制，但整体来看，no-cache适合绝大部分的场景。 </p>
+<h3 id="3-1、no-cache验证新鲜度：if-modified-since与if-none-match"><a href="#3-1、no-cache验证新鲜度：if-modified-since与if-none-match" class="headerlink" title="3.1、no-cache验证新鲜度：if-modified-since与if-none-match"></a>3.1、no-cache验证新鲜度：if-modified-since与if-none-match</h3><p>当原始服务器采用no-cache缓存模式时，缓存请求数据，服务器的响应会返回响应头Last-Modified与Etag。Last-Modified表示原始服务器修改该数据的最后时间，Etag是一个字符串，不同的系统生成方式也是不同的。缓存在验证新鲜度时，会将这2个值通过2个请求头If-Modified-Since与If-None-Match传送到原始服务器，而原始服务器通过比对这2个值，就可以判断缓存的数据与本地数据是否一致，也就可以决定是否需要返回数据。</p>
+<p>响应：</p>
+<figure class="highlight css"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><code class="hljs css">Last-Modified : Tue,<span class="hljs-number">06</span> Sep <span class="hljs-number">2022</span> <span class="hljs-number">03</span>:<span class="hljs-number">09</span>:<span class="hljs-number">17</span> GMT<br><br>ETag : “<span class="hljs-number">6316</span>b9dd-<span class="hljs-number">2</span>b1ce”<br></code></pre></td></tr></table></figure>
+
+<p>请求：</p>
+<figure class="highlight css"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><code class="hljs css">If-Modified-Since : Tue,<span class="hljs-number">06</span> Sep <span class="hljs-number">2022</span> <span class="hljs-number">03</span>:<span class="hljs-number">09</span>:<span class="hljs-number">17</span> GMT<br><br>If-None-Match : “<span class="hljs-number">6316</span>b9dd-<span class="hljs-number">2</span>b1ce”<br></code></pre></td></tr></table></figure>
+
+
+
+<h2 id="4、协商缓存在nginx的应用"><a href="#4、协商缓存在nginx的应用" class="headerlink" title="4、协商缓存在nginx的应用"></a>4、协商缓存在nginx的应用</h2><h3 id="4-1、应用no-cache对前端的优化"><a href="#4-1、应用no-cache对前端的优化" class="headerlink" title="4.1、应用no-cache对前端的优化"></a>4.1、应用no-cache对前端的优化</h3><p>nginx提供流量分发、协议转换、静态资源代理等功能。本节以HUI前端为例，围绕静态资源代理这一功能，分析nginx何应用no-cache优化前端。</p>
+<p>see界面可以对协商缓存进行设置，最后落地到配置文件nginx.conf，具体配置如下图所示，可以设置单个文件采用协商缓存模式如： sysconfig.js；也可以根据文件类型后缀设置协商缓存模式如：html或js。</p>
+<p><img src="file:///C:/Users/ZHANGJ~1/AppData/Local/Temp/msohtmlclip1/01/clip_image008.jpg" srcset="/img/loading.gif" lazyload alt="img"></p>
+<p>首先在浏览器访问hui-build前端，可以看到首次访问时，静态资源的状态码是200 ok，这代表数据是从服务器获取到的。</p>
+<p><img src="file:///C:/Users/ZHANGJ~1/AppData/Local/Temp/msohtmlclip1/01/clip_image010.jpg" srcset="/img/loading.gif" lazyload alt="img"></p>
+<p>接着刷新界面，可以看到状态码变为304 Not Modified，nginx的日志信息也可以看到客户端是发起了一次请求到nginx获取数据，判断到数据并未发生更新返回304。</p>
+<p><img src="file:///C:/Users/ZHANGJ~1/AppData/Local/Temp/msohtmlclip1/01/clip_image012.jpg" srcset="/img/loading.gif" lazyload alt="img"></p>
+<p><img src="file:///C:/Users/ZHANGJ~1/AppData/Local/Temp/msohtmlclip1/01/clip_image014.jpg" srcset="/img/loading.gif" lazyload alt="img"></p>
+<p>此时，如果对sysconfig.js进行修改，再次刷新界面，如下图所示，可以看到状态码变为200 ok，修改的内容及时返回到了客户端。</p>
+<p>修改前：</p>
+<p><img src="file:///C:/Users/ZHANGJ~1/AppData/Local/Temp/msohtmlclip1/01/clip_image016.jpg" srcset="/img/loading.gif" lazyload alt="img"></p>
+<p>修改：</p>
+<p><img src="file:///C:/Users/ZHANGJ~1/AppData/Local/Temp/msohtmlclip1/01/clip_image018.jpg" srcset="/img/loading.gif" lazyload alt="img"></p>
+<p>接着刷新界面，可以看到状态码变为200 ok，而且数据已经更新：</p>
+<p><img src="file:///C:/Users/ZHANGJ~1/AppData/Local/Temp/msohtmlclip1/01/clip_image020.jpg" srcset="/img/loading.gif" lazyload alt="img"></p>
+<p><img src="file:///C:/Users/ZHANGJ~1/AppData/Local/Temp/msohtmlclip1/01/clip_image022.jpg" srcset="/img/loading.gif" lazyload alt="img"></p>
+<p>   这样既可以保证数据的及时更新，又可以减少大量数据的传输，唯一的网络开销是进行新鲜度的再次验证。</p>
+<h3 id="4-2、nginx源码分析If-Modified-Since与If-None-Match"><a href="#4-2、nginx源码分析If-Modified-Since与If-None-Match" class="headerlink" title="4.2、nginx源码分析If-Modified-Since与If-None-Match"></a>4.2、nginx源码分析If-Modified-Since与If-None-Match</h3><p><strong>etag的生成</strong></p>
+<p>nginx的etag的生成方式比较简单，由last-modified与content-length转换为十六进制组合而成。</p>
+<p><img src="file:///C:/Users/ZHANGJ~1/AppData/Local/Temp/msohtmlclip1/01/clip_image024.jpg" srcset="/img/loading.gif" lazyload alt="img"></p>
+<p>缓存请求数据时，在响应头返回给缓存。</p>
+<p><img src="file:///C:/Users/ZHANGJ~1/AppData/Local/Temp/msohtmlclip1/01/clip_image026.jpg" srcset="/img/loading.gif" lazyload alt="img"></p>
+<p><strong>If-Modified-Since****与If-None-Match的校验</strong></p>
+<p>缓存向nginx验证数据新鲜度时，需要携带If-Modified-Since与If-None-Match请求头。</p>
+<p><img src="file:///C:/Users/ZHANGJ~1/AppData/Local/Temp/msohtmlclip1/01/clip_image028.jpg" srcset="/img/loading.gif" lazyload alt="img"></p>
+<p>nginx在判断缓存数据的新鲜度时，会先后对If-Modified-Since和If-None-Match与当前数据的last-modified和etag进行比对，只要2者有1个发生了改变，则判断本地数据发生更新，缓存中的数据已过期，就会直接返回更新后的数据，如果都没有变，则会返回304。源码与流程图如下。</p>
+<p><img src="file:///C:/Users/ZHANGJ~1/AppData/Local/Temp/msohtmlclip1/01/clip_image030.jpg" srcset="/img/loading.gif" lazyload alt="img"></p>
+<p><img src="file:///C:/Users/ZHANGJ~1/AppData/Local/Temp/msohtmlclip1/01/clip_image032.gif" srcset="/img/loading.gif" lazyload alt="基础缓存数据流程"></p>
+<h2 id="5、总结"><a href="#5、总结" class="headerlink" title="5、总结"></a>5、总结</h2><p>协商缓存不只是一种简单的缓存机制，更是一种很好的理念。对于客户端与服务端数据同步、性能优化都是很好的借鉴，尤其是服务端不能主动向客户端发送请求的场景。例如当有服务以域名的形式注册到nginx时，nginx需要向DNS查询真实ip，为了避免每次请求都会向DNS查询，会对查询到的结果进行缓存，并启动定时器查询真实ip是否发生改变。而定时器的时间就类似于协商缓存的新鲜度，在实际的生产中没有完美的方案，因此需要根据具体的需求偏重来调整可靠性与性能。</p>
+<p>本文从HTTP缓存原理出发，介绍了缓存对系统性能优化的意义，并讲解了HTTP缓存发展过程中存在冗余数据多次传输的问题，以及为了解决这个问题而出现的协商缓存机制。通过对协商缓存的原理与nginx实现协商缓存的源码分析，希望大家可以对HTTP缓存有一定的理解。</p>
+
+                
+              </div>
+            
+            <hr/>
+            <div>
+              <div class="post-metas my-3">
+  
+  
+</div>
+
+
+              
+  
+
+  <div class="license-box my-3">
+    <div class="license-title">
+      <div></div>
+      <div>https://zjfans.github.io/2024/03/06/协商缓存在nginx的应用与实践/</div>
+    </div>
+    <div class="license-meta">
+      
+        <div class="license-meta-item">
+          <div>作者</div>
+          <div>张三疯</div>
+        </div>
+      
+      
+        <div class="license-meta-item license-meta-date">
+          <div>发布于</div>
+          <div>2024年3月6日</div>
+        </div>
+      
+      
+      
+        <div class="license-meta-item">
+          <div>许可协议</div>
+          <div>
+            
+              
+              
+                <a class="print-no-link" target="_blank" href="https://creativecommons.org/licenses/by/4.0/">
+                  <span class="hint--top hint--rounded" aria-label="BY - 署名">
+                    <i class="iconfont icon-by"></i>
+                  </span>
+                </a>
+              
+            
+          </div>
+        </div>
+      
+    </div>
+    <div class="license-icon iconfont"></div>
+  </div>
+
+
+
+              
+                <div class="post-prevnext my-3">
+                  <article class="post-prev col-6">
+                    
+                    
+                  </article>
+                  <article class="post-next col-6">
+                    
+                    
+                      <a href="/2024/02/28/SOCKET.IO%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5-%E4%BB%A3%E7%90%86%E7%AF%87/" title="SOCKET.IO最佳实践-代理篇">
+                        <span class="hidden-mobile">SOCKET.IO最佳实践-代理篇</span>
+                        <span class="visible-mobile">下一篇</span>
+                        <i class="iconfont icon-arrowright"></i>
+                      </a>
+                    
+                  </article>
+                </div>
+              
+            </div>
+
+            
+          </article>
+        </div>
+      </div>
+    </div>
+
+    <div class="side-col d-none d-lg-block col-lg-2">
+      
+  <aside class="sidebar" style="margin-left: -1rem">
+    <div id="toc">
+  <p class="toc-header">
+    <i class="iconfont icon-list"></i>
+    <span>目录</span>
+  </p>
+  <div class="toc-body" id="toc-body"></div>
+</div>
+
+
+
+  </aside>
+
+
+    </div>
+  </div>
+</div>
+
+
+
+
+
+  
+
+
+
+  
+
+
+
+  
+
+
+
+  
+
+
+
+  
+
+
+
+
+
+
+
+    
+
+    
+      <a id="scroll-top-button" aria-label="TOP" href="#" role="button">
+        <i class="iconfont icon-arrowup" aria-hidden="true"></i>
+      </a>
+    
+
+    
+      <div class="modal fade" id="modalSearch" tabindex="-1" role="dialog" aria-labelledby="ModalLabel"
+     aria-hidden="true">
+  <div class="modal-dialog modal-dialog-scrollable modal-lg" role="document">
+    <div class="modal-content">
+      <div class="modal-header text-center">
+        <h4 class="modal-title w-100 font-weight-bold">搜索</h4>
+        <button type="button" id="local-search-close" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body mx-3">
+        <div class="md-form mb-5">
+          <input type="text" id="local-search-input" class="form-control validate">
+          <label data-error="x" data-success="v" for="local-search-input">关键词</label>
+        </div>
+        <div class="list-group" id="local-search-result"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+    
+
+    
+  </main>
+
+  <footer>
+    <div class="footer-inner">
+  
+    <div class="footer-content">
+       <a href="https://hexo.io" target="_blank" rel="nofollow noopener"><span>Hexo</span></a> <i class="iconfont icon-love"></i> <a href="https://github.com/fluid-dev/hexo-theme-fluid" target="_blank" rel="nofollow noopener"><span>Fluid</span></a> 
+    </div>
+  
+  
+  
+  
+</div>
+
+  </footer>
+
+  <!-- Scripts -->
+  
+  <script  src="https://lib.baomitu.com/nprogress/0.2.0/nprogress.min.js" ></script>
+  <link  rel="stylesheet" href="https://lib.baomitu.com/nprogress/0.2.0/nprogress.min.css" />
+
+  <script>
+    NProgress.configure({"showSpinner":false,"trickleSpeed":100})
+    NProgress.start()
+    window.addEventListener('load', function() {
+      NProgress.done();
+    })
+  </script>
+
+
+<script  src="https://lib.baomitu.com/jquery/3.6.4/jquery.min.js" ></script>
+<script  src="https://lib.baomitu.com/twitter-bootstrap/4.6.1/js/bootstrap.min.js" ></script>
+<script  src="/js/events.js" ></script>
+<script  src="/js/plugins.js" ></script>
+
+
+  <script  src="https://lib.baomitu.com/typed.js/2.0.12/typed.min.js" ></script>
+  <script>
+    (function (window, document) {
+      var typing = Fluid.plugins.typing;
+      var subtitle = document.getElementById('subtitle');
+      if (!subtitle || !typing) {
+        return;
+      }
+      var text = subtitle.getAttribute('data-typed-text');
+      
+        typing(text);
+      
+    })(window, document);
+  </script>
+
+
+
+
+  
+    <script  src="/js/img-lazyload.js" ></script>
+  
+
+
+
+
+  
+<script>
+  Fluid.utils.createScript('https://lib.baomitu.com/tocbot/4.20.1/tocbot.min.js', function() {
+    var toc = jQuery('#toc');
+    if (toc.length === 0 || !window.tocbot) { return; }
+    var boardCtn = jQuery('#board-ctn');
+    var boardTop = boardCtn.offset().top;
+
+    window.tocbot.init(Object.assign({
+      tocSelector     : '#toc-body',
+      contentSelector : '.markdown-body',
+      linkClass       : 'tocbot-link',
+      activeLinkClass : 'tocbot-active-link',
+      listClass       : 'tocbot-list',
+      isCollapsedClass: 'tocbot-is-collapsed',
+      collapsibleClass: 'tocbot-is-collapsible',
+      scrollSmooth    : true,
+      includeTitleTags: true,
+      headingsOffset  : -boardTop,
+    }, CONFIG.toc));
+    if (toc.find('.toc-list-item').length > 0) {
+      toc.css('visibility', 'visible');
+    }
+
+    Fluid.events.registerRefreshCallback(function() {
+      if ('tocbot' in window) {
+        tocbot.refresh();
+        var toc = jQuery('#toc');
+        if (toc.length === 0 || !tocbot) {
+          return;
+        }
+        if (toc.find('.toc-list-item').length > 0) {
+          toc.css('visibility', 'visible');
+        }
+      }
+    });
+  });
+</script>
+
+
+  <script src=https://lib.baomitu.com/clipboard.js/2.0.11/clipboard.min.js></script>
+
+  <script>Fluid.plugins.codeWidget();</script>
+
+
+  
+<script>
+  Fluid.utils.createScript('https://lib.baomitu.com/anchor-js/4.3.1/anchor.min.js', function() {
+    window.anchors.options = {
+      placement: CONFIG.anchorjs.placement,
+      visible  : CONFIG.anchorjs.visible
+    };
+    if (CONFIG.anchorjs.icon) {
+      window.anchors.options.icon = CONFIG.anchorjs.icon;
+    }
+    var el = (CONFIG.anchorjs.element || 'h1,h2,h3,h4,h5,h6').split(',');
+    var res = [];
+    for (var item of el) {
+      res.push('.markdown-body > ' + item.trim());
+    }
+    if (CONFIG.anchorjs.placement === 'left') {
+      window.anchors.options.class = 'anchorjs-link-left';
+    }
+    window.anchors.add(res.join(', '));
+
+    Fluid.events.registerRefreshCallback(function() {
+      if ('anchors' in window) {
+        anchors.removeAll();
+        var el = (CONFIG.anchorjs.element || 'h1,h2,h3,h4,h5,h6').split(',');
+        var res = [];
+        for (var item of el) {
+          res.push('.markdown-body > ' + item.trim());
+        }
+        if (CONFIG.anchorjs.placement === 'left') {
+          anchors.options.class = 'anchorjs-link-left';
+        }
+        anchors.add(res.join(', '));
+      }
+    });
+  });
+</script>
+
+
+  
+<script>
+  Fluid.utils.createScript('https://lib.baomitu.com/fancybox/3.5.7/jquery.fancybox.min.js', function() {
+    Fluid.plugins.fancyBox();
+  });
+</script>
+
+
+  <script>Fluid.plugins.imageCaption();</script>
+
+  <script  src="/js/local-search.js" ></script>
+
+
+
+
+
+<!-- 主题的启动项，将它保持在最底部 -->
+<!-- the boot of the theme, keep it at the bottom -->
+<script  src="/js/boot.js" ></script>
+
+
+  
+
+  <noscript>
+    <div class="noscript-warning">博客在允许 JavaScript 运行的环境下浏览效果更佳</div>
+  </noscript>
+</body>
+</html>
