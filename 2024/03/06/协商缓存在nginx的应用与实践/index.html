@@ -46,9 +46,8 @@
 <meta property="og:image" content="https://zjfans.github.io/source/img%5Ccache-21.png">
 <meta property="og:image" content="https://zjfans.github.io/img/cache-22.png">
 <meta property="og:image" content="https://zjfans.github.io/img/cache-23.png">
-<meta property="og:image" content="https://zjfans.github.io/img/cache-24.png">
 <meta property="article:published_time" content="2024-03-06T10:38:39.757Z">
-<meta property="article:modified_time" content="2024-03-11T09:53:38.248Z">
+<meta property="article:modified_time" content="2024-03-11T12:27:43.916Z">
 <meta property="article:author" content="张三疯">
 <meta property="article:tag" content="协商缓存">
 <meta property="article:tag" content="no cache nginx">
@@ -246,7 +245,7 @@
       <span class="post-meta mr-2">
         <i class="iconfont icon-chart"></i>
         
-          3.1k 字
+          3k 字
         
       </span>
     
@@ -365,6 +364,7 @@
 <p><img src="/img/cache-%E5%9B%BE16.png" srcset="/img/loading.gif" lazyload alt="cache-图16"></p>
 <h2 id="5、实践出真知"><a href="#5、实践出真知" class="headerlink" title="5、实践出真知"></a>5、实践出真知</h2><h3 id="5-1、抓包分析-协商缓存验证新鲜度"><a href="#5-1、抓包分析-协商缓存验证新鲜度" class="headerlink" title="5.1、抓包分析-协商缓存验证新鲜度"></a>5.1、抓包分析-协商缓存验证新鲜度</h3><p>1、首先用nginx代理一个js文件，浏览器第一次请求资源时，状态码为200 ok，刷线界面，状态码变为304，如下图</p>
 <p><img src="/img/cache-17.png" srcset="/img/loading.gif" lazyload alt="cache-17"></p>
+<p>为了兼容http1.0，pragma也设置了no-cache</p>
 <p><img src="/img/cache-18.png" srcset="/img/loading.gif" lazyload alt="cache-18"></p>
 <p><img src="/img/cache-19.png" srcset="/img/loading.gif" lazyload alt="cache-19"></p>
 <p>2、抓包查看第一次请求的网络包，可以看到服务端返回了静态资源的数据</p>
@@ -378,8 +378,7 @@
 <p><img src="/img/cache-23.png" srcset="/img/loading.gif" lazyload alt="cache-23"></p>
 <p>5、结论</p>
 <p>协商缓存模式下，客户端会对每个已经缓存的资源额外进行一次新鲜度验证，对于网络来说，这是一种开销。但是既要保证资源的新鲜度，又要尽量提高性能，这是很好的策略，毕竟没有完美的人，自然也就没有完美的策略。对于静态资源长时间不发生改变的场景，很明显no-cache不适用，不如使用must-revalidate。</p>
-<h3 id="5-2、特殊请求不生效"><a href="#5-2、特殊请求不生效" class="headerlink" title="5.2、特殊请求不生效"></a>5.2、特殊请求不生效</h3><p>在测试的过程中，一个页面会请求很多静态资源，但是总有几个不会触发协商缓存，如下图，这是很困扰人的现象。在请教了一个实力很强的前端同事，研究了不少时间后，终于发现了原因</p>
-<p><img src="/img/cache-24.png" srcset="/img/loading.gif" lazyload alt="cache-24"></p>
+<h3 id="5-2、特殊请求不生效"><a href="#5-2、特殊请求不生效" class="headerlink" title="5.2、特殊请求不生效"></a>5.2、特殊请求不生效</h3><p>在测试的过程中，一个页面会请求很多静态资源，但是总有几个不会触发协商缓存。</p>
 <h2 id="6、总结"><a href="#6、总结" class="headerlink" title="6、总结"></a>6、总结</h2><p>协商缓存不只是一种简单的缓存机制，更是一种很好的理念。对于客户端与服务端数据同步、性能优化都是很好的借鉴，尤其是服务端不能主动向客户端发送请求的场景。例如当有服务以域名的形式注册到nginx时，nginx需要向DNS查询真实ip，为了避免每次请求都会向DNS查询，会对查询到的结果进行缓存，并启动定时器查询真实ip是否发生改变。而定时器的时间就类似于协商缓存的新鲜度，在实际的生产中没有完美的方案，因此需要根据具体的需求偏重来调整可靠性与性能。</p>
 <p>本文从HTTP缓存原理出发，介绍了缓存对系统性能优化的意义，并讲解了HTTP缓存发展过程中存在冗余数据多次传输的问题，以及为了解决这个问题而出现的协商缓存机制。通过对协商缓存的原理与nginx实现协商缓存的源码分析，希望大家可以对HTTP缓存有一定的理解。 </p>
 
