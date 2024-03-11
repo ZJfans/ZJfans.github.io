@@ -24,11 +24,34 @@
 <meta property="og:description" content="1、前言缓存是一个高效减轻网络与服务器压力的机制，具有减少冗余数据传输、缓解网络瓶颈以及降低时延等优点。通常客户端在请求数据时，会发送请求到原始服务器获取，重复的数据可能会在网络中多次传输，但是如果有缓存，客户端就可以直接从缓存中获取数据，减少重复的流量。例如在浏览器首次请求某些静态资源时，状态码会是200 ok，但是刷新页面，状态码就会变为200 ok ( from memory cache)，">
 <meta property="og:locale" content="zh_CN">
 <meta property="og:image" content="https://zjfans.github.io/img/%E7%BC%93%E5%AD%98%E6%B5%81%E7%A8%8B%E5%9B%BE.png">
+<meta property="og:image" content="https://zjfans.github.io/img/%E4%BD%BF%E7%94%A8%E6%9C%9F%E4%B8%8E%E6%96%B0%E9%B2%9C%E5%BA%A6.png">
+<meta property="og:image" content="https://zjfans.github.io/img/cache-%E5%9B%BE3.png">
+<meta property="og:image" content="https://zjfans.github.io/E:/Nginx/%E5%8D%9A%E5%AE%A2/ZJfans.github.io/source/img/clip_image008.jpg">
+<meta property="og:image" content="file:///C:/Users/ZHANGJ~1/AppData/Local/Temp/msohtmlclip1/01/clip_image010.jpg">
+<meta property="og:image" content="https://zjfans.github.io/E:/Nginx/%E5%8D%9A%E5%AE%A2/ZJfans.github.io/source/img/cache-%E5%9B%BE6.jpg">
+<meta property="og:image" content="file:///C:/Users/ZHANGJ~1/AppData/Local/Temp/msohtmlclip1/01/clip_image014.jpg">
+<meta property="og:image" content="file:///C:/Users/ZHANGJ~1/AppData/Local/Temp/msohtmlclip1/01/clip_image016.jpg">
+<meta property="og:image" content="file:///C:/Users/ZHANGJ~1/AppData/Local/Temp/msohtmlclip1/01/clip_image018.jpg">
+<meta property="og:image" content="file:///C:/Users/ZHANGJ~1/AppData/Local/Temp/msohtmlclip1/01/clip_image020.jpg">
+<meta property="og:image" content="file:///C:/Users/ZHANGJ~1/AppData/Local/Temp/msohtmlclip1/01/clip_image022.jpg">
+<meta property="og:image" content="https://zjfans.github.io/img/cache-%E5%9B%BE12.png">
+<meta property="og:image" content="https://zjfans.github.io/img/cache-%E5%9B%BE13.png">
+<meta property="og:image" content="https://zjfans.github.io/img/cache-%E5%9B%BE14.png">
+<meta property="og:image" content="https://zjfans.github.io/img/cache-%E5%9B%BE15.png">
+<meta property="og:image" content="https://zjfans.github.io/img/cache-%E5%9B%BE16.png">
+<meta property="og:image" content="https://zjfans.github.io/img/cache-17.png">
+<meta property="og:image" content="https://zjfans.github.io/img/cache-18.png">
+<meta property="og:image" content="https://zjfans.github.io/img/cache-19.png">
+<meta property="og:image" content="https://zjfans.github.io/img/cache-20.png">
+<meta property="og:image" content="https://zjfans.github.io/source/img%5Ccache-21.png">
+<meta property="og:image" content="https://zjfans.github.io/img/cache-22.png">
+<meta property="og:image" content="https://zjfans.github.io/img/cache-23.png">
+<meta property="og:image" content="https://zjfans.github.io/img/cache-24.png">
 <meta property="article:published_time" content="2024-03-06T10:38:39.757Z">
-<meta property="article:modified_time" content="2024-03-06T11:46:16.388Z">
+<meta property="article:modified_time" content="2024-03-11T09:53:38.248Z">
 <meta property="article:author" content="张三疯">
-<meta property="article:tag" content="websocket">
-<meta property="article:tag" content="nginx">
+<meta property="article:tag" content="协商缓存">
+<meta property="article:tag" content="no cache nginx">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:image" content="https://zjfans.github.io/img/%E7%BC%93%E5%AD%98%E6%B5%81%E7%A8%8B%E5%9B%BE.png">
   
@@ -223,7 +246,7 @@
       <span class="post-meta mr-2">
         <i class="iconfont icon-chart"></i>
         
-          2.7k 字
+          3.1k 字
         
       </span>
     
@@ -234,7 +257,7 @@
         
         
         
-          23 分钟
+          26 分钟
         
       </span>
     
@@ -334,14 +357,31 @@
 <p><img src="/img/cache-%E5%9B%BE12.png" srcset="/img/loading.gif" lazyload alt="cache-图12"></p>
 <p>缓存请求数据时，在响应头返回给缓存。</p>
 <p><img src="/img/cache-%E5%9B%BE13.png" srcset="/img/loading.gif" lazyload alt="cache-图13"></p>
-<p><strong>If-Modified-Since****与If-None-Match的校验</strong></p>
+<p><strong>If-Modified-Since</strong>与<strong>If-None-Match</strong>的校验</p>
 <p>缓存向nginx验证数据新鲜度时，需要携带If-Modified-Since与If-None-Match请求头。</p>
 <p><img src="/img/cache-%E5%9B%BE14.png" srcset="/img/loading.gif" lazyload alt="cache-图14"></p>
 <p>nginx在判断缓存数据的新鲜度时，会先后对If-Modified-Since和If-None-Match与当前数据的last-modified和etag进行比对，只要2者有1个发生了改变，则判断本地数据发生更新，缓存中的数据已过期，就会直接返回更新后的数据，如果都没有变，则会返回304。源码与流程图如下。</p>
 <p><img src="/img/cache-%E5%9B%BE15.png" srcset="/img/loading.gif" lazyload alt="cache-图15"></p>
 <p><img src="/img/cache-%E5%9B%BE16.png" srcset="/img/loading.gif" lazyload alt="cache-图16"></p>
-<h2 id="5、问题"><a href="#5、问题" class="headerlink" title="5、问题"></a>5、问题</h2><h3 id="5-1、抓包分析-协商缓存验证新鲜度"><a href="#5-1、抓包分析-协商缓存验证新鲜度" class="headerlink" title="5.1、抓包分析-协商缓存验证新鲜度"></a>5.1、抓包分析-协商缓存验证新鲜度</h3><h3 id="5-2、特殊请求不生效"><a href="#5-2、特殊请求不生效" class="headerlink" title="5.2、特殊请求不生效"></a>5.2、特殊请求不生效</h3><h2 id="6、总结"><a href="#6、总结" class="headerlink" title="6、总结"></a>6、总结</h2><p>协商缓存不只是一种简单的缓存机制，更是一种很好的理念。对于客户端与服务端数据同步、性能优化都是很好的借鉴，尤其是服务端不能主动向客户端发送请求的场景。例如当有服务以域名的形式注册到nginx时，nginx需要向DNS查询真实ip，为了避免每次请求都会向DNS查询，会对查询到的结果进行缓存，并启动定时器查询真实ip是否发生改变。而定时器的时间就类似于协商缓存的新鲜度，在实际的生产中没有完美的方案，因此需要根据具体的需求偏重来调整可靠性与性能。</p>
-<p>本文从HTTP缓存原理出发，介绍了缓存对系统性能优化的意义，并讲解了HTTP缓存发展过程中存在冗余数据多次传输的问题，以及为了解决这个问题而出现的协商缓存机制。通过对协商缓存的原理与nginx实现协商缓存的源码分析，希望大家可以对HTTP缓存有一定的理解。</p>
+<h2 id="5、实践出真知"><a href="#5、实践出真知" class="headerlink" title="5、实践出真知"></a>5、实践出真知</h2><h3 id="5-1、抓包分析-协商缓存验证新鲜度"><a href="#5-1、抓包分析-协商缓存验证新鲜度" class="headerlink" title="5.1、抓包分析-协商缓存验证新鲜度"></a>5.1、抓包分析-协商缓存验证新鲜度</h3><p>1、首先用nginx代理一个js文件，浏览器第一次请求资源时，状态码为200 ok，刷线界面，状态码变为304，如下图</p>
+<p><img src="/img/cache-17.png" srcset="/img/loading.gif" lazyload alt="cache-17"></p>
+<p><img src="/img/cache-18.png" srcset="/img/loading.gif" lazyload alt="cache-18"></p>
+<p><img src="/img/cache-19.png" srcset="/img/loading.gif" lazyload alt="cache-19"></p>
+<p>2、抓包查看第一次请求的网络包，可以看到服务端返回了静态资源的数据</p>
+<p><img src="/img/cache-20.png" srcset="/img/loading.gif" lazyload alt="cache-20"></p>
+<p>3、查看第二次请求，可以看到服务端没有返回任何静态资源，只有响应头这些数据</p>
+<p><img src="/source/img%5Ccache-21.png" srcset="/img/loading.gif" lazyload alt="cache-21"></p>
+<p>4、符合协商缓存的现象</p>
+<p>当请求的If-Modified-Since、If-None-Match与服务端不一致时，服务端会返回静态资源</p>
+<p><img src="/img/cache-22.png" srcset="/img/loading.gif" lazyload alt="cache-22"></p>
+<p>但是当请求的If-Modified-Since、If-None-Match与服务端一致时，服务端验证新鲜度足够，就只会返回304</p>
+<p><img src="/img/cache-23.png" srcset="/img/loading.gif" lazyload alt="cache-23"></p>
+<p>5、结论</p>
+<p>协商缓存模式下，客户端会对每个已经缓存的资源额外进行一次新鲜度验证，对于网络来说，这是一种开销。但是既要保证资源的新鲜度，又要尽量提高性能，这是很好的策略，毕竟没有完美的人，自然也就没有完美的策略。对于静态资源长时间不发生改变的场景，很明显no-cache不适用，不如使用must-revalidate。</p>
+<h3 id="5-2、特殊请求不生效"><a href="#5-2、特殊请求不生效" class="headerlink" title="5.2、特殊请求不生效"></a>5.2、特殊请求不生效</h3><p>在测试的过程中，一个页面会请求很多静态资源，但是总有几个不会触发协商缓存，如下图，这是很困扰人的现象。在请教了一个实力很强的前端同事，研究了不少时间后，终于发现了原因</p>
+<p><img src="/img/cache-24.png" srcset="/img/loading.gif" lazyload alt="cache-24"></p>
+<h2 id="6、总结"><a href="#6、总结" class="headerlink" title="6、总结"></a>6、总结</h2><p>协商缓存不只是一种简单的缓存机制，更是一种很好的理念。对于客户端与服务端数据同步、性能优化都是很好的借鉴，尤其是服务端不能主动向客户端发送请求的场景。例如当有服务以域名的形式注册到nginx时，nginx需要向DNS查询真实ip，为了避免每次请求都会向DNS查询，会对查询到的结果进行缓存，并启动定时器查询真实ip是否发生改变。而定时器的时间就类似于协商缓存的新鲜度，在实际的生产中没有完美的方案，因此需要根据具体的需求偏重来调整可靠性与性能。</p>
+<p>本文从HTTP缓存原理出发，介绍了缓存对系统性能优化的意义，并讲解了HTTP缓存发展过程中存在冗余数据多次传输的问题，以及为了解决这个问题而出现的协商缓存机制。通过对协商缓存的原理与nginx实现协商缓存的源码分析，希望大家可以对HTTP缓存有一定的理解。 </p>
 
                 
               </div>
@@ -354,9 +394,9 @@
     <div class="post-meta">
       <i class="iconfont icon-tags"></i>
       
-        <a href="/tags/websocket/" class="print-no-link">#websocket</a>
+        <a href="/tags/%E5%8D%8F%E5%95%86%E7%BC%93%E5%AD%98/" class="print-no-link">#协商缓存</a>
       
-        <a href="/tags/nginx/" class="print-no-link">#nginx</a>
+        <a href="/tags/no-cache-nginx/" class="print-no-link">#no cache nginx</a>
       
     </div>
   
@@ -412,6 +452,12 @@
                 <div class="post-prevnext my-3">
                   <article class="post-prev col-6">
                     
+                    
+                      <a href="/2024/03/11/openresty---lua%E8%B0%83%E7%94%A8c%E5%8E%9F%E7%90%86%E5%88%86%E6%9E%90/" title="openresty---lua调用c原理分析">
+                        <i class="iconfont icon-arrowleft"></i>
+                        <span class="hidden-mobile">openresty---lua调用c原理分析</span>
+                        <span class="visible-mobile">上一篇</span>
+                      </a>
                     
                   </article>
                   <article class="post-next col-6">

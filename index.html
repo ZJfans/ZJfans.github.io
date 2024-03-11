@@ -224,13 +224,55 @@
   <div class="row mx-auto index-card">
     
     
-      <div class="col-12 col-md-4 m-auto index-img">
-        <a href="/2024/03/06/%E5%8D%8F%E5%95%86%E7%BC%93%E5%AD%98%E5%9C%A8nginx%E7%9A%84%E5%BA%94%E7%94%A8%E4%B8%8E%E5%AE%9E%E8%B7%B5/" target="_self">
-          <img src="/img/%E7%BC%93%E5%AD%98%E6%B5%81%E7%A8%8B%E5%9B%BE.png" srcset="/img/loading.gif" lazyload alt="协商缓存在nginx的应用与实践">
+    <article class="col-12 col-md-12 mx-auto index-info">
+      <h2 class="index-header">
+        
+        <a href="/2024/03/11/openresty---lua%E8%B0%83%E7%94%A8c%E5%8E%9F%E7%90%86%E5%88%86%E6%9E%90/" target="_self">
+          openresty---lua调用c原理分析
         </a>
+      </h2>
+
+      
+      <a class="index-excerpt index-excerpt__noimg" href="/2024/03/11/openresty---lua%E8%B0%83%E7%94%A8c%E5%8E%9F%E7%90%86%E5%88%86%E6%9E%90/" target="_self">
+        <div>
+          openresty—lua调用c模块原理分析1、lua基础1、lua虚拟机lua是解释型语言，需要虚拟机对象。不同的lua虚拟机之间的工作是线程安全的，因为一切和虚拟机相关的内存操作都被关联到虚拟机对象中，而没有利用任何其它共享变量。lua的虚拟机核心部分，没有任何的系统调用，是一个纯粹的黑盒子，正确的使用lua，不会对系统造成任何干扰。这其中最关键的一点是，lua让用户自行定义内存管理器，在创建
+        </div>
+      </a>
+
+      <div class="index-btm post-metas">
+        
+          <div class="post-meta mr-3">
+            <i class="iconfont icon-date"></i>
+            <time datetime="2024-03-11 17:32" pubdate>
+              2024-03-11
+            </time>
+          </div>
+        
+        
+        
+          <div class="post-meta">
+            <i class="iconfont icon-tags"></i>
+            
+              <a href="/tags/lua%E8%99%9A%E6%8B%9F%E6%9C%BA/">#lua虚拟机</a>
+            
+              <a href="/tags/global-State/">#global_State</a>
+            
+              <a href="/tags/lua-State/">#lua_State</a>
+            
+              <a href="/tags/%E5%85%83%E8%A1%A8/">#元表</a>
+            
+              <a href="/tags/%E5%8D%8F%E7%A8%8B/">#协程</a>
+            
+          </div>
+        
       </div>
+    </article>
+  </div>
+
+  <div class="row mx-auto index-card">
     
-    <article class="col-12 col-md-8 mx-auto index-info">
+    
+    <article class="col-12 col-md-12 mx-auto index-info">
       <h2 class="index-header">
         
         <a href="/2024/03/06/%E5%8D%8F%E5%95%86%E7%BC%93%E5%AD%98%E5%9C%A8nginx%E7%9A%84%E5%BA%94%E7%94%A8%E4%B8%8E%E5%AE%9E%E8%B7%B5/" target="_self">
@@ -239,7 +281,7 @@
       </h2>
 
       
-      <a class="index-excerpt " href="/2024/03/06/%E5%8D%8F%E5%95%86%E7%BC%93%E5%AD%98%E5%9C%A8nginx%E7%9A%84%E5%BA%94%E7%94%A8%E4%B8%8E%E5%AE%9E%E8%B7%B5/" target="_self">
+      <a class="index-excerpt index-excerpt__noimg" href="/2024/03/06/%E5%8D%8F%E5%95%86%E7%BC%93%E5%AD%98%E5%9C%A8nginx%E7%9A%84%E5%BA%94%E7%94%A8%E4%B8%8E%E5%AE%9E%E8%B7%B5/" target="_self">
         <div>
           1、前言缓存是一个高效减轻网络与服务器压力的机制，具有减少冗余数据传输、缓解网络瓶颈以及降低时延等优点。通常客户端在请求数据时，会发送请求到原始服务器获取，重复的数据可能会在网络中多次传输，但是如果有缓存，客户端就可以直接从缓存中获取数据，减少重复的流量。例如在浏览器首次请求某些静态资源时，状态码会是200 ok，但是刷新页面，状态码就会变为200 ok ( from memory cache)，
         </div>
@@ -259,9 +301,9 @@
           <div class="post-meta">
             <i class="iconfont icon-tags"></i>
             
-              <a href="/tags/websocket/">#websocket</a>
+              <a href="/tags/%E5%8D%8F%E5%95%86%E7%BC%93%E5%AD%98/">#协商缓存</a>
             
-              <a href="/tags/nginx/">#nginx</a>
+              <a href="/tags/no-cache-nginx/">#no cache nginx</a>
             
           </div>
         
@@ -309,9 +351,9 @@
             
               <a href="/tags/websocket/">#websocket</a>
             
-              <a href="/tags/nginx/">#nginx</a>
-            
               <a href="/tags/socket-io/">#socket.io</a>
+            
+              <a href="/tags/nginx/">#nginx</a>
             
           </div>
         

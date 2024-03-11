@@ -1,0 +1,739 @@
+
+
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-color-scheme=auto>
+
+
+
+<head>
+  <meta charset="UTF-8">
+  <link rel="apple-touch-icon" sizes="76x76" href="/img/fluid.png">
+  <link rel="icon" href="/img/fluid.png">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, shrink-to-fit=no">
+  <meta http-equiv="x-ua-compatible" content="ie=edge">
+  
+  <meta name="theme-color" content="#2f4154">
+  <meta name="author" content="张三疯">
+  <meta name="keywords" content="nginx,openresty,网关,HTTP/HTTPS,Websocket">
+  
+    <meta name="description" content="openresty—lua调用c模块原理分析1、lua基础1、lua虚拟机lua是解释型语言，需要虚拟机对象。不同的lua虚拟机之间的工作是线程安全的，因为一切和虚拟机相关的内存操作都被关联到虚拟机对象中，而没有利用任何其它共享变量。lua的虚拟机核心部分，没有任何的系统调用，是一个纯粹的黑盒子，正确的使用lua，不会对系统造成任何干扰。这其中最关键的一点是，lua让用户自行定义内存管理器，在创建">
+<meta property="og:type" content="article">
+<meta property="og:title" content="openresty---lua调用c原理分析">
+<meta property="og:url" content="https://zjfans.github.io/2024/03/11/openresty---lua%E8%B0%83%E7%94%A8c%E5%8E%9F%E7%90%86%E5%88%86%E6%9E%90/index.html">
+<meta property="og:site_name" content="ZJfans Blog">
+<meta property="og:description" content="openresty—lua调用c模块原理分析1、lua基础1、lua虚拟机lua是解释型语言，需要虚拟机对象。不同的lua虚拟机之间的工作是线程安全的，因为一切和虚拟机相关的内存操作都被关联到虚拟机对象中，而没有利用任何其它共享变量。lua的虚拟机核心部分，没有任何的系统调用，是一个纯粹的黑盒子，正确的使用lua，不会对系统造成任何干扰。这其中最关键的一点是，lua让用户自行定义内存管理器，在创建">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2024-03-11T09:32:23.446Z">
+<meta property="article:modified_time" content="2024-03-11T09:33:00.664Z">
+<meta property="article:author" content="张三疯">
+<meta property="article:tag" content="lua虚拟机">
+<meta property="article:tag" content="global_State">
+<meta property="article:tag" content="lua_State">
+<meta property="article:tag" content="元表">
+<meta property="article:tag" content="协程">
+<meta name="twitter:card" content="summary_large_image">
+  
+  
+  
+  <title>openresty---lua调用c原理分析 - ZJfans Blog</title>
+
+  <link  rel="stylesheet" href="https://lib.baomitu.com/twitter-bootstrap/4.6.1/css/bootstrap.min.css" />
+
+
+
+  <link  rel="stylesheet" href="https://lib.baomitu.com/github-markdown-css/4.0.0/github-markdown.min.css" />
+
+  <link  rel="stylesheet" href="https://lib.baomitu.com/hint.css/2.7.0/hint.min.css" />
+
+  <link  rel="stylesheet" href="https://lib.baomitu.com/fancybox/3.5.7/jquery.fancybox.min.css" />
+
+
+
+<!-- 主题依赖的图标库，不要自行修改 -->
+<!-- Do not modify the link that theme dependent icons -->
+
+<link rel="stylesheet" href="//at.alicdn.com/t/font_1749284_hj8rtnfg7um.css">
+
+
+
+<link rel="stylesheet" href="//at.alicdn.com/t/font_1736178_lbnruvf0jn.css">
+
+
+<link  rel="stylesheet" href="/css/main.css" />
+
+
+  <link id="highlight-css" rel="stylesheet" href="/css/highlight.css" />
+  
+    <link id="highlight-css-dark" rel="stylesheet" href="/css/highlight-dark.css" />
+  
+
+
+
+
+  <script id="fluid-configs">
+    var Fluid = window.Fluid || {};
+    Fluid.ctx = Object.assign({}, Fluid.ctx)
+    var CONFIG = {"hostname":"zjfans.github.io","root":"/","version":"1.9.7","typing":{"enable":true,"typeSpeed":70,"cursorChar":"_","loop":false,"scope":[]},"anchorjs":{"enable":true,"element":"h1,h2,h3,h4,h5,h6","placement":"left","visible":"hover","icon":""},"progressbar":{"enable":true,"height_px":3,"color":"#29d","options":{"showSpinner":false,"trickleSpeed":100}},"code_language":{"enable":true,"default":"TEXT"},"copy_btn":true,"image_caption":{"enable":true},"image_zoom":{"enable":true,"img_url_replace":["",""]},"toc":{"enable":true,"placement":"right","headingSelector":"h1,h2,h3,h4,h5,h6","collapseDepth":0},"lazyload":{"enable":true,"loading_img":"/img/loading.gif","onlypost":false,"offset_factor":2},"web_analytics":{"enable":false,"follow_dnt":true,"baidu":null,"google":{"measurement_id":null},"tencent":{"sid":null,"cid":null},"woyaola":null,"cnzz":null,"leancloud":{"app_id":null,"app_key":null,"server_url":null,"path":"window.location.pathname","ignore_local":false}},"search_path":"/local-search.xml","include_content_in_search":true};
+
+    if (CONFIG.web_analytics.follow_dnt) {
+      var dntVal = navigator.doNotTrack || window.doNotTrack || navigator.msDoNotTrack;
+      Fluid.ctx.dnt = dntVal && (dntVal.startsWith('1') || dntVal.startsWith('yes') || dntVal.startsWith('on'));
+    }
+  </script>
+  <script  src="/js/utils.js" ></script>
+  <script  src="/js/color-schema.js" ></script>
+  
+
+
+  
+<meta name="generator" content="Hexo 6.3.0"></head>
+
+
+<body>
+  
+
+  <header>
+    
+
+<div class="header-inner" style="height: 70vh;">
+  <nav id="navbar" class="navbar fixed-top  navbar-expand-lg navbar-dark scrolling-navbar">
+  <div class="container">
+    <a class="navbar-brand" href="/">
+      <strong>ZJfans Blog</strong>
+    </a>
+
+    <button id="navbar-toggler-btn" class="navbar-toggler" type="button" data-toggle="collapse"
+            data-target="#navbarSupportedContent"
+            aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+      <div class="animated-icon"><span></span><span></span><span></span></div>
+    </button>
+
+    <!-- Collapsible content -->
+    <div class="collapse navbar-collapse" id="navbarSupportedContent">
+      <ul class="navbar-nav ml-auto text-center">
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/" target="_self">
+                <i class="iconfont icon-home-fill"></i>
+                <span>首页</span>
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/archives/" target="_self">
+                <i class="iconfont icon-archive-fill"></i>
+                <span>归档</span>
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/categories/" target="_self">
+                <i class="iconfont icon-category-fill"></i>
+                <span>分类</span>
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/tags/" target="_self">
+                <i class="iconfont icon-tags-fill"></i>
+                <span>标签</span>
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/about/" target="_self">
+                <i class="iconfont icon-user-fill"></i>
+                <span>关于</span>
+              </a>
+            </li>
+          
+        
+        
+          <li class="nav-item" id="search-btn">
+            <a class="nav-link" target="_self" href="javascript:;" data-toggle="modal" data-target="#modalSearch" aria-label="Search">
+              <i class="iconfont icon-search"></i>
+            </a>
+          </li>
+          
+        
+        
+          <li class="nav-item" id="color-toggle-btn">
+            <a class="nav-link" target="_self" href="javascript:;" aria-label="Color Toggle">
+              <i class="iconfont icon-dark" id="color-toggle-icon"></i>
+            </a>
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+</nav>
+
+  
+
+<div id="banner" class="banner" parallax=true
+     style="background: url('/img/default.png') no-repeat center center; background-size: cover;">
+  <div class="full-bg-img">
+    <div class="mask flex-center" style="background-color: rgba(0, 0, 0, 0.3)">
+      <div class="banner-text text-center fade-in-up">
+        <div class="h2">
+          
+            <span id="subtitle" data-typed-text="openresty---lua调用c原理分析"></span>
+          
+        </div>
+
+        
+          
+  <div class="mt-3">
+    
+    
+      <span class="post-meta">
+        <i class="iconfont icon-date-fill" aria-hidden="true"></i>
+        <time datetime="2024-03-11 17:32" pubdate>
+          2024年3月11日 下午
+        </time>
+      </span>
+    
+  </div>
+
+  <div class="mt-1">
+    
+      <span class="post-meta mr-2">
+        <i class="iconfont icon-chart"></i>
+        
+          4.5k 字
+        
+      </span>
+    
+
+    
+      <span class="post-meta mr-2">
+        <i class="iconfont icon-clock-fill"></i>
+        
+        
+        
+          38 分钟
+        
+      </span>
+    
+
+    
+    
+  </div>
+
+
+        
+      </div>
+
+      
+    </div>
+  </div>
+</div>
+
+</div>
+
+  </header>
+
+  <main>
+    
+      
+
+<div class="container-fluid nopadding-x">
+  <div class="row nomargin-x">
+    <div class="side-col d-none d-lg-block col-lg-2">
+      
+
+    </div>
+
+    <div class="col-lg-8 nopadding-x-md">
+      <div class="container nopadding-x-md" id="board-ctn">
+        <div id="board">
+          <article class="post-content mx-auto">
+            <h1 id="seo-header">openresty---lua调用c原理分析</h1>
+            
+            
+              <div class="markdown-body">
+                
+                <h1 id="openresty—lua调用c模块原理分析"><a href="#openresty—lua调用c模块原理分析" class="headerlink" title="openresty—lua调用c模块原理分析"></a>openresty—lua调用c模块原理分析</h1><h2 id="1、lua基础"><a href="#1、lua基础" class="headerlink" title="1、lua基础"></a>1、lua基础</h2><h3 id="1、lua虚拟机"><a href="#1、lua虚拟机" class="headerlink" title="1、lua虚拟机"></a>1、lua虚拟机</h3><p><code>lua</code>是解释型语言，需要虚拟机对象。不同的<code>lua</code>虚拟机之间的工作是线程安全的，因为一切和虚拟机相关的内存操作都被关联到虚拟机对象中，而没有利用任何其它共享变量。<code>lua</code>的虚拟机核心部分，没有任何的系统调用，是一个纯粹的黑盒子，正确的使用<code>lua</code>，不会对系统造成任何干扰。这其中最关键的一点是，<code>lua</code>让用户自行定义内存管理器，在创建<code>lua</code>虚拟机时传入，这保证了<code>lua</code>的整个运行状态是用户可控的。</p>
+<h3 id="2、状态机"><a href="#2、状态机" class="headerlink" title="2、状态机"></a>2、状态机</h3><p><code>global_State</code>：全局状态机</p>
+<p><code>lua_State</code>：协程状态机</p>
+<p>从<code>lua</code>的使用者的角度看，<code>global_State</code>是不可见的。我们无法用公开的API取到它的指针，也不需要引用它。<code>global_State</code>里面有对主线程的引用，有注册表管理所有全局数据，有全局字符串表，有内存管理函数，有<code>GC</code>需要的把所有对象串联起来的相关信息，以及一切<code>lua</code>在工作时需要的工作内存。<br>通过<code>lua_newstate</code>创建一个新的<code>lua</code>虚拟机时，第一块申请的内存将用来保存主线程和这个全局状态机。<code>lua</code>的实现尽可能的避免内存碎片，同时也减少内存分配和释放的次数。它采用了一个小技巧，利用一个<code>LG</code>结构，把主线程<code>lua_State</code>和<code>global_State</code>分配在一起。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-keyword">typedef</span> <span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">LX</span> &#123;</span><br><span class="hljs-meta">#<span class="hljs-keyword">if</span> defined ( luaI_EXTRASPACE )</span><br><span class="hljs-type">char</span> buff [ luaI_EXTRASPACE ];<br><span class="hljs-meta"># <span class="hljs-keyword">endif</span></span><br>lua_State l;<br>&#125; LX;<br><br><span class="hljs-keyword">typedef</span> <span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">LG</span> &#123;</span><br>LX l;<br>global_State g;<br>&#125; LG;<br></code></pre></td></tr></table></figure>
+
+<p><code>lua_newstate</code>的实现</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><code class="hljs c">lua_API lua_State * <span class="hljs-title function_">lua_newstate</span> <span class="hljs-params">( lua_Alloc f, <span class="hljs-type">void</span> *ud)</span> &#123;<br>    <span class="hljs-type">int</span> i;<br>    lua_State *L;    <span class="hljs-comment">//创建一个主线程状态机</span><br>    global_State *g; <span class="hljs-comment">//创建一个全局状态机</span><br>    LG *l = cast (LG *, (*f)(ud , <span class="hljs-literal">NULL</span> , lua_TTHREAD , <span class="hljs-keyword">sizeof</span> (LG)));  <span class="hljs-comment">//申请内存</span><br>    ................................................................................<br>	<span class="hljs-keyword">return</span> L; <br>&#125;<br></code></pre></td></tr></table></figure>
+
+<h3 id="3、version"><a href="#3、version" class="headerlink" title="3、version"></a>3、version</h3><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-type">void</span> <span class="hljs-title function_">luaL_checkversion</span> <span class="hljs-params">(lua_State *L)</span>;<br></code></pre></td></tr></table></figure>
+
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><code class="hljs c">lua_API <span class="hljs-type">const</span> lua_Number * <span class="hljs-title function_">lua_version</span> <span class="hljs-params">( lua_State *L)</span> &#123;<br>	<span class="hljs-type">static</span> <span class="hljs-type">const</span> lua_Number version = lua_VERSION_NUM ;<br>	<span class="hljs-keyword">if</span> (L == <span class="hljs-literal">NULL</span> ) <span class="hljs-keyword">return</span> &amp; version ;<br>	<span class="hljs-keyword">else</span> <span class="hljs-keyword">return</span> G(L) -&gt; version ;<br>&#125;<br></code></pre></td></tr></table></figure>
+
+<p>检查调用它的内核是否是创建这个 <code>lua</code> 状态机的内核。以及调用它的代码是否使用了相同的 <code>lua</code> 版本。同时也检查调用它的内核与创建该 <code>lua</code> 状态机的内核是否使用了同一片地址空间。</p>
+<ol>
+<li><strong>检查调用它的内核是否是创建这个 <code>lua</code> 状态机的内核</strong>：假设你正在编写一个 <code>lua</code> 插件，这个插件将被加载到不同的 <code>lua</code> 程序中。这些程序可能使用了不同版本的 <code>lua</code> 内核。在这种情况下，你的插件需要确保它能在所有这些程序中正常工作。你可以在插件的初始化代码中调用 <code>luaL_checkversion</code> 来确保插件被加载的 <code>lua</code> 程序使用的是和插件编译时相同版本的 <code>lua</code> 内核。</li>
+<li><strong>调用它的代码是否使用了相同的 <code>lua</code> 版本</strong>：假设你正在维护一个 <code>lua</code> 库，这个库被不同的项目使用，而这些项目可能使用了不同版本的<code>lua</code>。在这种情况下，你需要确保你的库在所有这些项目中都能正常工作。你可以在库的初始化代码中调用 <code>luaL_checkversion</code> 来确保使用库的项目使用的是和库编译时相同版本的 <code>lua</code>。</li>
+<li><strong>检查调用它的内核与创建该 lua 状态机的内核是否使用了同一片地址空间</strong>：这通常发生在你的 <code>lua</code> 代码需要和其他语言（如 <code>C</code> 或 <code>C++</code>）的代码交互时。例如，你的 <code>lua</code> 代码调用了一个 <code>C</code> 函数，这个 <code>C</code> 函数创建了一个新的 <code>lua</code> 状态机，并尝试在这个新的状态机上执行一些 <code>lua</code> 代码。在这种情况下，你需要确保这个新的状态机和原来的状态机在同一片地址空间，否则可能会导致内存错误。你可以在 C 函数中调用 <code>luaL_checkversion</code> 来进行这个检查。</li>
+</ol>
+<h3 id="4、元表"><a href="#4、元表" class="headerlink" title="4、元表"></a>4、元表</h3><p><code>lua</code>语言的元表类似于<code>c++</code>的类与对象，c++的每个类都可以绑定成员函数、成员变量，还可以对成员方法进行重载等等，通过实例化一个对象，可以对对象进行一系列的操作。c++是面向对象的语言，当有一个函数需要共用，又不想对类进行继承，可以使用static关键字，定义为一个全局的函数。从这些外在表现的方面看，c++和lua其实很像，但是显然lua更加轻量</p>
+<p>lua 中的每一个值都可以绑定一个元表。这个元表是一个普通的table，它可以定义与该值相关的某些操作。你可以通过设置元表中特定域的值来改变Lua 值的行为。比如当一个非数字型的值作为加法操作的操作数时，Lua 会检查该值是否绑定了元表并且元表设置了域“__add”的值为一个函数，如果是，那么Lua 就会调用这个函数来进行该值的加法操作。</p>
+<p>每个table 和full userdata 类型的值都可以有自己单独的元表（但多个table 和userdata可以共享一个元表）。其它的每一种类型对应地只能绑定一个元表。也就是说，<strong>所有的数字类型只能绑定同一个元表</strong>，<strong>所有的字符串类型只能绑定同一个元表</strong>，等等。除了字符串类型的值默认有一个元表外，其它的值默认是没有元表的。</p>
+<p>一个元表控制了一个对象的算术、比较、连接，取长度操作和索引操作的行为。原理可以去看《lua官方文档》，这里主要关注2个有意思的元方法，索引和赋值</p>
+<ul>
+<li><p>index:索引操作。当使用一个不存于table 中的键去索引table 中的内容时会尝试调用此元方法。（当索引操作作用于的对象不是一个table 时，那么所有键都是不存在的，所以元方法一定会被尝试调用。）</p>
+</li>
+<li><p>newindex: table 赋值操作table[key] &#x3D; value。使用一个不存在于table 中的键来给table 中的域赋值时会尝试调用此元方法。</p>
+</li>
+</ul>
+<p><code>index：</code></p>
+<figure class="highlight lua"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><code class="hljs lua"><span class="hljs-function"><span class="hljs-keyword">function</span> <span class="hljs-title">gettable_event</span> <span class="hljs-params">(table, key)</span></span><br>	<span class="hljs-keyword">local</span> h<br>	<span class="hljs-keyword">if</span> <span class="hljs-built_in">type</span>(<span class="hljs-built_in">table</span>) == <span class="hljs-string">&quot;table&quot;</span> <span class="hljs-keyword">then</span><br>		<span class="hljs-keyword">local</span> v = <span class="hljs-built_in">rawget</span>(<span class="hljs-built_in">table</span>, key)<br>	<span class="hljs-comment">-- 如果键存在，返回原始的值</span><br>	<span class="hljs-keyword">if</span> v ~= <span class="hljs-literal">nil</span> <span class="hljs-keyword">then</span> <span class="hljs-keyword">return</span> v <span class="hljs-keyword">end</span><br>		h = metatable(<span class="hljs-built_in">table</span>).<span class="hljs-built_in">__index</span><br>	<span class="hljs-keyword">if</span> h == <span class="hljs-literal">nil</span> <span class="hljs-keyword">then</span> <span class="hljs-keyword">return</span> <span class="hljs-literal">nil</span> <span class="hljs-keyword">end</span><br>	<span class="hljs-keyword">else</span><br>		h = metatable(<span class="hljs-built_in">table</span>).<span class="hljs-built_in">__index</span><br>	<span class="hljs-keyword">if</span> h == <span class="hljs-literal">nil</span> <span class="hljs-keyword">then</span><br>		<span class="hljs-built_in">error</span>(···)<br>		<span class="hljs-keyword">end</span><br>	<span class="hljs-keyword">end</span><br>	<span class="hljs-keyword">if</span> <span class="hljs-built_in">type</span>(h) == <span class="hljs-string">&quot;function&quot;</span> <span class="hljs-keyword">then</span><br>		<span class="hljs-keyword">return</span> (h(<span class="hljs-built_in">table</span>, key)) <span class="hljs-comment">-- 调用元方法</span><br>	<span class="hljs-keyword">else</span> <span class="hljs-keyword">return</span> h[key] <span class="hljs-comment">-- 或者把元方法当作一个table 来使用</span><br>	<span class="hljs-keyword">end</span><br><span class="hljs-keyword">end</span><br></code></pre></td></tr></table></figure>
+
+<p><code>newindex：</code></p>
+<figure class="highlight lua"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><code class="hljs lua"><span class="hljs-function"><span class="hljs-keyword">function</span> <span class="hljs-title">settable_event</span> <span class="hljs-params">(table, key, value)</span></span><br>	<span class="hljs-keyword">local</span> h<br>	<span class="hljs-keyword">if</span> <span class="hljs-built_in">type</span>(<span class="hljs-built_in">table</span>) == <span class="hljs-string">&quot;table&quot;</span> <span class="hljs-keyword">then</span><br>	<span class="hljs-keyword">local</span> v = <span class="hljs-built_in">rawget</span>(<span class="hljs-built_in">table</span>, key)<br>	<span class="hljs-comment">-- 如果键存在，那就做原始赋值</span><br>	<span class="hljs-keyword">if</span> v ~= <span class="hljs-literal">nil</span> <span class="hljs-keyword">then</span> <span class="hljs-built_in">rawset</span>(<span class="hljs-built_in">table</span>, key, value); <span class="hljs-keyword">return</span> <span class="hljs-keyword">end</span><br>		h = metatable(<span class="hljs-built_in">table</span>).<span class="hljs-built_in">__newindex</span><br>	<span class="hljs-keyword">if</span> h == <span class="hljs-literal">nil</span> <span class="hljs-keyword">then</span> <span class="hljs-built_in">rawset</span>(<span class="hljs-built_in">table</span>, key, value); <span class="hljs-keyword">return</span> <span class="hljs-keyword">end</span><br>	<span class="hljs-keyword">else</span><br>		h = metatable(<span class="hljs-built_in">table</span>).<span class="hljs-built_in">__newindex</span><br>    <span class="hljs-keyword">if</span> h == <span class="hljs-literal">nil</span> <span class="hljs-keyword">then</span><br>		<span class="hljs-built_in">error</span>(···)<br>		<span class="hljs-keyword">end</span><br>	<span class="hljs-keyword">end</span><br>	<span class="hljs-keyword">if</span> <span class="hljs-built_in">type</span>(h) == <span class="hljs-string">&quot;function&quot;</span> <span class="hljs-keyword">then</span><br>		h(<span class="hljs-built_in">table</span>, key,value) <span class="hljs-comment">-- 调用元方法</span><br>	<span class="hljs-keyword">else</span> h[key] = value   <span class="hljs-comment">--或者把元方法当作一个table 来使用</span><br>	<span class="hljs-keyword">end</span><br><span class="hljs-keyword">end</span><br></code></pre></td></tr></table></figure>
+
+<h2 id="2、请求与lua-state的关系"><a href="#2、请求与lua-state的关系" class="headerlink" title="2、请求与lua_state的关系"></a>2、请求与lua_state的关系</h2><h3 id="1、lua-State是什么"><a href="#1、lua-State是什么" class="headerlink" title="1、lua_State是什么"></a>1、lua_State是什么</h3><p>在 <code>lua</code> 中，<code>lua_State</code> 是一个代表 lua 解释器状态的结构体指针，它包含了 lua 解释器的所有状态信息，例如当前的全局环境、栈状态等。可以把<code>lua_State</code> 理解为 lua 的一个线程或者执行环境。</p>
+<p>在 lua 中，每个线程都有自己的独立的执行栈，局部变量，错误处理函数等。这些都被封装在 <code>lua_State</code> 结构体中。当在 lua 中创建一个新的线程（或者协程）时，lua 会为这个线程创建一个新的 <code>lua_State</code>。这个 <code>lua_State</code> 包含了这个线程的所有状态信息，使得这个线程可以独立于其他线程运行。这是 lua 中线程和协程实现的基础，也是 lua 能够支持并发编程的关键。</p>
+<h3 id="2、openresty的协程"><a href="#2、openresty的协程" class="headerlink" title="2、openresty的协程"></a>2、openresty的协程</h3><p>lua 的协程（<code>coroutine</code>）是一种用户级的线程，它们不同于操作系统的线程，切换由程序自身控制，因此开销小，使用灵活。</p>
+<p>在 OpenResty 中，lua 协程用于实现非阻塞 I&#x2F;O。当一个请求需要进行 I&#x2F;O 操作（如访问数据库）时，当前的 lua 协程会挂起，将控制权交给其他的协程。等到 I&#x2F;O 操作完成后，原来的协程再恢复执行。这样，即使 I&#x2F;O 操作是阻塞的，也不会影响到整个程序的执行。</p>
+<h3 id="3、请求与协程的关系"><a href="#3、请求与协程的关系" class="headerlink" title="3、请求与协程的关系"></a>3、请求与协程的关系</h3><p>在 OpenResty 中，每个 worker 进程使用一个 lua VM（lua 虚拟机），并创建一个新的 <code>lua_State</code>（即主线程）来执行 lua 代码。当请求被分配到 worker 时，将在这个 lua VM 中创建一个协程，协程之间数据隔离，每个协程都具有独立的全局变量。</p>
+<p>具体来讲，对于每个请求，Openresty都会创建一个协程来处理，<code>co = ngx_http_lua_new_thread(r, L, &amp;co_ref);</code> 而这个创建的协程是系统协程，是主协程，用户无法控制它。而用户通过<code>ngx.thread.spawn</code>创建的协程是通过 <code>ngx_http_lua_coroutine_create_helper</code>创建出来的，用户创建的协程是主协程的子协程。并通过<code>ngx_http_lua_co_ctx_s</code>保存协程的相关信息。协程通过 <code>ngx_http_lua_run_thread</code> 函数来运行与调度，当前待执行的协程为 <code>ngx_http_lua_ctx_t-&gt;cur_co_ctx</code> 。</p>
+<p>当 lua 代码调用 I&#x2F;O 操作等异步接口时，<code>ngx_lua</code> 会挂起当前协程（并保护上下文数据），而不阻塞 worker 进程]。I&#x2F;O 等异步操作完成时，<code>ngx_lua</code> 会恢复上下文，程序继续执行。这些操作对用户程序都是透明的，使得每个请求都在一个独立的 lua 线程中处理，各个请求之间互不影响，可以并发处理大量的请求，从而提高了系统的吞吐量。</p>
+<h2 id="3、源码分析"><a href="#3、源码分析" class="headerlink" title="3、源码分析"></a>3、源码分析</h2><h3 id="1、lua与c模块的交互"><a href="#1、lua与c模块的交互" class="headerlink" title="1、lua与c模块的交互"></a>1、lua与c模块的交互</h3><p>1、预加载的注册方式，通常自己实现一个模块，采用这种方式</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><code class="hljs c">ngx_http_lua_add_package_preload<br><br>    <br><span class="hljs-comment">//在OpenResty（基于Nginx的扩展）中，ngx_http_lua_add_package_preload 是一个用于预加载 lua 模块的函数。这个函数的主要作用是将 lua 模块预加载到 Nginx 工作进程的全局环境中，从而避免在每次请求时重新加载 lua 模块。</span><br><span class="hljs-comment">//具体而言，ngx_http_lua_add_package_preload 用于将 lua 模块与一个预定义的路径关联，以便在需要时可以快速地加载。这对于提高性能和减少模块加载时间非常有用，特别是在处理大量并发请求时。</span><br><span class="hljs-comment">//原型如下：</span><br>    <br><span class="hljs-type">void</span> <span class="hljs-title function_">ngx_http_lua_add_package_preload</span><span class="hljs-params">(<span class="hljs-type">ngx_conf_t</span> *cf, <span class="hljs-type">const</span> <span class="hljs-type">char</span> *package, lua_CFunction func)</span>;<br><br><span class="hljs-comment">//cf: ngx_conf_t 结构，用于获取配置信息。</span><br><span class="hljs-comment">//package: lua 模块的名称，通常是点分隔的路径，例如 &quot;resty.foo&quot;。</span><br><span class="hljs-comment">//func: 一个 lua C 函数，用于加载并返回 lua 模块。这个函数在第一次加载模块时被调用，并且加载成功后，其返回值会被缓存，以便后续请求可以直接使用。</span><br></code></pre></td></tr></table></figure>
+
+<p>如 <code>ngx_http_lua_upstream_module</code> 模块</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-type">static</span> <span class="hljs-type">ngx_int_t</span><br><span class="hljs-title function_">ngx_http_lua_upstream_init</span><span class="hljs-params">(<span class="hljs-type">ngx_conf_t</span> *cf)</span><br>&#123;<br>    <span class="hljs-keyword">if</span> (ngx_http_lua_add_package_preload(cf, <span class="hljs-string">&quot;ngx.upstream&quot;</span>,<br>                                         ngx_http_lua_upstream_create_module)<br>        != NGX_OK)<br>    &#123;<br>        <span class="hljs-keyword">return</span> NGX_ERROR;<br>    &#125;<br><br>    <span class="hljs-keyword">return</span> NGX_OK;<br>&#125;<br></code></pre></td></tr></table></figure>
+
+<p> <code>ngx_http_lua_add_package_preload</code>具体实现为:</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-type">ngx_int_t</span><br><span class="hljs-title function_">ngx_http_lua_add_package_preload</span><span class="hljs-params">(<span class="hljs-type">ngx_conf_t</span> *cf, <span class="hljs-type">const</span> <span class="hljs-type">char</span> *package,</span><br><span class="hljs-params">    lua_CFunction func)</span><br>&#123;<br>    lua_State                     *L;<br>    <span class="hljs-type">ngx_http_lua_main_conf_t</span>      *lmcf;<br>    <span class="hljs-type">ngx_http_lua_preload_hook_t</span>   *hook;<br><br>    lmcf = ngx_http_conf_get_module_main_conf(cf, ngx_http_lua_module);<br><br>    L = lmcf-&gt;lua;<br>    <br><span class="hljs-comment">//lua_getglobal(L, &quot;package&quot;): 获取全局变量 &quot;package&quot;。</span><br><span class="hljs-comment">//lua_getfield(L, -1, &quot;preload&quot;): 获取 &quot;package&quot; 表中的 &quot;preload&quot; 字段，这是一个用于存放预加载函数的表。</span><br><span class="hljs-comment">//lua_pushcfunction(L, func): 将 C 函数推入 lua 栈。</span><br><span class="hljs-comment">//lua_setfield(L, -2, package): 将 C 函数设置为 &quot;preload&quot; 表中的字段，字段名为 lua 模块的名称。</span><br><span class="hljs-comment">//lua_pop(L, 2): 弹出栈上的两个元素，即 &quot;package&quot; 表和 &quot;preload&quot; 表。</span><br><br><span class="hljs-comment">//很重要！！！！！*******//相当于建立了一个ngx.upstream的表，里面preload存放对应的函数----ngx_http_lua_upstream_module</span><br><br><br>    <span class="hljs-keyword">if</span> (L) &#123;<br>        lua_getglobal(L, <span class="hljs-string">&quot;package&quot;</span>);<br>        lua_getfield(L, <span class="hljs-number">-1</span>, <span class="hljs-string">&quot;preload&quot;</span>);<br>        lua_pushcfunction(L, func);<br>        lua_setfield(L, <span class="hljs-number">-2</span>, package);<br>        lua_pop(L, <span class="hljs-number">2</span>);<br>    &#125;<br><br>    <span class="hljs-comment">/* we always register preload_hooks since we always create new Lua VMs</span><br><span class="hljs-comment">     * when lua code cache is off. */</span><br><br>    <span class="hljs-keyword">if</span> (lmcf-&gt;preload_hooks == <span class="hljs-literal">NULL</span>) &#123;<br>        lmcf-&gt;preload_hooks =<br>            ngx_array_create(cf-&gt;pool, <span class="hljs-number">4</span>,<br>                             <span class="hljs-keyword">sizeof</span>(<span class="hljs-type">ngx_http_lua_preload_hook_t</span>));<br><br>        <span class="hljs-keyword">if</span> (lmcf-&gt;preload_hooks == <span class="hljs-literal">NULL</span>) &#123;<br>            <span class="hljs-keyword">return</span> NGX_ERROR;<br>        &#125;<br>    &#125;<br><br>    hook = ngx_array_push(lmcf-&gt;preload_hooks);<br>    <span class="hljs-keyword">if</span> (hook == <span class="hljs-literal">NULL</span>) &#123;<br>        <span class="hljs-keyword">return</span> NGX_ERROR;<br>    &#125;<br><br>    hook-&gt;package = (u_char *) package;<br>    hook-&gt;loader = func;<br><br>    <span class="hljs-keyword">return</span> NGX_OK;<br>&#125;<br></code></pre></td></tr></table></figure>
+
+<p><code>ngx_http_lua_upstream_create_module</code>的实现</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-type">static</span> <span class="hljs-type">int</span><br><span class="hljs-title function_">ngx_http_lua_upstream_create_module</span><span class="hljs-params">(lua_State * L)</span><br>&#123;<br>    lua_createtable(L, <span class="hljs-number">0</span>, <span class="hljs-number">6</span>);<br><br>    lua_pushcfunction(L, ngx_http_lua_upstream_get_upstreams);<br>    lua_setfield(L, <span class="hljs-number">-2</span>, <span class="hljs-string">&quot;get_upstreams&quot;</span>);<br><br>    lua_pushcfunction(L, ngx_http_lua_upstream_get_servers);<br>    lua_setfield(L, <span class="hljs-number">-2</span>, <span class="hljs-string">&quot;get_servers&quot;</span>);<br><br>    lua_pushcfunction(L, ngx_http_lua_upstream_get_primary_peers);<br>    lua_setfield(L, <span class="hljs-number">-2</span>, <span class="hljs-string">&quot;get_primary_peers&quot;</span>);<br><br>    lua_pushcfunction(L, ngx_http_lua_upstream_get_backup_peers);<br>    lua_setfield(L, <span class="hljs-number">-2</span>, <span class="hljs-string">&quot;get_backup_peers&quot;</span>);<br><br>    lua_pushcfunction(L, ngx_http_lua_upstream_set_peer_down);<br>    lua_setfield(L, <span class="hljs-number">-2</span>, <span class="hljs-string">&quot;set_peer_down&quot;</span>);<br><br>    lua_pushcfunction(L, ngx_http_lua_upstream_current_upstream_name);<br>    lua_setfield(L, <span class="hljs-number">-2</span>, <span class="hljs-string">&quot;current_upstream_name&quot;</span>);<br><br>    <span class="hljs-keyword">return</span> <span class="hljs-number">1</span>;<br>&#125;<br></code></pre></td></tr></table></figure>
+
+<p>2、非预加载的注册方式，openresty官方内置</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-type">ngx_int_t</span>  <span class="hljs-title function_">ngx_http_lua_inject_xxx_api</span><span class="hljs-params">(lua_State *L)</span>&#123;&#125;<br></code></pre></td></tr></table></figure>
+
+<p>如：<code>ngx_http_lua_inject_resp_header_api</code></p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-type">void</span><br><span class="hljs-title function_">ngx_http_lua_inject_resp_header_api</span><span class="hljs-params">(lua_State *L)</span><br>&#123;   <span class="hljs-comment">//创建一个新的lua表，并将其推入lua堆栈。这个表将用于存储HTTP响应头的键值对</span><br>    lua_newtable(L);    <span class="hljs-comment">/* .header */</span><br>    <span class="hljs-comment">//创建一个新的lua表，并设置它的元表。元表是一个普通的lua表，它定义了一些特殊的操作，比如当在表中查找一个不存在的键时，会通过元表的__index元方法来获取值。在这里，我们为.header表创建了一个元表。</span><br>    lua_createtable(L, <span class="hljs-number">0</span>, <span class="hljs-number">2</span>); <span class="hljs-comment">/* metatable for .header */</span><br>    <br>    <span class="hljs-comment">//将C函数ngx_http_lua_ngx_header_get推入堆栈，并将它作为值与键__index关联起来。这样，当在.header表中查找一个不存在的键时，将会调用ngx_http_lua_ngx_header_get函数来获取相应的值。</span><br>    lua_pushcfunction(L, ngx_http_lua_ngx_header_get);<br>    lua_setfield(L, <span class="hljs-number">-2</span>, <span class="hljs-string">&quot;__index&quot;</span>);<br>    <br>    <span class="hljs-comment">//将C函数ngx_http_lua_ngx_header_set推入堆栈，并将它作为值与键__newindex关联起来。这样，当在.header表中设置一个不存在的键时，将会调用ngx_http_lua_ngx_header_set函数来设置相应的值。</span><br>    lua_pushcfunction(L, ngx_http_lua_ngx_header_set);<br>    lua_setfield(L, <span class="hljs-number">-2</span>, <span class="hljs-string">&quot;__newindex&quot;</span>);<br>    <br>    <span class="hljs-comment">//将刚刚创建的元表设置为.header表的元表，从而实现了对HTTP响应头的读写操作。</span><br>    lua_setmetatable(L, <span class="hljs-number">-2</span>);<br>    <br>    <span class="hljs-comment">//将.header表保存在全局环境中，命名为header，这样在lua脚本中可以通过ngx.header来访问和操作HTTP响应头。</span><br>    lua_setfield(L, <span class="hljs-number">-2</span>, <span class="hljs-string">&quot;header&quot;</span>);<br><br>    lua_createtable(L, <span class="hljs-number">0</span>, <span class="hljs-number">1</span>); <span class="hljs-comment">/* .resp */</span><br><br>    lua_pushcfunction(L, ngx_http_lua_ngx_resp_get_headers);<br>    lua_setfield(L, <span class="hljs-number">-2</span>, <span class="hljs-string">&quot;get_headers&quot;</span>);<br>    <br>    <span class="hljs-comment">//ngx.resp</span><br>    lua_setfield(L, <span class="hljs-number">-2</span>, <span class="hljs-string">&quot;resp&quot;</span>);<br>&#125;<br></code></pre></td></tr></table></figure>
+
+<p>openresty在nginx的配置阶段统一注册</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-type">static</span> <span class="hljs-type">void</span><br><span class="hljs-title function_">ngx_http_lua_inject_ngx_api</span><span class="hljs-params">(lua_State *L, <span class="hljs-type">ngx_http_lua_main_conf_t</span> *lmcf,</span><br><span class="hljs-params">    <span class="hljs-type">ngx_log_t</span> *<span class="hljs-built_in">log</span>)</span><br>&#123;<br>    lua_createtable(L, <span class="hljs-number">0</span> <span class="hljs-comment">/* narr */</span>, <span class="hljs-number">115</span> <span class="hljs-comment">/* nrec */</span>);    <span class="hljs-comment">/* ngx.* */</span><br><br>    lua_pushcfunction(L, ngx_http_lua_get_raw_phase_context);<br>    lua_setfield(L, <span class="hljs-number">-2</span>, <span class="hljs-string">&quot;_phase_ctx&quot;</span>);<br><br>    ngx_http_lua_inject_arg_api(L);<br><br>    ngx_http_lua_inject_http_consts(L);<br>    ngx_http_lua_inject_core_consts(L);<br><br>    ngx_http_lua_inject_resp_header_api(L);   <span class="hljs-comment">//注册到线程中</span><br>    <br>    .......................................<br></code></pre></td></tr></table></figure>
+
+<p>将lua与c代码关联起来，这样就可以在lua中调用ngx.header，比如：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><code class="hljs c">local cookie = &#123;&#125;<br>ngx.header[<span class="hljs-string">&quot;Set-cookie&quot;</span>] = cookie<br></code></pre></td></tr></table></figure>
+
+<p>3、关于__index</p>
+<p>当尝试从表中获取不存在的值时，那么就会调用  <code>ngx_http_lua_ngx_header_get</code></p>
+<p>在lua中，<code>__index</code> 是一种特殊的元方法（metamethod），用于表的访问控制。当你尝试从一个表中获取一个不存在的键时，lua会在表的元表中查找是否定义了<code>__index</code>元方法。如果找到了<code>__index</code>元方法，lua会调用它，并将表本身和要访问的键作为参数传递给该元方法。</p>
+<p>在这段代码中，我们创建了一个名为 <code>.header</code> 的新表，并为该表创建了一个元表。然后，我们通过 <code>lua_setfield(L, -2, &quot;__index&quot;)</code> 将名为 <code>__index</code> 的 C 函数（<code>ngx_http_lua_ngx_header_get</code>）与该元表中的 <code>__index</code> 键关联起来。这样，当在 <code>.header</code> 表中查找一个不存在的键时，lua 就会调用 <code>ngx_http_lua_ngx_header_get</code> 函数来获取相应的值。</p>
+<p>换句话说，这个代码片段通过设置 <code>__index</code> 元方法，为 <code>.header</code> 表提供了一种自定义的行为：当访问 <code>.header</code> 表中不存在的键时，会调用 <code>ngx_http_lua_ngx_header_get</code> 函数进行处理。这在某种程度上实现了对 <code>.header</code> 表的动态访问控制。</p>
+<h3 id="2、协程"><a href="#2、协程" class="headerlink" title="2、协程"></a>2、协程</h3><ol>
+<li>nginx master初始化时，会创建一个lua_state，并初始化一个cached_lua_threads。      &#x2F;&#x2F;见下面分析1</li>
+<li>master在fork   work时，每个work会拥有各自的lua_state，即主协程</li>
+<li>主协程会维护cached_lua_threads，存放这个work（也就是这个lua_state主协程）创建出的所有协程，可以重复使用。  &#x2F;&#x2F;见下面分析2</li>
+<li>当有请求时，先检查         主协程是否存在  &amp;&amp;  协程队列是否为空 。    &#x2F;&#x2F;见下面代码3</li>
+<li>如果满足条件，那么从队列取一个协程，绑定该请求的上下文    &#x2F;&#x2F;见下面分析2</li>
+<li>如果不满足条件，说明此时没有主协程，或者没有可用的协程了，那就新建协程   &#x2F;&#x2F;见下面分析2</li>
+</ol>
+<p>1、master进程初始化虚拟机，创建lua_state</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-comment">//初始化ngx_http_lua_module模块              //初始化虚拟机,lmcf-&gt;lua为创建成功的虚拟机实例</span><br>ngx_http_lua_init               -&gt;         rc = ngx_http_lua_init_vm(&amp;lmcf-&gt;lua, <span class="hljs-literal">NULL</span>, cf-&gt;cycle, cf-&gt;pool, lmcf, cf-&gt;<span class="hljs-built_in">log</span>,<span class="hljs-literal">NULL</span>); <br></code></pre></td></tr></table></figure>
+
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-type">ngx_int_t</span><br><span class="hljs-title function_">ngx_http_lua_init_vm</span><span class="hljs-params">(lua_State **new_vm, lua_State *parent_vm,</span><br><span class="hljs-params">    <span class="hljs-type">ngx_cycle_t</span> *cycle, <span class="hljs-type">ngx_pool_t</span> *pool, <span class="hljs-type">ngx_http_lua_main_conf_t</span> *lmcf,</span><br><span class="hljs-params">    <span class="hljs-type">ngx_log_t</span> *<span class="hljs-built_in">log</span>, <span class="hljs-type">ngx_pool_cleanup_t</span> **pcln)</span><br>&#123;<br>    ..............................................<br><br>    <span class="hljs-comment">/* create new lua VM instance */</span><br>    L = ngx_http_lua_new_state(parent_vm, cycle, lmcf, <span class="hljs-built_in">log</span>);  <span class="hljs-comment">//创建lua_state</span><br>    <span class="hljs-keyword">if</span> (L == <span class="hljs-literal">NULL</span>) &#123;<br>        <span class="hljs-keyword">return</span> NGX_ERROR;<br>    &#125;<br><br>    .....................................<br>&#125;<br></code></pre></td></tr></table></figure>
+
+<p>初始化协程队列</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-comment">//初始化配置                                       //初始化队列</span><br>ngx_http_lua_init_main_conf          -&gt;           ngx_queue_init(&amp;lmcf-&gt;cached_lua_threads);<br></code></pre></td></tr></table></figure>
+
+<p>2、lmcf-&gt;cached_lua_threads</p>
+<p><code>lmcf-&gt;cached_lua_threads</code> 是一个队列，用于缓存 <strong>lua</strong> 协程（线程）。</p>
+<ol>
+<li>这个队列是在 <strong>Nginx</strong> 的 <strong>lua</strong> 模块中使用的，用于管理 <strong>lua</strong> 协程的生命周期。</li>
+<li>具体作用包括但不限于：<ul>
+<li>缓存已经创建的 <strong>lua</strong> 协程，以便在请求处理过程中重复使用。</li>
+<li>避免频繁地创建和销毁协程，提高性能和效率。</li>
+</ul>
+</li>
+<li>当需要执行 <strong>lua</strong> 脚本时，可以从这个队列中获取一个已经存在的协程，而不必每次都重新创建。</li>
+</ol>
+<p><code>lmcf-&gt;cached_lua_threads</code> 是一个用于缓存 <strong>lua</strong> 协程的队列，以优化请求处理性能</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br></pre></td><td class="code"><pre><code class="hljs c">lua_State *<br><span class="hljs-title function_">ngx_http_lua_new_thread</span><span class="hljs-params">(<span class="hljs-type">ngx_http_request_t</span> *r, lua_State *L, <span class="hljs-type">int</span> *ref)</span><br>&#123;<br>    ................................<br><br>    lmcf = ngx_http_get_module_main_conf(r, ngx_http_lua_module);<br><br>    <span class="hljs-keyword">if</span> (L == lmcf-&gt;lua &amp;&amp; !ngx_queue_empty(&amp;lmcf-&gt;cached_lua_threads)) &#123;   <span class="hljs-comment">//主线程是否存在   &amp;&amp;  线程队列不为空</span><br>        q = ngx_queue_head(&amp;lmcf-&gt;cached_lua_threads);<br>        tref = ngx_queue_data(q, <span class="hljs-type">ngx_http_lua_thread_ref_t</span>, <span class="hljs-built_in">queue</span>);<br>    &#125; <span class="hljs-keyword">else</span>   <span class="hljs-comment">//走到这里，说明  协程队列为空 </span><br>    &#123;<br>        lua_pushlightuserdata(L, ngx_http_lua_lightudata_mask(<br>                              coroutines_key));<br>        lua_rawget(L, lua_REGISTRYINDEX); <span class="hljs-comment">//从主协程获取线程队列</span><br>        co = lua_newthread(L);    <span class="hljs-comment">//新创建协程</span><br>        lua_pushvalue(L, <span class="hljs-number">-1</span>);     <span class="hljs-comment">//新创建的协程推入栈中</span><br>        co_ref = luaL_ref(L, <span class="hljs-number">-3</span>);   <span class="hljs-comment">//新协程的引用存储在注册表</span><br><br>        ngx_log_debug2(NGX_LOG_DEBUG_HTTP, ngx_cycle-&gt;<span class="hljs-built_in">log</span>, <span class="hljs-number">0</span>,<br>                       <span class="hljs-string">&quot;lua ref lua thread %p (ref %d)&quot;</span>, co, co_ref);<br><br><span class="hljs-meta">#<span class="hljs-keyword">ifndef</span> OPENRESTY_luaJIT      <span class="hljs-comment">//如果是jit，设置全局变量</span></span><br>        <span class="hljs-keyword">if</span> (set_globals) &#123;<br>            lua_createtable(co, <span class="hljs-number">0</span>, <span class="hljs-number">0</span>);  <span class="hljs-comment">/* the new globals table */</span><br><br>            <span class="hljs-comment">/* co stack: global_tb */</span><br><br>            lua_createtable(co, <span class="hljs-number">0</span>, <span class="hljs-number">1</span>);  <span class="hljs-comment">/* the metatable */</span><br>            ngx_http_lua_get_globals_table(co);<br>            lua_setfield(co, <span class="hljs-number">-2</span>, <span class="hljs-string">&quot;__index&quot;</span>);<br>            lua_setmetatable(co, <span class="hljs-number">-2</span>);<br><br>            <span class="hljs-comment">/* co stack: global_tb */</span><br><br>            ngx_http_lua_set_globals_table(co);<br>        &#125;<br><span class="hljs-meta">#<span class="hljs-keyword">endif</span></span><br>    &#125;<br><br>    ................................<br></code></pre></td></tr></table></figure>
+
+<p>3、请求与协程创建关联的过程</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><code class="hljs c">ngx_http_lua_content_by_chunk(lua_State *L, <span class="hljs-type">ngx_http_request_t</span> *r)<br>&#123;<br>     ................................<br><br>    <span class="hljs-comment">/*  &#123;&#123;&#123; new coroutine to handle request */</span><br>    co = ngx_http_lua_new_thread(r, L, &amp;co_ref);   <span class="hljs-comment">//主线程的创建</span><br><br>    <span class="hljs-keyword">if</span> (co == <span class="hljs-literal">NULL</span>) &#123;<br>        ngx_log_error(NGX_LOG_ERR, r-&gt;connection-&gt;<span class="hljs-built_in">log</span>, <span class="hljs-number">0</span>,<br>                      <span class="hljs-string">&quot;lua: failed to create new coroutine to handle request&quot;</span>);<br><br>        <span class="hljs-keyword">return</span> NGX_HTTP_INTERNAL_SERVER_ERROR;<br>    &#125; <br>   ....................................<br>&#125;<br></code></pre></td></tr></table></figure>
+
+<h2 id="4、问题"><a href="#4、问题" class="headerlink" title="4、问题"></a>4、问题</h2><p>1、主协程要是奔溃了，怎么保护的？</p>
+<p>待补。。。</p>
+<blockquote>
+<p>1、《lua源码剖析-云风》<br>2、<a target="_blank" rel="noopener" href="https://segmentfault.com/a/1190000038878724">https://segmentfault.com/a/1190000038878724</a><br>3、openresty-1.25.3.1</p>
+</blockquote>
+
+                
+              </div>
+            
+            <hr/>
+            <div>
+              <div class="post-metas my-3">
+  
+  
+    <div class="post-meta">
+      <i class="iconfont icon-tags"></i>
+      
+        <a href="/tags/lua%E8%99%9A%E6%8B%9F%E6%9C%BA/" class="print-no-link">#lua虚拟机</a>
+      
+        <a href="/tags/global-State/" class="print-no-link">#global_State</a>
+      
+        <a href="/tags/lua-State/" class="print-no-link">#lua_State</a>
+      
+        <a href="/tags/%E5%85%83%E8%A1%A8/" class="print-no-link">#元表</a>
+      
+        <a href="/tags/%E5%8D%8F%E7%A8%8B/" class="print-no-link">#协程</a>
+      
+    </div>
+  
+</div>
+
+
+              
+  
+
+  <div class="license-box my-3">
+    <div class="license-title">
+      <div>openresty---lua调用c原理分析</div>
+      <div>https://zjfans.github.io/2024/03/11/openresty---lua调用c原理分析/</div>
+    </div>
+    <div class="license-meta">
+      
+        <div class="license-meta-item">
+          <div>作者</div>
+          <div>张三疯</div>
+        </div>
+      
+      
+        <div class="license-meta-item license-meta-date">
+          <div>发布于</div>
+          <div>2024年3月11日</div>
+        </div>
+      
+      
+      
+        <div class="license-meta-item">
+          <div>许可协议</div>
+          <div>
+            
+              
+              
+                <a class="print-no-link" target="_blank" href="https://creativecommons.org/licenses/by/4.0/">
+                  <span class="hint--top hint--rounded" aria-label="BY - 署名">
+                    <i class="iconfont icon-by"></i>
+                  </span>
+                </a>
+              
+            
+          </div>
+        </div>
+      
+    </div>
+    <div class="license-icon iconfont"></div>
+  </div>
+
+
+
+              
+                <div class="post-prevnext my-3">
+                  <article class="post-prev col-6">
+                    
+                    
+                  </article>
+                  <article class="post-next col-6">
+                    
+                    
+                      <a href="/2024/03/06/%E5%8D%8F%E5%95%86%E7%BC%93%E5%AD%98%E5%9C%A8nginx%E7%9A%84%E5%BA%94%E7%94%A8%E4%B8%8E%E5%AE%9E%E8%B7%B5/" title="协商缓存在nginx的应用与实践">
+                        <span class="hidden-mobile">协商缓存在nginx的应用与实践</span>
+                        <span class="visible-mobile">下一篇</span>
+                        <i class="iconfont icon-arrowright"></i>
+                      </a>
+                    
+                  </article>
+                </div>
+              
+            </div>
+
+            
+          </article>
+        </div>
+      </div>
+    </div>
+
+    <div class="side-col d-none d-lg-block col-lg-2">
+      
+  <aside class="sidebar" style="margin-left: -1rem">
+    <div id="toc">
+  <p class="toc-header">
+    <i class="iconfont icon-list"></i>
+    <span>目录</span>
+  </p>
+  <div class="toc-body" id="toc-body"></div>
+</div>
+
+
+
+  </aside>
+
+
+    </div>
+  </div>
+</div>
+
+
+
+
+
+  
+
+
+
+  
+
+
+
+  
+
+
+
+  
+
+
+
+  
+
+
+
+
+
+
+
+    
+
+    
+      <a id="scroll-top-button" aria-label="TOP" href="#" role="button">
+        <i class="iconfont icon-arrowup" aria-hidden="true"></i>
+      </a>
+    
+
+    
+      <div class="modal fade" id="modalSearch" tabindex="-1" role="dialog" aria-labelledby="ModalLabel"
+     aria-hidden="true">
+  <div class="modal-dialog modal-dialog-scrollable modal-lg" role="document">
+    <div class="modal-content">
+      <div class="modal-header text-center">
+        <h4 class="modal-title w-100 font-weight-bold">搜索</h4>
+        <button type="button" id="local-search-close" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body mx-3">
+        <div class="md-form mb-5">
+          <input type="text" id="local-search-input" class="form-control validate">
+          <label data-error="x" data-success="v" for="local-search-input">关键词</label>
+        </div>
+        <div class="list-group" id="local-search-result"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+    
+
+    
+  </main>
+
+  <footer>
+    <div class="footer-inner">
+  
+    <div class="footer-content">
+       <a href="https://hexo.io" target="_blank" rel="nofollow noopener"><span>Hexo</span></a> <i class="iconfont icon-love"></i> <a href="https://github.com/fluid-dev/hexo-theme-fluid" target="_blank" rel="nofollow noopener"><span>Fluid</span></a> 
+    </div>
+  
+  
+  
+  
+</div>
+
+  </footer>
+
+  <!-- Scripts -->
+  
+  <script  src="https://lib.baomitu.com/nprogress/0.2.0/nprogress.min.js" ></script>
+  <link  rel="stylesheet" href="https://lib.baomitu.com/nprogress/0.2.0/nprogress.min.css" />
+
+  <script>
+    NProgress.configure({"showSpinner":false,"trickleSpeed":100})
+    NProgress.start()
+    window.addEventListener('load', function() {
+      NProgress.done();
+    })
+  </script>
+
+
+<script  src="https://lib.baomitu.com/jquery/3.6.4/jquery.min.js" ></script>
+<script  src="https://lib.baomitu.com/twitter-bootstrap/4.6.1/js/bootstrap.min.js" ></script>
+<script  src="/js/events.js" ></script>
+<script  src="/js/plugins.js" ></script>
+
+
+  <script  src="https://lib.baomitu.com/typed.js/2.0.12/typed.min.js" ></script>
+  <script>
+    (function (window, document) {
+      var typing = Fluid.plugins.typing;
+      var subtitle = document.getElementById('subtitle');
+      if (!subtitle || !typing) {
+        return;
+      }
+      var text = subtitle.getAttribute('data-typed-text');
+      
+        typing(text);
+      
+    })(window, document);
+  </script>
+
+
+
+
+  
+    <script  src="/js/img-lazyload.js" ></script>
+  
+
+
+
+
+  
+<script>
+  Fluid.utils.createScript('https://lib.baomitu.com/tocbot/4.20.1/tocbot.min.js', function() {
+    var toc = jQuery('#toc');
+    if (toc.length === 0 || !window.tocbot) { return; }
+    var boardCtn = jQuery('#board-ctn');
+    var boardTop = boardCtn.offset().top;
+
+    window.tocbot.init(Object.assign({
+      tocSelector     : '#toc-body',
+      contentSelector : '.markdown-body',
+      linkClass       : 'tocbot-link',
+      activeLinkClass : 'tocbot-active-link',
+      listClass       : 'tocbot-list',
+      isCollapsedClass: 'tocbot-is-collapsed',
+      collapsibleClass: 'tocbot-is-collapsible',
+      scrollSmooth    : true,
+      includeTitleTags: true,
+      headingsOffset  : -boardTop,
+    }, CONFIG.toc));
+    if (toc.find('.toc-list-item').length > 0) {
+      toc.css('visibility', 'visible');
+    }
+
+    Fluid.events.registerRefreshCallback(function() {
+      if ('tocbot' in window) {
+        tocbot.refresh();
+        var toc = jQuery('#toc');
+        if (toc.length === 0 || !tocbot) {
+          return;
+        }
+        if (toc.find('.toc-list-item').length > 0) {
+          toc.css('visibility', 'visible');
+        }
+      }
+    });
+  });
+</script>
+
+
+  <script src=https://lib.baomitu.com/clipboard.js/2.0.11/clipboard.min.js></script>
+
+  <script>Fluid.plugins.codeWidget();</script>
+
+
+  
+<script>
+  Fluid.utils.createScript('https://lib.baomitu.com/anchor-js/4.3.1/anchor.min.js', function() {
+    window.anchors.options = {
+      placement: CONFIG.anchorjs.placement,
+      visible  : CONFIG.anchorjs.visible
+    };
+    if (CONFIG.anchorjs.icon) {
+      window.anchors.options.icon = CONFIG.anchorjs.icon;
+    }
+    var el = (CONFIG.anchorjs.element || 'h1,h2,h3,h4,h5,h6').split(',');
+    var res = [];
+    for (var item of el) {
+      res.push('.markdown-body > ' + item.trim());
+    }
+    if (CONFIG.anchorjs.placement === 'left') {
+      window.anchors.options.class = 'anchorjs-link-left';
+    }
+    window.anchors.add(res.join(', '));
+
+    Fluid.events.registerRefreshCallback(function() {
+      if ('anchors' in window) {
+        anchors.removeAll();
+        var el = (CONFIG.anchorjs.element || 'h1,h2,h3,h4,h5,h6').split(',');
+        var res = [];
+        for (var item of el) {
+          res.push('.markdown-body > ' + item.trim());
+        }
+        if (CONFIG.anchorjs.placement === 'left') {
+          anchors.options.class = 'anchorjs-link-left';
+        }
+        anchors.add(res.join(', '));
+      }
+    });
+  });
+</script>
+
+
+  
+<script>
+  Fluid.utils.createScript('https://lib.baomitu.com/fancybox/3.5.7/jquery.fancybox.min.js', function() {
+    Fluid.plugins.fancyBox();
+  });
+</script>
+
+
+  <script>Fluid.plugins.imageCaption();</script>
+
+  <script  src="/js/local-search.js" ></script>
+
+
+
+
+
+<!-- 主题的启动项，将它保持在最底部 -->
+<!-- the boot of the theme, keep it at the bottom -->
+<script  src="/js/boot.js" ></script>
+
+
+  
+
+  <noscript>
+    <div class="noscript-warning">博客在允许 JavaScript 运行的环境下浏览效果更佳</div>
+  </noscript>
+</body>
+</html>
