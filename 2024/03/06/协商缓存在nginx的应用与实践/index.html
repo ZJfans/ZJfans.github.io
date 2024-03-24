@@ -23,36 +23,14 @@
 <meta property="og:site_name" content="ZJfans Blog">
 <meta property="og:description" content="1、前言缓存是一个高效减轻网络与服务器压力的机制，具有减少冗余数据传输、缓解网络瓶颈以及降低时延等优点。通常客户端在请求数据时，会发送请求到原始服务器获取，重复的数据可能会在网络中多次传输，但是如果有缓存，客户端就可以直接从缓存中获取数据，减少重复的流量。例如在浏览器首次请求某些静态资源时，状态码会是200 ok，但是刷新页面，状态码就会变为200 ok ( from memory cache)，">
 <meta property="og:locale" content="zh_CN">
-<meta property="og:image" content="https://zjfans.github.io/img/%E7%BC%93%E5%AD%98%E6%B5%81%E7%A8%8B%E5%9B%BE.png">
-<meta property="og:image" content="https://zjfans.github.io/img/%E4%BD%BF%E7%94%A8%E6%9C%9F%E4%B8%8E%E6%96%B0%E9%B2%9C%E5%BA%A6.png">
-<meta property="og:image" content="https://zjfans.github.io/img/cache-%E5%9B%BE3.png">
-<meta property="og:image" content="https://zjfans.github.io/E:/Nginx/%E5%8D%9A%E5%AE%A2/ZJfans.github.io/source/img/clip_image008.jpg">
-<meta property="og:image" content="file:///C:/Users/ZHANGJ~1/AppData/Local/Temp/msohtmlclip1/01/clip_image010.jpg">
-<meta property="og:image" content="https://zjfans.github.io/E:/Nginx/%E5%8D%9A%E5%AE%A2/ZJfans.github.io/source/img/cache-%E5%9B%BE6.jpg">
-<meta property="og:image" content="file:///C:/Users/ZHANGJ~1/AppData/Local/Temp/msohtmlclip1/01/clip_image014.jpg">
-<meta property="og:image" content="file:///C:/Users/ZHANGJ~1/AppData/Local/Temp/msohtmlclip1/01/clip_image016.jpg">
-<meta property="og:image" content="file:///C:/Users/ZHANGJ~1/AppData/Local/Temp/msohtmlclip1/01/clip_image018.jpg">
-<meta property="og:image" content="file:///C:/Users/ZHANGJ~1/AppData/Local/Temp/msohtmlclip1/01/clip_image020.jpg">
-<meta property="og:image" content="file:///C:/Users/ZHANGJ~1/AppData/Local/Temp/msohtmlclip1/01/clip_image022.jpg">
-<meta property="og:image" content="https://zjfans.github.io/img/cache-%E5%9B%BE12.png">
-<meta property="og:image" content="https://zjfans.github.io/img/cache-%E5%9B%BE13.png">
-<meta property="og:image" content="https://zjfans.github.io/img/cache-%E5%9B%BE14.png">
-<meta property="og:image" content="https://zjfans.github.io/img/cache-%E5%9B%BE15.png">
-<meta property="og:image" content="https://zjfans.github.io/img/cache-%E5%9B%BE16.png">
-<meta property="og:image" content="https://zjfans.github.io/img/cache-17.png">
-<meta property="og:image" content="https://zjfans.github.io/img/cache-18.png">
-<meta property="og:image" content="https://zjfans.github.io/img/cache-19.png">
-<meta property="og:image" content="https://zjfans.github.io/img/cache-20.png">
-<meta property="og:image" content="https://zjfans.github.io/source/img%5Ccache-21.png">
-<meta property="og:image" content="https://zjfans.github.io/img/cache-22.png">
-<meta property="og:image" content="https://zjfans.github.io/img/cache-23.png">
+<meta property="og:image" content="https://zjfans.github.io/img/ingmar-h-RWS1FY27DUg-unsplash.jpg">
 <meta property="article:published_time" content="2024-03-06T10:38:39.757Z">
-<meta property="article:modified_time" content="2024-03-11T12:27:43.916Z">
+<meta property="article:modified_time" content="2024-03-12T11:21:49.840Z">
 <meta property="article:author" content="张三疯">
 <meta property="article:tag" content="协商缓存">
 <meta property="article:tag" content="no cache nginx">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:image" content="https://zjfans.github.io/img/%E7%BC%93%E5%AD%98%E6%B5%81%E7%A8%8B%E5%9B%BE.png">
+<meta name="twitter:image" content="https://zjfans.github.io/img/ingmar-h-RWS1FY27DUg-unsplash.jpg">
   
   
   
@@ -245,7 +223,7 @@
       <span class="post-meta mr-2">
         <i class="iconfont icon-chart"></i>
         
-          3k 字
+          3.1k 字
         
       </span>
     
@@ -319,7 +297,7 @@
 <p>服务器可以通过no-store来禁止缓存对数据进行存储，因此每次客户端请求数据时，缓存都需要发送请求到原始服务器获取，这样就可以保证客户端获取数据的新鲜度。</p>
 <p>no-cache与no-store不同，no-cache允许缓存对数据进行存储，缓存需要在原始服务器验证新鲜度之后，才能将数据返回给客户端。通常，如果数据发生了更新，原始服务器会返回更新后的数据；反之，会返回304，表示缓存的数据并没有发生改变，可以把缓存的数据返回给客户端。</p>
 <p>而must-revalidate与no-cache类似，同样允许缓存对数据进行存储。如果缓存的数据过期，则must-revalidate与no-cache的行为一致；但是如果数据未过期，则可以直接返回给客户端数据而无需验证。因此must-revalidate通常需要与Expires、max-age进行配合使用。例如：</p>
-<p><img src="/img/cache-%E5%9B%BE3.png" srcset="/img/loading.gif" lazyload alt="cache-图3"></p>
+<p><img src="/img/cache-%E5%9B%BE3.png" srcset="/img/loading.gif" lazyload alt="Cache-Control的使用"></p>
 <p>现在让我们总结一下这3种缓存机制的特点：</p>
 <p>no-store：缓存不可以存储数据，每次请求都需要到服务器获取数据，因此可以保证数据的新鲜度，但是大量冗余数据的传输，会增大网络与服务器的压力，降低系统的整体性能。</p>
 <p>no-cache：缓存可以存储数据，每次请求都需要到服务器进行新鲜度的验证，因此可以保证数据的新鲜度。相比于no-store，减少了大量数据的传输。</p>
@@ -336,7 +314,7 @@
 
 <h2 id="4、协商缓存在nginx的应用"><a href="#4、协商缓存在nginx的应用" class="headerlink" title="4、协商缓存在nginx的应用"></a>4、协商缓存在nginx的应用</h2><h3 id="4-1、应用no-cache对前端的优化"><a href="#4-1、应用no-cache对前端的优化" class="headerlink" title="4.1、应用no-cache对前端的优化"></a>4.1、应用no-cache对前端的优化</h3><p>nginx提供流量分发、协议转换、静态资源代理等功能。本节以HUI前端为例，围绕静态资源代理这一功能，分析nginx何应用no-cache优化前端。</p>
 <p>see界面可以对协商缓存进行设置，最后落地到配置文件nginx.conf，具体配置如下图所示，可以设置单个文件采用协商缓存模式如： sysconfig.js；也可以根据文件类型后缀设置协商缓存模式如：html或js。</p>
-<p><img src="/E:/Nginx\博客\ZJfans.github.io\source\img\clip_image008.jpg" srcset="/img/loading.gif" lazyload alt="img"></p>
+<p><img src="/img/clip_image008.jpg" srcset="/img/loading.gif" lazyload alt="img"></p>
 <p>首先在浏览器访问hui-build前端，可以看到首次访问时，静态资源的状态码是200 ok，这代表数据是从服务器获取到的。</p>
 <p><img src="file:///C:/Users/ZHANGJ~1/AppData/Local/Temp/msohtmlclip1/01/clip_image010.jpg" srcset="/img/loading.gif" lazyload alt="img"></p>
 <p>接着刷新界面，可以看到状态码变为304 Not Modified，nginx的日志信息也可以看到客户端是发起了一次请求到nginx获取数据，判断到数据并未发生更新返回304。</p>
@@ -370,7 +348,7 @@
 <p>2、抓包查看第一次请求的网络包，可以看到服务端返回了静态资源的数据</p>
 <p><img src="/img/cache-20.png" srcset="/img/loading.gif" lazyload alt="cache-20"></p>
 <p>3、查看第二次请求，可以看到服务端没有返回任何静态资源，只有响应头这些数据</p>
-<p><img src="/source/img%5Ccache-21.png" srcset="/img/loading.gif" lazyload alt="cache-21"></p>
+<p><img src="/source/img/cache-21.png" srcset="/img/loading.gif" lazyload alt="cache-21"></p>
 <p>4、符合协商缓存的现象</p>
 <p>当请求的If-Modified-Since、If-None-Match与服务端不一致时，服务端会返回静态资源</p>
 <p><img src="/img/cache-22.png" srcset="/img/loading.gif" lazyload alt="cache-22"></p>
@@ -378,7 +356,7 @@
 <p><img src="/img/cache-23.png" srcset="/img/loading.gif" lazyload alt="cache-23"></p>
 <p>5、结论</p>
 <p>协商缓存模式下，客户端会对每个已经缓存的资源额外进行一次新鲜度验证，对于网络来说，这是一种开销。但是既要保证资源的新鲜度，又要尽量提高性能，这是很好的策略，毕竟没有完美的人，自然也就没有完美的策略。对于静态资源长时间不发生改变的场景，很明显no-cache不适用，不如使用must-revalidate。</p>
-<h3 id="5-2、特殊请求不生效"><a href="#5-2、特殊请求不生效" class="headerlink" title="5.2、特殊请求不生效"></a>5.2、特殊请求不生效</h3><p>在测试的过程中，一个页面会请求很多静态资源，但是总有几个不会触发协商缓存。</p>
+<h3 id="5-2、特殊请求不生效"><a href="#5-2、特殊请求不生效" class="headerlink" title="5.2、特殊请求不生效"></a>5.2、特殊请求不生效</h3><p>在测试的过程中，一个页面会请求很多静态资源，但是总有几个不会触发协商缓存。但是这几个页面单独拿出来在浏览器请求，协商缓存是可以生效的。这是因为这个静态资源的请求方式和普通方式不同。</p>
 <h2 id="6、总结"><a href="#6、总结" class="headerlink" title="6、总结"></a>6、总结</h2><p>协商缓存不只是一种简单的缓存机制，更是一种很好的理念。对于客户端与服务端数据同步、性能优化都是很好的借鉴，尤其是服务端不能主动向客户端发送请求的场景。例如当有服务以域名的形式注册到nginx时，nginx需要向DNS查询真实ip，为了避免每次请求都会向DNS查询，会对查询到的结果进行缓存，并启动定时器查询真实ip是否发生改变。而定时器的时间就类似于协商缓存的新鲜度，在实际的生产中没有完美的方案，因此需要根据具体的需求偏重来调整可靠性与性能。</p>
 <p>本文从HTTP缓存原理出发，介绍了缓存对系统性能优化的意义，并讲解了HTTP缓存发展过程中存在冗余数据多次传输的问题，以及为了解决这个问题而出现的协商缓存机制。通过对协商缓存的原理与nginx实现协商缓存的源码分析，希望大家可以对HTTP缓存有一定的理解。 </p>
 

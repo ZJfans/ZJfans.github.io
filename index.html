@@ -227,13 +227,94 @@
     <article class="col-12 col-md-12 mx-auto index-info">
       <h2 class="index-header">
         
+        <a href="/2024/03/19/linux%E5%88%86%E6%9E%90/" target="_self">
+          
+        </a>
+      </h2>
+
+      
+      <a class="index-excerpt index-excerpt__noimg" href="/2024/03/19/linux%E5%88%86%E6%9E%90/" target="_self">
+        <div>
+          linux分析 以下是一些常用的”perf”子命令及其功能：  perf stat: 用于收集和显示系统性能计数器的统计信息，包括CPU周期、指令数、缓存命中率等。 perf record: 用于记录指定命令或者系统的性能事件，例如CPU指令、缓存事件等。 perf report: 用于分析和显示由perf record记录的性能事件的报告，以便进行性能问题的诊断和分析。 perf top: 实时
+        </div>
+      </a>
+
+      <div class="index-btm post-metas">
+        
+          <div class="post-meta mr-3">
+            <i class="iconfont icon-date"></i>
+            <time datetime="2024-03-19 13:39" pubdate>
+              2024-03-19
+            </time>
+          </div>
+        
+        
+        
+      </div>
+    </article>
+  </div>
+
+  <div class="row mx-auto index-card">
+    
+    
+    <article class="col-12 col-md-12 mx-auto index-info">
+      <h2 class="index-header">
+        
+        <a href="/2024/03/17/%E8%AE%B0%E4%B8%80%E6%AC%A1%E7%94%9F%E4%BA%A7%E5%8E%8B%E6%B5%8B%E6%80%A7%E8%83%BD%E5%BC%95%E5%8F%91%E7%9A%84%E9%97%AE%E9%A2%98%EF%BC%8C%E4%BB%80%E4%B9%88%E6%98%AFreuseport%EF%BC%9F/" target="_self">
+          记一次生产压测性能引发的问题，什么是reuseport？
+        </a>
+      </h2>
+
+      
+      <a class="index-excerpt index-excerpt__noimg" href="/2024/03/17/%E8%AE%B0%E4%B8%80%E6%AC%A1%E7%94%9F%E4%BA%A7%E5%8E%8B%E6%B5%8B%E6%80%A7%E8%83%BD%E5%BC%95%E5%8F%91%E7%9A%84%E9%97%AE%E9%A2%98%EF%BC%8C%E4%BB%80%E4%B9%88%E6%98%AFreuseport%EF%BC%9F/" target="_self">
+        <div>
+          1、问题背景业务进行压力测试，发现一个奇怪的现象，整个压测过程中总会有断崖的情况。本来TPS在2万8左右，会直接掉到1500左右，然后又马上恢复，但是只能恢复到2万2，损耗了20%。 现场配置： 机器：海光麒麟v10  sp1  x86 性能指标：128c  512G nginx配置：16个work进程，句柄数40960 客户端与nginx建立的长连接：16个 问题在于nginx调大进程为64，或
+        </div>
+      </a>
+
+      <div class="index-btm post-metas">
+        
+          <div class="post-meta mr-3">
+            <i class="iconfont icon-date"></i>
+            <time datetime="2024-03-17 17:32" pubdate>
+              2024-03-17
+            </time>
+          </div>
+        
+        
+        
+          <div class="post-meta">
+            <i class="iconfont icon-tags"></i>
+            
+              <a href="/tags/nginx/">#nginx</a>
+            
+              <a href="/tags/reuseport/">#reuseport</a>
+            
+          </div>
+        
+      </div>
+    </article>
+  </div>
+
+  <div class="row mx-auto index-card">
+    
+    
+      <div class="col-12 col-md-4 m-auto index-img">
+        <a href="/2024/03/11/openresty---lua%E8%B0%83%E7%94%A8c%E5%8E%9F%E7%90%86%E5%88%86%E6%9E%90/" target="_self">
+          <img src="/img/erwan-hesry-5dqDNs5jl-s-unsplash.jpg" srcset="/img/loading.gif" lazyload alt="openresty---lua调用c原理分析">
+        </a>
+      </div>
+    
+    <article class="col-12 col-md-8 mx-auto index-info">
+      <h2 class="index-header">
+        
         <a href="/2024/03/11/openresty---lua%E8%B0%83%E7%94%A8c%E5%8E%9F%E7%90%86%E5%88%86%E6%9E%90/" target="_self">
           openresty---lua调用c原理分析
         </a>
       </h2>
 
       
-      <a class="index-excerpt index-excerpt__noimg" href="/2024/03/11/openresty---lua%E8%B0%83%E7%94%A8c%E5%8E%9F%E7%90%86%E5%88%86%E6%9E%90/" target="_self">
+      <a class="index-excerpt " href="/2024/03/11/openresty---lua%E8%B0%83%E7%94%A8c%E5%8E%9F%E7%90%86%E5%88%86%E6%9E%90/" target="_self">
         <div>
           openresty—lua调用c模块原理分析1、lua基础1、lua虚拟机lua是解释型语言，需要虚拟机对象。不同的lua虚拟机之间的工作是线程安全的，因为一切和虚拟机相关的内存操作都被关联到虚拟机对象中，而没有利用任何其它共享变量。lua的虚拟机核心部分，没有任何的系统调用，是一个纯粹的黑盒子，正确的使用lua，不会对系统造成任何干扰。这其中最关键的一点是，lua让用户自行定义内存管理器，在创建
         </div>
@@ -272,7 +353,13 @@
   <div class="row mx-auto index-card">
     
     
-    <article class="col-12 col-md-12 mx-auto index-info">
+      <div class="col-12 col-md-4 m-auto index-img">
+        <a href="/2024/03/06/%E5%8D%8F%E5%95%86%E7%BC%93%E5%AD%98%E5%9C%A8nginx%E7%9A%84%E5%BA%94%E7%94%A8%E4%B8%8E%E5%AE%9E%E8%B7%B5/" target="_self">
+          <img src="/img/ingmar-h-RWS1FY27DUg-unsplash.jpg" srcset="/img/loading.gif" lazyload alt="协商缓存在nginx的应用与实践">
+        </a>
+      </div>
+    
+    <article class="col-12 col-md-8 mx-auto index-info">
       <h2 class="index-header">
         
         <a href="/2024/03/06/%E5%8D%8F%E5%95%86%E7%BC%93%E5%AD%98%E5%9C%A8nginx%E7%9A%84%E5%BA%94%E7%94%A8%E4%B8%8E%E5%AE%9E%E8%B7%B5/" target="_self">
@@ -281,7 +368,7 @@
       </h2>
 
       
-      <a class="index-excerpt index-excerpt__noimg" href="/2024/03/06/%E5%8D%8F%E5%95%86%E7%BC%93%E5%AD%98%E5%9C%A8nginx%E7%9A%84%E5%BA%94%E7%94%A8%E4%B8%8E%E5%AE%9E%E8%B7%B5/" target="_self">
+      <a class="index-excerpt " href="/2024/03/06/%E5%8D%8F%E5%95%86%E7%BC%93%E5%AD%98%E5%9C%A8nginx%E7%9A%84%E5%BA%94%E7%94%A8%E4%B8%8E%E5%AE%9E%E8%B7%B5/" target="_self">
         <div>
           1、前言缓存是一个高效减轻网络与服务器压力的机制，具有减少冗余数据传输、缓解网络瓶颈以及降低时延等优点。通常客户端在请求数据时，会发送请求到原始服务器获取，重复的数据可能会在网络中多次传输，但是如果有缓存，客户端就可以直接从缓存中获取数据，减少重复的流量。例如在浏览器首次请求某些静态资源时，状态码会是200 ok，但是刷新页面，状态码就会变为200 ok ( from memory cache)，
         </div>
