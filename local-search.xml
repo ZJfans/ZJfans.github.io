@@ -4,40 +4,6 @@
   
   
   <entry>
-    <title></title>
-    <link href="/2024/03/19/linux%E5%88%86%E6%9E%90/"/>
-    <url>/2024/03/19/linux%E5%88%86%E6%9E%90/</url>
-    
-    <content type="html"><![CDATA[<p>linux分析</p><p>以下是一些常用的”perf”子命令及其功能：</p><ol><li><code>perf stat</code>: 用于收集和显示系统性能计数器的统计信息，包括CPU周期、指令数、缓存命中率等。</li><li><code>perf record</code>: 用于记录指定命令或者系统的性能事件，例如CPU指令、缓存事件等。</li><li><code>perf report</code>: 用于分析和显示由<code>perf record</code>记录的性能事件的报告，以便进行性能问题的诊断和分析。</li><li><code>perf top</code>: 实时显示系统上活跃的函数和符号，可以用于发现系统中的性能瓶颈。</li><li><code>perf annotate</code>: 用于显示源代码和汇编代码的注释，帮助理解性能事件的来源。</li><li><code>perf trace</code>: 用于跟踪系统的事件，例如系统调用、中断等，以帮助分析系统的行为和性能问题。</li><li><code>perf record -e &lt;event&gt;</code>: 记录指定的性能事件，例如CPU指令、缓存事件等。</li><li><code>perf script</code>: 将<code>perf record</code>记录的性能事件转换为脚本，以便进一步分析或处理。</li></ol>]]></content>
-    
-    
-    
-  </entry>
-  
-  
-  
-  <entry>
-    <title>记一次生产压测性能引发的问题，什么是reuseport？</title>
-    <link href="/2024/03/17/%E8%AE%B0%E4%B8%80%E6%AC%A1%E7%94%9F%E4%BA%A7%E5%8E%8B%E6%B5%8B%E6%80%A7%E8%83%BD%E5%BC%95%E5%8F%91%E7%9A%84%E9%97%AE%E9%A2%98%EF%BC%8C%E4%BB%80%E4%B9%88%E6%98%AFreuseport%EF%BC%9F/"/>
-    <url>/2024/03/17/%E8%AE%B0%E4%B8%80%E6%AC%A1%E7%94%9F%E4%BA%A7%E5%8E%8B%E6%B5%8B%E6%80%A7%E8%83%BD%E5%BC%95%E5%8F%91%E7%9A%84%E9%97%AE%E9%A2%98%EF%BC%8C%E4%BB%80%E4%B9%88%E6%98%AFreuseport%EF%BC%9F/</url>
-    
-    <content type="html"><![CDATA[<h2 id="1、问题背景"><a href="#1、问题背景" class="headerlink" title="1、问题背景"></a>1、问题背景</h2><p>业务进行压力测试，发现一个奇怪的现象，整个压测过程中总会有断崖的情况。本来TPS在2万8左右，会直接掉到1500左右，然后又马上恢复，但是只能恢复到2万2，损耗了20%。</p><p>现场配置：</p><p>机器：海光麒麟v10  sp1  x86</p><p>性能指标：128c  512G</p><p>nginx配置：16个work进程，句柄数40960</p><p>客户端与nginx建立的长连接：16个</p><p>问题在于nginx调大进程为64，或者客户端通道数调大为64，就没有问题。即16-64，64-16没问题，但是16-16有问题，100%复现断崖。</p><p>排查步骤：现场没有监控，且公司的监控做的一言难尽，所以排查过程比较困难，不过还是确认了一些问题</p><p>1、整个压测过程中，瓶颈不在nginx，因为最大cpu压力才到70%，主要排查问题是断崖。</p><p>2、查看nginx的日志，没有任何报错，但是发现断崖时，客户端给的流量下降了，根据日志绘出曲线后，与压力机的曲线一致</p><p>3、所以着重分析为什么此时客户端给的压力会突降低。但是整个链路的节点都有可能有问题，客户端队列阻塞？nginx处理变慢？服务端处理变慢？</p><p>重点是，这是私有协议，没有做access.log日志，根本看不到请求的耗时、数量等信息，从压力机看，64个进程和16个进程的平均时延没有差距。2中查看的流量还是打开debug，数的日志条数🙂，苦力活。因此开始tcpdump抓包，一个包抓了21个G，现场内网环境拷贝需要经过2层网络，现场还有其他的测试计划，只能见缝插针压测一把，第一天就这样过去了</p><p>第二天包终于拷贝出来了，在看包之前，我想起是信创系统，看了一下nginx的版本，不适配😬，赶快换了对应版本，16-16的模式没有再出现断崖，而且TPS上升了3千，到了3万1，断崖问题解决，但是因为操作系统不适配导致的断崖就留给以后查了。紧急的问题是，压测的过程中，nginx的各个进程压力不均匀？</p><h2 id="2、不均匀的现象"><a href="#2、不均匀的现象" class="headerlink" title="2、不均匀的现象"></a>2、不均匀的现象</h2><p>由于私有协议的特性，需要建立通道，可以简单理解为TCP连接。因此一个nginx进程建立的通道越多，后续请求的压力就越大，因为客户端会把请求分发到各个通道。举个例子，客户端建立64条通道，nginx开启64个进程，按照理想状态，每一条连接对应一个进程，那么nginx进程的压力是均衡的，但是实际上</p><p>nginx共有64条连接，其中39个nginx进程有连接，25个进程处于空闲，没有连接。其中1个进程的连接数为5条；4个进程的连接数分别为3条；14个进程的连接数为2条；19个进程的连接数为1条；25个进程的连接数为0条；</p><h2 id="3、什么是reuseport"><a href="#3、什么是reuseport" class="headerlink" title="3、什么是reuseport"></a>3、什么是reuseport</h2><h3 id="4、怎么优化"><a href="#4、怎么优化" class="headerlink" title="4、怎么优化"></a>4、怎么优化</h3>]]></content>
-    
-    
-    
-    <tags>
-      
-      <tag>nginx</tag>
-      
-      <tag>reuseport</tag>
-      
-    </tags>
-    
-  </entry>
-  
-  
-  
-  <entry>
     <title>openresty---lua调用c原理分析</title>
     <link href="/2024/03/11/openresty---lua%E8%B0%83%E7%94%A8c%E5%8E%9F%E7%90%86%E5%88%86%E6%9E%90/"/>
     <url>/2024/03/11/openresty---lua%E8%B0%83%E7%94%A8c%E5%8E%9F%E7%90%86%E5%88%86%E6%9E%90/</url>
