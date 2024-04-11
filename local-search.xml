@@ -87,11 +87,11 @@
     
     <tags>
       
+      <tag>nginx</tag>
+      
       <tag>websocket</tag>
       
       <tag>socket.io</tag>
-      
-      <tag>nginx</tag>
       
     </tags>
     
@@ -150,9 +150,9 @@
     
     <tags>
       
-      <tag>websocket</tag>
-      
       <tag>nginx</tag>
+      
+      <tag>websocket</tag>
       
     </tags>
     
