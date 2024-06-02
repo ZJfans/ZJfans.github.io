@@ -19,13 +19,13 @@
     <meta name="description" content="前言：在传统的轮询中，客户端定期向服务器发送请求，询问是否有新的数据可用。这会导致很多不必要的空请求，尤其是在没有新数据可用的时候。而且如果使用的是HTTP&#x2F;1.0版本，每个请求&#x2F;响应都需要打开一个新连接，考虑到连接的建立、关闭、TCP慢启动机制等因素，这是一个很大的开销。因此HTTP&#x2F;1.1引入了2个头部:Connection头部和Upgrade头部，用于协议升级。">
 <meta property="og:type" content="article">
 <meta property="og:title" content="SOCKET.IO最佳实践-代理篇">
-<meta property="og:url" content="https://zjfans.github.io/2024/02/28/SOCKET.IO%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5-%E4%BB%A3%E7%90%86%E7%AF%87/index.html">
+<meta property="og:url" content="https://zjfans.github.io/2024/04/12/SOCKET.IO%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5-%E4%BB%A3%E7%90%86%E7%AF%87/index.html">
 <meta property="og:site_name" content="ZJfans Blog">
 <meta property="og:description" content="前言：在传统的轮询中，客户端定期向服务器发送请求，询问是否有新的数据可用。这会导致很多不必要的空请求，尤其是在没有新数据可用的时候。而且如果使用的是HTTP&#x2F;1.0版本，每个请求&#x2F;响应都需要打开一个新连接，考虑到连接的建立、关闭、TCP慢启动机制等因素，这是一个很大的开销。因此HTTP&#x2F;1.1引入了2个头部:Connection头部和Upgrade头部，用于协议升级。">
 <meta property="og:locale" content="zh_CN">
 <meta property="og:image" content="https://zjfans.github.io/img/neom-DMGDdksVoWI-unsplash.jpg">
-<meta property="article:published_time" content="2024-02-28T11:46:51.274Z">
-<meta property="article:modified_time" content="2024-04-11T09:37:51.328Z">
+<meta property="article:published_time" content="2024-04-12T01:41:09.430Z">
+<meta property="article:modified_time" content="2024-06-02T11:15:43.468Z">
 <meta property="article:author" content="张三疯">
 <meta property="article:tag" content="websocket">
 <meta property="article:tag" content="socket.io">
@@ -241,8 +241,8 @@
     
       <span class="post-meta">
         <i class="iconfont icon-date-fill" aria-hidden="true"></i>
-        <time datetime="2024-02-28 19:46" pubdate>
-          2024年2月28日 晚上
+        <time datetime="2024-04-12 09:41" pubdate>
+          2024年4月12日 上午
         </time>
       </span>
     
@@ -253,7 +253,7 @@
       <span class="post-meta mr-2">
         <i class="iconfont icon-chart"></i>
         
-          4.4k 字
+          5.4k 字
         
       </span>
     
@@ -264,7 +264,7 @@
         
         
         
-          37 分钟
+          45 分钟
         
       </span>
     
@@ -402,7 +402,7 @@
 <h5 id="3、多-多"><a href="#3、多-多" class="headerlink" title="3、多-多"></a>3、多-多</h5><p>这种场景和单-多的场景没有任何区别，因为集群前面肯定有一个单节点的负载均衡器做负载，本质也是单-多。有些人可能好奇，双活难道不是每个节点都是集群吗，整条链路如果存在单节点，这个单节点挂掉之后，整条链路随之挂掉，事实上就是这样的，所以在负载的最前面，都是用DNS做分发。</p>
 <h5 id="4、多-单"><a href="#4、多-单" class="headerlink" title="4、多-单"></a>4、多-单</h5><p>同上，本质和单-多没有区别</p>
 <h4 id="3、HTTP长轮询与websocket同时存在"><a href="#3、HTTP长轮询与websocket同时存在" class="headerlink" title="3、HTTP长轮询与websocket同时存在"></a>3、HTTP长轮询与websocket同时存在</h4><p>Socket.io的机制会同时存在HTTP长轮询与websocket协议的请求，所以代理节点需要<strong>同时配置会话保持与协议升级的配置</strong>。</p>
-<h2 id="5、总结"><a href="#5、总结" class="headerlink" title="5、总结"></a>5、总结</h2><p>1、首先回答第4节的2个问题</p>
+<h2 id="5、问题解答"><a href="#5、问题解答" class="headerlink" title="5、问题解答"></a>5、问题解答</h2><p>1、首先回答第4节的2个问题</p>
 <p>1、第一个nginx真的需要配置ip_hash吗？</p>
 <p>ip_hash是将某一ip的客户端，固定路由到后台的某一台服务器。所以假设client-A、client-B与某个socket.io建立了会话,，那么后续请求也需要一一对应，我们可以推测nginx-M是否设置ip_hash的路由场景</p>
 <ul>
@@ -422,10 +422,61 @@
 <h2 id="6、socket-io集群同步"><a href="#6、socket-io集群同步" class="headerlink" title="6、socket.io集群同步"></a>6、socket.io集群同步</h2><p>试想，如果socket.io集群间能同步数据，那么是不是客户端可以随意对应哪个socket.io了？</p>
 <p>答案是的</p>
 <p>由于客户端可能连接到集群中不同的节点，为了在集群中不同的节点之间传递消息，socket.io官方以redis的发布订阅功能为基础做了消息路由分发：<strong>socket.io-redis</strong>。<strong>socket.io-redis</strong>在节点向客户端群发消息时会将该消息发布到redis的订阅队列中，让其他节点能够订阅到该消息，从而实现节点间消息推送。不过这有额外的开发工作量，目前来看，公司内部的socket.io并没有做集群的数据共享</p>
-<h2 id="7、实际问题"><a href="#7、实际问题" class="headerlink" title="7、实际问题"></a>7、实际问题</h2><h3 id="1、实际问题-1"><a href="#1、实际问题-1" class="headerlink" title="1、实际问题 1"></a>1、实际问题 1</h3><p>1、业务背景</p>
-<p>某系统使用socket.io做数据推送，架构如下图，打开F12，这个前端同时存在polling和websocket的请求，有了上面的经验，这个很容易，我们在Nginx，针对socket.io的请求，配置<strong>会话保持</strong>和<strong>websocket升级</strong>的配置就可以，但是有问题，这主要是业务的使用方式。</p>
+<h2 id="7、sticky-哈希-一致性哈希"><a href="#7、sticky-哈希-一致性哈希" class="headerlink" title="7、sticky&amp;&amp;哈希 &amp;&amp; 一致性哈希"></a>7、sticky&amp;&amp;哈希 &amp;&amp; 一致性哈希</h2><h3 id="1、不能使用ip-hash，要使用hash"><a href="#1、不能使用ip-hash，要使用hash" class="headerlink" title="1、不能使用ip_hash，要使用hash"></a>1、不能使用ip_hash，要使用hash</h3><p>nginx的ngx_http_upstream_ip_hash_module.c包含了具体hash负载策略的实现，在另外一篇文章会分析nginx的几大负载策略，这里简要概括一下，nginx会使用r-&gt;connection的地址，即取上一个节点的ip进行负载，也就是第5节说的问题，多级代理下，会导致集群退化成单节点。</p>
+<p>同时nginx提供了hash，因此需要使用hash，而不是ip_hash，且要这么配置</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><code class="hljs c">upstream myapp &#123;<br>        hash $http_x_real_ip;  # 使用 X-Real-IP 头部的值进行哈希<br>        server backend1.example.com weight=<span class="hljs-number">1</span>;<br>        server backend2.example.com weight=<span class="hljs-number">2</span>;<br>    &#125;<br><br><span class="hljs-comment">//或者</span><br><br>upstream myapp &#123;<br>        hash $http_x_forwarded_for;  # 使用 $http_x_forwarded_for 头部的值进行哈希<br>        server backend1.example.com weight=<span class="hljs-number">1</span>;<br>        server backend2.example.com weight=<span class="hljs-number">2</span>;<br>    &#125;<br></code></pre></td></tr></table></figure>
+
+<figure class="highlight css"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><code class="hljs css">//ingress-nginx<br>nginx<span class="hljs-selector-class">.ingress</span><span class="hljs-selector-class">.kubernetes</span><span class="hljs-selector-class">.io</span>/upstream-hash-by: <span class="hljs-string">&quot;$http_x_forwarded_for&quot;</span><br></code></pre></td></tr></table></figure>
+
+<p><strong>如果使用$http_x_forwarded_for，会将第一个地址进行哈希，还是所有地址呢？</strong></p>
+<p>这里先来理解一下X-Forwarded-For，X-Forwarded-For包含了经过的所有代理服务器的IP地址。同样在多级代理下，每级代理（包括最初始的客户端）都需要传递X-Forwarded-For头部，并添加自身的ip .X-Forwarded-For头部的值由多个IP地址组成，以逗号分隔。例如，如果请求经过了三个代理服务器，则X-Forwarded-For头部的值为：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><code class="hljs c">X-Forwarded-For: client_ip, proxy1_ip, proxy2_ip<br></code></pre></td></tr></table></figure>
+
+<p>其中，client_ip代表客户端的真实IP地址，proxy1_ip和proxy2_ip分别代表两个中间代理服务器的IP地址。</p>
+<p>从逻辑来讲来看，应该取第一个地址，因为如果在多级代理下，比如client -&gt;  F5  -&gt; (A&#x2F;B)  -&gt;server，同一个client可能会走A或者B，这就会导致hash值发生变化。简单搭个环境，打开debug测试一下，<strong>hash模块用的确实是真实客户端ip，也就是第一个ip</strong>，这样就是没有问题的。</p>
 <p><img src="/img/socket-%E5%9B%BE17.png" srcset="/img/loading.gif" lazyload alt="socket-图17"></p>
-<p>图19</p>
+<p>​		有意思的是，如果客户端后的第一个节点没有获取到client_ip，第二个节点获取到了第一个节点的ip，就会导致X-Forwarded-For的client_ip始终是客户端后第一个节点的ip，ip固定了，hash直接就无效了，因为不管客户端再怎么变化，client_ip始终是第一个代理节点。所以要保证整个链路支持X-Forwarded-For。</p>
+<p>事实证明，生产根本不是这样的，尤其是你的客户用了各种各样的负载均衡器，7层还好一般都支持，4层就够呛了（第一层代理节点要从tcp连接获取客户端的ip），如果客户买了F5，就一定会配置，或者愿意配置吗？</p>
+<p>对比一下几种算法</p>
+<table>
+<thead>
+<tr>
+<th>功能&#x2F;支持</th>
+<th>使用真实客户端ip进行ip_hash</th>
+<th>一致性哈希</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>ip_hash</td>
+<td>否</td>
+<td>否</td>
+</tr>
+<tr>
+<td>hash</td>
+<td>是</td>
+<td>是</td>
+</tr>
+<tr>
+<td>sticky</td>
+<td>否，使用cookie的router值路由</td>
+<td>否</td>
+</tr>
+</tbody></table>
+<p>1、使用不同的算法会有什么问题？</p>
+<p>1、使用ip_hash代理，退化成单节点</p>
+<p>如果停掉在用的，当前会话直接挂掉，nginx会重新选取一个节点。根据socket.io的特性，会出现报错，停掉空闲节点，不会有影响。</p>
+<p>另外补充一个点，如果   client  –   nginx   –   后端服务，这种模式下，nginx开启ip_hash后，如果停掉一个节点，nginx会重新计算权值，这个值影响最终请求被路由到哪台机器，也就是粘性会话失效了。</p>
+<p>也就是ip_hash的2个缺点，<strong>集群退化单节点</strong>与<strong>不支持一致性哈希</strong></p>
+<p>2、使用hash</p>
+<p>首先肯定是使用真实客户端ip进行hash路由，这样可以避免使后端集群退化成单节点</p>
+<p>而且现在因为后端服务是多节点，停止掉一个节点后，数据项的hash值会发生变化，客户端的请求会路由到其他的节点，且这个服务的数据丢失。</p>
+<p>但是使用一致性哈希后，数据会同步到顺时针的下一个节点，整个集群不会因为增删节点，影响对外提供功能</p>
+<p>以ingress-nginx举例：</p>
+<figure class="highlight css"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><code class="hljs css">nginx<span class="hljs-selector-class">.ingress</span><span class="hljs-selector-class">.kubernetes</span><span class="hljs-selector-class">.io</span>/upstream-hash-by: <span class="hljs-string">&quot;$http_x_forwarded_for&quot;</span><br></code></pre></td></tr></table></figure>
+
+<h2 id="8、实际问题"><a href="#8、实际问题" class="headerlink" title="8、实际问题"></a>8、实际问题</h2><h3 id="1、实际问题-1"><a href="#1、实际问题-1" class="headerlink" title="1、实际问题 1"></a>1、实际问题 1</h3><p>1、业务背景</p>
+<p>某系统使用socket.io做数据推送，架构如下图，打开F12，这个前端同时存在polling和websocket的请求，有了上面的经验，这个很容易，我们在Nginx，针对socket.io的请求，配置<strong>会话保持</strong>和<strong>websocket升级</strong>的配置就可以，但是有问题，这主要是业务的使用方式。</p>
+<p><img src="/img/socket-%E5%9B%BE18.png" srcset="/img/loading.gif" lazyload alt="socket-图18"></p>
 <p>2、 业务的使用</p>
 <p>1、client首先会发送一个post请求，告知后台微服务，客户端想获取什么数据。</p>
 <p>2、服务端组装好数据后，通过Socket.io将就绪的通知，通过websocket的请求推送到客户端。</p>
@@ -487,7 +538,7 @@
   <div class="license-box my-3">
     <div class="license-title">
       <div>SOCKET.IO最佳实践-代理篇</div>
-      <div>https://zjfans.github.io/2024/02/28/SOCKET.IO最佳实践-代理篇/</div>
+      <div>https://zjfans.github.io/2024/04/12/SOCKET.IO最佳实践-代理篇/</div>
     </div>
     <div class="license-meta">
       
@@ -499,7 +550,7 @@
       
         <div class="license-meta-item license-meta-date">
           <div>发布于</div>
-          <div>2024年2月28日</div>
+          <div>2024年4月12日</div>
         </div>
       
       
@@ -531,9 +582,9 @@
                   <article class="post-prev col-6">
                     
                     
-                      <a href="/2024/03/06/%E5%8D%8F%E5%95%86%E7%BC%93%E5%AD%98%E5%9C%A8nginx%E7%9A%84%E5%BA%94%E7%94%A8%E4%B8%8E%E5%AE%9E%E8%B7%B5/" title="协商缓存在nginx的应用与实践">
+                      <a href="/2024/04/12/ssl%E5%8F%8C%E5%90%91%E9%AA%8C%E8%AF%81%E2%80%94%20ssl_verify_depth%E7%9A%84%E4%BD%9C%E7%94%A8/" title="ssl双向验证— ssl_verify_depth的作用">
                         <i class="iconfont icon-arrowleft"></i>
-                        <span class="hidden-mobile">协商缓存在nginx的应用与实践</span>
+                        <span class="hidden-mobile">ssl双向验证— ssl_verify_depth的作用</span>
                         <span class="visible-mobile">上一篇</span>
                       </a>
                     
@@ -541,8 +592,8 @@
                   <article class="post-next col-6">
                     
                     
-                      <a href="/2024/02/28/Cookie%E5%B1%9E%E6%80%A7%E4%B9%8Bsecure%E3%80%81httponly/" title="Cookie属性之secure、httponly">
-                        <span class="hidden-mobile">Cookie属性之secure、httponly</span>
+                      <a href="/2024/04/12/openresty---lua%E8%B0%83%E7%94%A8c%E5%8E%9F%E7%90%86%E5%88%86%E6%9E%90/" title="openresty---lua调用c原理分析">
+                        <span class="hidden-mobile">openresty---lua调用c原理分析</span>
                         <span class="visible-mobile">下一篇</span>
                         <i class="iconfont icon-arrowright"></i>
                       </a>

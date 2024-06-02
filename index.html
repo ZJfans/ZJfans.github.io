@@ -253,24 +253,18 @@
   <div class="row mx-auto index-card">
     
     
-      <div class="col-12 col-md-4 m-auto index-img">
-        <a href="/2024/04/10/nginx%E7%9A%84reuseport%E7%89%B9%E6%80%A7%E5%88%86%E6%9E%90/" target="_self">
-          <img src="/img/ai-generated-8631634_1280.jpg" srcset="/img/loading.gif" lazyload alt="nginx的reuseport特性分析">
-        </a>
-      </div>
-    
-    <article class="col-12 col-md-8 mx-auto index-info">
+    <article class="col-12 col-md-12 mx-auto index-info">
       <h2 class="index-header">
         
-        <a href="/2024/04/10/nginx%E7%9A%84reuseport%E7%89%B9%E6%80%A7%E5%88%86%E6%9E%90/" target="_self">
-          nginx的reuseport特性分析
+        <a href="/2024/06/02/Nginx%E8%B4%9F%E8%BD%BD%E5%9D%87%E8%A1%A1%E7%AE%97%E6%B3%95%E8%A7%A3%E6%9E%90/" target="_self">
+          
         </a>
       </h2>
 
       
-      <a class="index-excerpt " href="/2024/04/10/nginx%E7%9A%84reuseport%E7%89%B9%E6%80%A7%E5%88%86%E6%9E%90/" target="_self">
+      <a class="index-excerpt index-excerpt__noimg" href="/2024/06/02/Nginx%E8%B4%9F%E8%BD%BD%E5%9D%87%E8%A1%A1%E7%AE%97%E6%B3%95%E8%A7%A3%E6%9E%90/" target="_self">
         <div>
-          1、奇怪的现象1.1、断崖问题业务进行性能测试，发现一个奇怪的现象，整个压测过程中总会有断崖的情况。本来TPS在2万8左右，会直接掉到1500左右，然后又马上恢复，但是只能恢复到2万2，损耗了20%。 现场架构：  现场XXX、nginx、服务都部署在一个机器，配置为： 1234567机器：海光麒麟v10  sp4  x86性能指标：128c  512Gnginx配置：16个work进程，句柄数4
+          负载均衡算法解析1、nginx-轮询1234567891011121314151617181920212223242526272829303132333435363738394041424344454647484950515253545556575859606162636465666768697071727374757677787980818283848586878889909192static
         </div>
       </a>
 
@@ -278,8 +272,47 @@
         
           <div class="post-meta mr-3">
             <i class="iconfont icon-date"></i>
-            <time datetime="2024-04-10 21:02" pubdate>
-              2024-04-10
+            <time datetime="2024-06-02 19:22" pubdate>
+              2024-06-02
+            </time>
+          </div>
+        
+        
+        
+      </div>
+    </article>
+  </div>
+
+  <div class="row mx-auto index-card">
+    
+    
+      <div class="col-12 col-md-4 m-auto index-img">
+        <a href="/2024/04/12/%E6%B5%85%E6%9E%90nginx%E5%AE%9E%E7%8E%B0websocket%E5%8E%9F%E7%90%86/" target="_self">
+          <img src="/img/allec-gomes-GClOjhaSpis-unsplash.jpg" srcset="/img/loading.gif" lazyload alt="浅析nginx实现websocket原理">
+        </a>
+      </div>
+    
+    <article class="col-12 col-md-8 mx-auto index-info">
+      <h2 class="index-header">
+        
+        <a href="/2024/04/12/%E6%B5%85%E6%9E%90nginx%E5%AE%9E%E7%8E%B0websocket%E5%8E%9F%E7%90%86/" target="_self">
+          浅析nginx实现websocket原理
+        </a>
+      </h2>
+
+      
+      <a class="index-excerpt " href="/2024/04/12/%E6%B5%85%E6%9E%90nginx%E5%AE%9E%E7%8E%B0websocket%E5%8E%9F%E7%90%86/" target="_self">
+        <div>
+          前言：​		传统的HTTP协议是一种无状态的请求&#x2F;响应协议，每次请求都需要重新建立连接。在一些特殊的业务场景下，服务端需要主动发送数据到客户端，例如行情推送、监控告警推送等。然而，HTTP协议不支持双向通信，因此需要将HTTP协议“升级”为WebSocket协议。WebSocket协议可以在建立连接后保持连接状态，双方可以通过一个持久的连接通道进行实时通信。WebSocket连接在建立时
+        </div>
+      </a>
+
+      <div class="index-btm post-metas">
+        
+          <div class="post-meta mr-3">
+            <i class="iconfont icon-date"></i>
+            <time datetime="2024-04-12 09:41" pubdate>
+              2024-04-12
             </time>
           </div>
         
@@ -288,13 +321,9 @@
           <div class="post-meta">
             <i class="iconfont icon-tags"></i>
             
+              <a href="/tags/websocket/">#websocket</a>
+            
               <a href="/tags/nginx/">#nginx</a>
-            
-              <a href="/tags/reuseport/">#reuseport</a>
-            
-              <a href="/tags/linux%E5%86%85%E6%A0%B8/">#linux内核</a>
-            
-              <a href="/tags/SO-REUSEPORT/">#SO_REUSEPORT</a>
             
           </div>
         
@@ -306,7 +335,153 @@
     
     
       <div class="col-12 col-md-4 m-auto index-img">
-        <a href="/2024/03/11/openresty---lua%E8%B0%83%E7%94%A8c%E5%8E%9F%E7%90%86%E5%88%86%E6%9E%90/" target="_self">
+        <a href="/2024/04/12/%E5%8D%8F%E5%95%86%E7%BC%93%E5%AD%98%E5%9C%A8nginx%E7%9A%84%E5%BA%94%E7%94%A8%E4%B8%8E%E5%AE%9E%E8%B7%B5/" target="_self">
+          <img src="/img/ingmar-h-RWS1FY27DUg-unsplash.jpg" srcset="/img/loading.gif" lazyload alt="协商缓存在nginx的应用与实践">
+        </a>
+      </div>
+    
+    <article class="col-12 col-md-8 mx-auto index-info">
+      <h2 class="index-header">
+        
+        <a href="/2024/04/12/%E5%8D%8F%E5%95%86%E7%BC%93%E5%AD%98%E5%9C%A8nginx%E7%9A%84%E5%BA%94%E7%94%A8%E4%B8%8E%E5%AE%9E%E8%B7%B5/" target="_self">
+          协商缓存在nginx的应用与实践
+        </a>
+      </h2>
+
+      
+      <a class="index-excerpt " href="/2024/04/12/%E5%8D%8F%E5%95%86%E7%BC%93%E5%AD%98%E5%9C%A8nginx%E7%9A%84%E5%BA%94%E7%94%A8%E4%B8%8E%E5%AE%9E%E8%B7%B5/" target="_self">
+        <div>
+          1、前言缓存是一个高效减轻网络与服务器压力的机制，具有减少冗余数据传输、缓解网络瓶颈以及降低时延等优点。通常客户端在请求数据时，会发送请求到原始服务器获取，重复的数据可能会在网络中多次传输，但是如果有缓存，客户端就可以直接从缓存中获取数据，减少重复的流量。例如在浏览器首次请求某些静态资源时，状态码会是200 ok，但是刷新页面，状态码就会变为200 ok ( from memory cache)，
+        </div>
+      </a>
+
+      <div class="index-btm post-metas">
+        
+          <div class="post-meta mr-3">
+            <i class="iconfont icon-date"></i>
+            <time datetime="2024-04-12 09:41" pubdate>
+              2024-04-12
+            </time>
+          </div>
+        
+        
+        
+          <div class="post-meta">
+            <i class="iconfont icon-tags"></i>
+            
+              <a href="/tags/%E5%8D%8F%E5%95%86%E7%BC%93%E5%AD%98/">#协商缓存</a>
+            
+              <a href="/tags/no-cache-nginx/">#no cache nginx</a>
+            
+          </div>
+        
+      </div>
+    </article>
+  </div>
+
+  <div class="row mx-auto index-card">
+    
+    
+      <div class="col-12 col-md-4 m-auto index-img">
+        <a href="/2024/04/12/ssl%E5%8F%8C%E5%90%91%E9%AA%8C%E8%AF%81%E2%80%94%20ssl_verify_depth%E7%9A%84%E4%BD%9C%E7%94%A8/" target="_self">
+          <img src="/img/danny-greenberg-lMtnNNv9aaU-unsplash.jpg" srcset="/img/loading.gif" lazyload alt="ssl双向验证— ssl_verify_depth的作用">
+        </a>
+      </div>
+    
+    <article class="col-12 col-md-8 mx-auto index-info">
+      <h2 class="index-header">
+        
+        <a href="/2024/04/12/ssl%E5%8F%8C%E5%90%91%E9%AA%8C%E8%AF%81%E2%80%94%20ssl_verify_depth%E7%9A%84%E4%BD%9C%E7%94%A8/" target="_self">
+          ssl双向验证— ssl_verify_depth的作用
+        </a>
+      </h2>
+
+      
+      <a class="index-excerpt " href="/2024/04/12/ssl%E5%8F%8C%E5%90%91%E9%AA%8C%E8%AF%81%E2%80%94%20ssl_verify_depth%E7%9A%84%E4%BD%9C%E7%94%A8/" target="_self">
+        <div>
+          前言关键词：根证书、中间证书、验证深度、ssl_verify_depth 根证书与中间证书在进行ssl验证前，服务器一般会向CA申请公钥证书，即将自己的公开密钥交给CA，CA用自己的私钥向服务器的公钥数字签名并返回公钥证书，在数字签名的过程中，CA一般会用根目录颁发证书，这种证书叫做根证书。 问题是，万一根目录颁发错了证书，或者需要撤销根，这时所有根目录颁发的证书都将失效，这样代价是巨大的，因此出
+        </div>
+      </a>
+
+      <div class="index-btm post-metas">
+        
+          <div class="post-meta mr-3">
+            <i class="iconfont icon-date"></i>
+            <time datetime="2024-04-12 09:41" pubdate>
+              2024-04-12
+            </time>
+          </div>
+        
+        
+        
+          <div class="post-meta">
+            <i class="iconfont icon-tags"></i>
+            
+              <a href="/tags/ssl/">#ssl</a>
+            
+              <a href="/tags/%E8%AF%81%E4%B9%A6/">#证书</a>
+            
+          </div>
+        
+      </div>
+    </article>
+  </div>
+
+  <div class="row mx-auto index-card">
+    
+    
+      <div class="col-12 col-md-4 m-auto index-img">
+        <a href="/2024/04/12/SOCKET.IO%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5-%E4%BB%A3%E7%90%86%E7%AF%87/" target="_self">
+          <img src="/img/neom-DMGDdksVoWI-unsplash.jpg" srcset="/img/loading.gif" lazyload alt="SOCKET.IO最佳实践-代理篇">
+        </a>
+      </div>
+    
+    <article class="col-12 col-md-8 mx-auto index-info">
+      <h2 class="index-header">
+        
+        <a href="/2024/04/12/SOCKET.IO%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5-%E4%BB%A3%E7%90%86%E7%AF%87/" target="_self">
+          SOCKET.IO最佳实践-代理篇
+        </a>
+      </h2>
+
+      
+      <a class="index-excerpt " href="/2024/04/12/SOCKET.IO%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5-%E4%BB%A3%E7%90%86%E7%AF%87/" target="_self">
+        <div>
+          前言：在传统的轮询中，客户端定期向服务器发送请求，询问是否有新的数据可用。这会导致很多不必要的空请求，尤其是在没有新数据可用的时候。而且如果使用的是HTTP&#x2F;1.0版本，每个请求&#x2F;响应都需要打开一个新连接，考虑到连接的建立、关闭、TCP慢启动机制等因素，这是一个很大的开销。因此HTTP&#x2F;1.1引入了2个头部:Connection头部和Upgrade头部，用于协议升级。
+        </div>
+      </a>
+
+      <div class="index-btm post-metas">
+        
+          <div class="post-meta mr-3">
+            <i class="iconfont icon-date"></i>
+            <time datetime="2024-04-12 09:41" pubdate>
+              2024-04-12
+            </time>
+          </div>
+        
+        
+        
+          <div class="post-meta">
+            <i class="iconfont icon-tags"></i>
+            
+              <a href="/tags/websocket/">#websocket</a>
+            
+              <a href="/tags/socket-io/">#socket.io</a>
+            
+              <a href="/tags/nginx/">#nginx</a>
+            
+          </div>
+        
+      </div>
+    </article>
+  </div>
+
+  <div class="row mx-auto index-card">
+    
+    
+      <div class="col-12 col-md-4 m-auto index-img">
+        <a href="/2024/04/12/openresty---lua%E8%B0%83%E7%94%A8c%E5%8E%9F%E7%90%86%E5%88%86%E6%9E%90/" target="_self">
           <img src="/img/erwan-hesry-5dqDNs5jl-s-unsplash.jpg" srcset="/img/loading.gif" lazyload alt="openresty---lua调用c原理分析">
         </a>
       </div>
@@ -314,13 +489,13 @@
     <article class="col-12 col-md-8 mx-auto index-info">
       <h2 class="index-header">
         
-        <a href="/2024/03/11/openresty---lua%E8%B0%83%E7%94%A8c%E5%8E%9F%E7%90%86%E5%88%86%E6%9E%90/" target="_self">
+        <a href="/2024/04/12/openresty---lua%E8%B0%83%E7%94%A8c%E5%8E%9F%E7%90%86%E5%88%86%E6%9E%90/" target="_self">
           openresty---lua调用c原理分析
         </a>
       </h2>
 
       
-      <a class="index-excerpt " href="/2024/03/11/openresty---lua%E8%B0%83%E7%94%A8c%E5%8E%9F%E7%90%86%E5%88%86%E6%9E%90/" target="_self">
+      <a class="index-excerpt " href="/2024/04/12/openresty---lua%E8%B0%83%E7%94%A8c%E5%8E%9F%E7%90%86%E5%88%86%E6%9E%90/" target="_self">
         <div>
           openresty—lua调用c模块原理分析1、lua基础1、lua虚拟机lua是解释型语言，需要虚拟机对象。不同的lua虚拟机之间的工作是线程安全的，因为一切和虚拟机相关的内存操作都被关联到虚拟机对象中，而没有利用任何其它共享变量。lua的虚拟机核心部分，没有任何的系统调用，是一个纯粹的黑盒子，正确的使用lua，不会对系统造成任何干扰。这其中最关键的一点是，lua让用户自行定义内存管理器，在创建
         </div>
@@ -330,8 +505,8 @@
         
           <div class="post-meta mr-3">
             <i class="iconfont icon-date"></i>
-            <time datetime="2024-03-11 17:32" pubdate>
-              2024-03-11
+            <time datetime="2024-04-12 09:41" pubdate>
+              2024-04-12
             </time>
           </div>
         
@@ -360,23 +535,23 @@
     
     
       <div class="col-12 col-md-4 m-auto index-img">
-        <a href="/2024/03/06/%E5%8D%8F%E5%95%86%E7%BC%93%E5%AD%98%E5%9C%A8nginx%E7%9A%84%E5%BA%94%E7%94%A8%E4%B8%8E%E5%AE%9E%E8%B7%B5/" target="_self">
-          <img src="/img/ingmar-h-RWS1FY27DUg-unsplash.jpg" srcset="/img/loading.gif" lazyload alt="协商缓存在nginx的应用与实践">
+        <a href="/2024/04/12/nginx%E7%9A%84reuseport%E7%89%B9%E6%80%A7%E5%88%86%E6%9E%90/" target="_self">
+          <img src="/img/ai-generated-8631634_1280.jpg" srcset="/img/loading.gif" lazyload alt="nginx的reuseport特性分析">
         </a>
       </div>
     
     <article class="col-12 col-md-8 mx-auto index-info">
       <h2 class="index-header">
         
-        <a href="/2024/03/06/%E5%8D%8F%E5%95%86%E7%BC%93%E5%AD%98%E5%9C%A8nginx%E7%9A%84%E5%BA%94%E7%94%A8%E4%B8%8E%E5%AE%9E%E8%B7%B5/" target="_self">
-          协商缓存在nginx的应用与实践
+        <a href="/2024/04/12/nginx%E7%9A%84reuseport%E7%89%B9%E6%80%A7%E5%88%86%E6%9E%90/" target="_self">
+          nginx的reuseport特性分析
         </a>
       </h2>
 
       
-      <a class="index-excerpt " href="/2024/03/06/%E5%8D%8F%E5%95%86%E7%BC%93%E5%AD%98%E5%9C%A8nginx%E7%9A%84%E5%BA%94%E7%94%A8%E4%B8%8E%E5%AE%9E%E8%B7%B5/" target="_self">
+      <a class="index-excerpt " href="/2024/04/12/nginx%E7%9A%84reuseport%E7%89%B9%E6%80%A7%E5%88%86%E6%9E%90/" target="_self">
         <div>
-          1、前言缓存是一个高效减轻网络与服务器压力的机制，具有减少冗余数据传输、缓解网络瓶颈以及降低时延等优点。通常客户端在请求数据时，会发送请求到原始服务器获取，重复的数据可能会在网络中多次传输，但是如果有缓存，客户端就可以直接从缓存中获取数据，减少重复的流量。例如在浏览器首次请求某些静态资源时，状态码会是200 ok，但是刷新页面，状态码就会变为200 ok ( from memory cache)，
+          1、奇怪的现象1.1、断崖问题业务进行性能测试，发现一个奇怪的现象，整个压测过程中总会有断崖的情况。本来TPS在2万8左右，会直接掉到1500左右，然后又马上恢复，但是只能恢复到2万2，损耗了20%。 现场架构：  现场XXX、nginx、服务都部署在一个机器，配置为： 1234567机器：海光麒麟v10  sp4  x86性能指标：128c  512Gnginx配置：16个work进程，句柄数4
         </div>
       </a>
 
@@ -384,8 +559,8 @@
         
           <div class="post-meta mr-3">
             <i class="iconfont icon-date"></i>
-            <time datetime="2024-03-06 18:38" pubdate>
-              2024-03-06
+            <time datetime="2024-04-12 09:41" pubdate>
+              2024-04-12
             </time>
           </div>
         
@@ -393,61 +568,15 @@
         
           <div class="post-meta">
             <i class="iconfont icon-tags"></i>
-            
-              <a href="/tags/%E5%8D%8F%E5%95%86%E7%BC%93%E5%AD%98/">#协商缓存</a>
-            
-              <a href="/tags/no-cache-nginx/">#no cache nginx</a>
-            
-          </div>
-        
-      </div>
-    </article>
-  </div>
-
-  <div class="row mx-auto index-card">
-    
-    
-      <div class="col-12 col-md-4 m-auto index-img">
-        <a href="/2024/02/28/SOCKET.IO%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5-%E4%BB%A3%E7%90%86%E7%AF%87/" target="_self">
-          <img src="/img/neom-DMGDdksVoWI-unsplash.jpg" srcset="/img/loading.gif" lazyload alt="SOCKET.IO最佳实践-代理篇">
-        </a>
-      </div>
-    
-    <article class="col-12 col-md-8 mx-auto index-info">
-      <h2 class="index-header">
-        
-        <a href="/2024/02/28/SOCKET.IO%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5-%E4%BB%A3%E7%90%86%E7%AF%87/" target="_self">
-          SOCKET.IO最佳实践-代理篇
-        </a>
-      </h2>
-
-      
-      <a class="index-excerpt " href="/2024/02/28/SOCKET.IO%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5-%E4%BB%A3%E7%90%86%E7%AF%87/" target="_self">
-        <div>
-          前言：在传统的轮询中，客户端定期向服务器发送请求，询问是否有新的数据可用。这会导致很多不必要的空请求，尤其是在没有新数据可用的时候。而且如果使用的是HTTP&#x2F;1.0版本，每个请求&#x2F;响应都需要打开一个新连接，考虑到连接的建立、关闭、TCP慢启动机制等因素，这是一个很大的开销。因此HTTP&#x2F;1.1引入了2个头部:Connection头部和Upgrade头部，用于协议升级。
-        </div>
-      </a>
-
-      <div class="index-btm post-metas">
-        
-          <div class="post-meta mr-3">
-            <i class="iconfont icon-date"></i>
-            <time datetime="2024-02-28 19:46" pubdate>
-              2024-02-28
-            </time>
-          </div>
-        
-        
-        
-          <div class="post-meta">
-            <i class="iconfont icon-tags"></i>
-            
-              <a href="/tags/websocket/">#websocket</a>
-            
-              <a href="/tags/socket-io/">#socket.io</a>
             
               <a href="/tags/nginx/">#nginx</a>
             
+              <a href="/tags/reuseport/">#reuseport</a>
+            
+              <a href="/tags/linux%E5%86%85%E6%A0%B8/">#linux内核</a>
+            
+              <a href="/tags/SO-REUSEPORT/">#SO_REUSEPORT</a>
+            
           </div>
         
       </div>
@@ -458,7 +587,7 @@
     
     
       <div class="col-12 col-md-4 m-auto index-img">
-        <a href="/2024/02/28/Cookie%E5%B1%9E%E6%80%A7%E4%B9%8Bsecure%E3%80%81httponly/" target="_self">
+        <a href="/2024/04/12/Cookie%E5%B1%9E%E6%80%A7%E4%B9%8Bsecure%E3%80%81httponly/" target="_self">
           <img src="/img/tobias-reich-zK9gSMQGAc4-unsplash.jpg" srcset="/img/loading.gif" lazyload alt="Cookie属性之secure、httponly">
         </a>
       </div>
@@ -466,13 +595,13 @@
     <article class="col-12 col-md-8 mx-auto index-info">
       <h2 class="index-header">
         
-        <a href="/2024/02/28/Cookie%E5%B1%9E%E6%80%A7%E4%B9%8Bsecure%E3%80%81httponly/" target="_self">
+        <a href="/2024/04/12/Cookie%E5%B1%9E%E6%80%A7%E4%B9%8Bsecure%E3%80%81httponly/" target="_self">
           Cookie属性之secure、httponly
         </a>
       </h2>
 
       
-      <a class="index-excerpt " href="/2024/02/28/Cookie%E5%B1%9E%E6%80%A7%E4%B9%8Bsecure%E3%80%81httponly/" target="_self">
+      <a class="index-excerpt " href="/2024/04/12/Cookie%E5%B1%9E%E6%80%A7%E4%B9%8Bsecure%E3%80%81httponly/" target="_self">
         <div>
           前言​		Cookie是一种用于在Web浏览器和Web服务器之间传递信息的机制，具有多种属性。经常会有安全测试不了解Cookie的属性，而认为某个属性是漏洞，最常见的就是secure，作者就见过很几次漏洞报告，认为http协议下，Cookie的secure为false是一个安全漏洞，这其实是测试没有理解secure的真正作用。那么阅读本文你将得到以下几个问题的答案 1、Cookie在会话鉴权中扮演
         </div>
@@ -482,8 +611,8 @@
         
           <div class="post-meta mr-3">
             <i class="iconfont icon-date"></i>
-            <time datetime="2024-02-28 15:24" pubdate>
-              2024-02-28
+            <time datetime="2024-04-12 09:41" pubdate>
+              2024-04-12
             </time>
           </div>
         
@@ -493,102 +622,6 @@
             <i class="iconfont icon-tags"></i>
             
               <a href="/tags/http/">#http</a>
-            
-          </div>
-        
-      </div>
-    </article>
-  </div>
-
-  <div class="row mx-auto index-card">
-    
-    
-      <div class="col-12 col-md-4 m-auto index-img">
-        <a href="/2024/02/28/ssl%E5%8F%8C%E5%90%91%E9%AA%8C%E8%AF%81%E2%80%94%20ssl_verify_depth%E7%9A%84%E4%BD%9C%E7%94%A8/" target="_self">
-          <img src="/img/danny-greenberg-lMtnNNv9aaU-unsplash.jpg" srcset="/img/loading.gif" lazyload alt="ssl双向验证— ssl_verify_depth的作用">
-        </a>
-      </div>
-    
-    <article class="col-12 col-md-8 mx-auto index-info">
-      <h2 class="index-header">
-        
-        <a href="/2024/02/28/ssl%E5%8F%8C%E5%90%91%E9%AA%8C%E8%AF%81%E2%80%94%20ssl_verify_depth%E7%9A%84%E4%BD%9C%E7%94%A8/" target="_self">
-          ssl双向验证— ssl_verify_depth的作用
-        </a>
-      </h2>
-
-      
-      <a class="index-excerpt " href="/2024/02/28/ssl%E5%8F%8C%E5%90%91%E9%AA%8C%E8%AF%81%E2%80%94%20ssl_verify_depth%E7%9A%84%E4%BD%9C%E7%94%A8/" target="_self">
-        <div>
-          前言关键词：根证书、中间证书、验证深度、ssl_verify_depth 根证书与中间证书在进行ssl验证前，服务器一般会向CA申请公钥证书，即将自己的公开密钥交给CA，CA用自己的私钥向服务器的公钥数字签名并返回公钥证书，在数字签名的过程中，CA一般会用根目录颁发证书，这种证书叫做根证书。 问题是，万一根目录颁发错了证书，或者需要撤销根，这时所有根目录颁发的证书都将失效，这样代价是巨大的，因此出
-        </div>
-      </a>
-
-      <div class="index-btm post-metas">
-        
-          <div class="post-meta mr-3">
-            <i class="iconfont icon-date"></i>
-            <time datetime="2024-02-28 15:23" pubdate>
-              2024-02-28
-            </time>
-          </div>
-        
-        
-        
-          <div class="post-meta">
-            <i class="iconfont icon-tags"></i>
-            
-              <a href="/tags/ssl/">#ssl</a>
-            
-              <a href="/tags/%E8%AF%81%E4%B9%A6/">#证书</a>
-            
-          </div>
-        
-      </div>
-    </article>
-  </div>
-
-  <div class="row mx-auto index-card">
-    
-    
-      <div class="col-12 col-md-4 m-auto index-img">
-        <a href="/2024/02/27/%E6%B5%85%E6%9E%90nginx%E5%AE%9E%E7%8E%B0websocket%E5%8E%9F%E7%90%86/" target="_self">
-          <img src="/img/allec-gomes-GClOjhaSpis-unsplash.jpg" srcset="/img/loading.gif" lazyload alt="浅析nginx实现websocket原理">
-        </a>
-      </div>
-    
-    <article class="col-12 col-md-8 mx-auto index-info">
-      <h2 class="index-header">
-        
-        <a href="/2024/02/27/%E6%B5%85%E6%9E%90nginx%E5%AE%9E%E7%8E%B0websocket%E5%8E%9F%E7%90%86/" target="_self">
-          浅析nginx实现websocket原理
-        </a>
-      </h2>
-
-      
-      <a class="index-excerpt " href="/2024/02/27/%E6%B5%85%E6%9E%90nginx%E5%AE%9E%E7%8E%B0websocket%E5%8E%9F%E7%90%86/" target="_self">
-        <div>
-          前言：​		传统的HTTP协议是一种无状态的请求&#x2F;响应协议，每次请求都需要重新建立连接。在一些特殊的业务场景下，服务端需要主动发送数据到客户端，例如行情推送、监控告警推送等。然而，HTTP协议不支持双向通信，因此需要将HTTP协议“升级”为WebSocket协议。WebSocket协议可以在建立连接后保持连接状态，双方可以通过一个持久的连接通道进行实时通信。WebSocket连接在建立时
-        </div>
-      </a>
-
-      <div class="index-btm post-metas">
-        
-          <div class="post-meta mr-3">
-            <i class="iconfont icon-date"></i>
-            <time datetime="2024-02-27 15:33" pubdate>
-              2024-02-27
-            </time>
-          </div>
-        
-        
-        
-          <div class="post-meta">
-            <i class="iconfont icon-tags"></i>
-            
-              <a href="/tags/websocket/">#websocket</a>
-            
-              <a href="/tags/nginx/">#nginx</a>
             
           </div>
         

@@ -19,13 +19,13 @@
     <meta name="description" content="1、奇怪的现象1.1、断崖问题业务进行性能测试，发现一个奇怪的现象，整个压测过程中总会有断崖的情况。本来TPS在2万8左右，会直接掉到1500左右，然后又马上恢复，但是只能恢复到2万2，损耗了20%。 现场架构：  现场XXX、nginx、服务都部署在一个机器，配置为： 1234567机器：海光麒麟v10  sp4  x86性能指标：128c  512Gnginx配置：16个work进程，句柄数4">
 <meta property="og:type" content="article">
 <meta property="og:title" content="nginx的reuseport特性分析">
-<meta property="og:url" content="https://zjfans.github.io/2024/04/10/nginx%E7%9A%84reuseport%E7%89%B9%E6%80%A7%E5%88%86%E6%9E%90/index.html">
+<meta property="og:url" content="https://zjfans.github.io/2024/04/12/nginx%E7%9A%84reuseport%E7%89%B9%E6%80%A7%E5%88%86%E6%9E%90/index.html">
 <meta property="og:site_name" content="ZJfans Blog">
 <meta property="og:description" content="1、奇怪的现象1.1、断崖问题业务进行性能测试，发现一个奇怪的现象，整个压测过程中总会有断崖的情况。本来TPS在2万8左右，会直接掉到1500左右，然后又马上恢复，但是只能恢复到2万2，损耗了20%。 现场架构：  现场XXX、nginx、服务都部署在一个机器，配置为： 1234567机器：海光麒麟v10  sp4  x86性能指标：128c  512Gnginx配置：16个work进程，句柄数4">
 <meta property="og:locale" content="zh_CN">
 <meta property="og:image" content="https://zjfans.github.io/img/ai-generated-8631634_1280.jpg">
-<meta property="article:published_time" content="2024-04-10T13:02:25.486Z">
-<meta property="article:modified_time" content="2024-04-11T02:03:32.721Z">
+<meta property="article:published_time" content="2024-04-12T01:41:09.424Z">
+<meta property="article:modified_time" content="2024-04-12T01:34:28.783Z">
 <meta property="article:author" content="张三疯">
 <meta property="article:tag" content="nginx">
 <meta property="article:tag" content="reuseport">
@@ -242,8 +242,8 @@
     
       <span class="post-meta">
         <i class="iconfont icon-date-fill" aria-hidden="true"></i>
-        <time datetime="2024-04-10 21:02" pubdate>
-          2024年4月10日 晚上
+        <time datetime="2024-04-12 09:41" pubdate>
+          2024年4月12日 上午
         </time>
       </span>
     
@@ -403,7 +403,7 @@
 <h3 id="3-4、均衡吗？引发reuseport奇怪的现象"><a href="#3-4、均衡吗？引发reuseport奇怪的现象" class="headerlink" title="3.4、均衡吗？引发reuseport奇怪的现象"></a>3.4、均衡吗？引发reuseport奇怪的现象</h3><p>如果nginx有8个进程监听这个端口，为什么我觉得会很不均匀的分配连接呢？于是用了我们自己的nginx，不开启reuseport的情况下，多个进程都监听了一个socket，但是开启了reuseport后，8个进程每个进程都监听了8个socket？？为什么不是8个进程各自监听自己的socket呢？<br>1、难道是内核版本太低了不支持？或者显示有问题？</p>
 <p>我这个虚拟机的内核是3.1，确实低了，于是找了一个4.19的操作系统，也是这样？</p>
 <p>那就不是linux内核的版本问题</p>
-<p><img src="/img/openresty-15.8%E5%BC%80%E5%90%AFreuseport.png" srcset="/img/loading.gif" lazyload alt="openresty-15.8开启reuseport"></p>
+<p><img src="/img/openresty-1.15.8%E5%BC%80%E5%90%AFreuseport.png" srcset="/img/loading.gif" lazyload alt="openresty-1.15.8开启reuseport"></p>
 <p>2、nginx的版本的问题？</p>
 <p>我用的是openresty-1.15.8版本，因此nginx的版本也是15.8，因此我下载了最新的openresty-1.25版本，重新编译启动后，结果如下图，work进程完全符合我的预期！！！</p>
 <p><img src="/img/openresty-1.25.3%E5%BC%80%E5%90%AFreuseport.png" srcset="/img/loading.gif" lazyload alt="openresty-1.25.3开启reuseport"></p>
@@ -464,10 +464,10 @@
 <p><strong>可以看到服务端在接收到客户端的 SYN 包后，会创建一个用于与客户端通信的 socket，这时候就会更新cpu了，也就是sk_incoming_cpu</strong>，下次这个cpu在分配连接的时候，会优先给这个cpu处理过的socket，也就是加一分</p>
 <figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-comment">// 如果一个socket上次处理它的数据包的CPU与当前CPU相同，额外加1分</span><br>		<span class="hljs-keyword">if</span> (READ_ONCE(sk-&gt;sk_incoming_cpu) == raw_smp_processor_id())<br>			score++;<br></code></pre></td></tr></table></figure>
 
-<p>理解了sk_incoming_cpu，其实就可以理解得分</p>
 <h4 id="4-1-3、更新sk-incoming-cpu"><a href="#4-1-3、更新sk-incoming-cpu" class="headerlink" title="4.1.3、更新sk_incoming_cpu"></a>4.1.3、更新sk_incoming_cpu</h4><p>重要的是<strong>reuseport_update_incoming_cpu</strong>，如何设置和更新sk_incoming_cpu</p>
 <figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-type">void</span> <span class="hljs-title function_">reuseport_update_incoming_cpu</span><span class="hljs-params">(<span class="hljs-keyword">struct</span> sock *sk, <span class="hljs-type">int</span> val)</span><br>&#123;<br>	<span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">sock_reuseport</span> *<span class="hljs-title">reuse</span>;</span><br>	<span class="hljs-type">int</span> old_sk_incoming_cpu;<br><br>	<span class="hljs-comment">// 如果reuseport选项未启用，直接更新sk_incoming_cpu值。</span><br>	<span class="hljs-keyword">if</span> (unlikely(!rcu_access_pointer(sk-&gt;sk_reuseport_cb))) &#123;<br>		WRITE_ONCE(sk-&gt;sk_incoming_cpu, val);<br>		<span class="hljs-keyword">return</span>;<br>	&#125;<br><br>	<span class="hljs-comment">// 加锁以保护对reuseport相关资源的访问。</span><br>	spin_lock_bh(&amp;reuseport_lock);<br><br>	<span class="hljs-comment">// 在加锁保护下更新sk_incoming_cpu值，以避免并发问题。</span><br>	old_sk_incoming_cpu = sk-&gt;sk_incoming_cpu;<br>	WRITE_ONCE(sk-&gt;sk_incoming_cpu, val);                <span class="hljs-comment">//这里做更新</span><br><br>	<span class="hljs-comment">// 安全地访问reuseport_cb，考虑了锁的依赖关系。</span><br>	reuse = rcu_dereference_protected(sk-&gt;sk_reuseport_cb,<br>					  lockdep_is_held(&amp;reuseport_lock));<br><br>	<span class="hljs-comment">// 如果reuseport_cb变为NULL，说明套接字已关闭，直接解锁退出。</span><br>	<span class="hljs-keyword">if</span> (!reuse)<br>		<span class="hljs-keyword">goto</span> out;<br><br>	<span class="hljs-comment">// 根据incoming_cpu值的正负变化，调整计数。</span><br>	<span class="hljs-keyword">if</span> (old_sk_incoming_cpu &lt; <span class="hljs-number">0</span> &amp;&amp; val &gt;= <span class="hljs-number">0</span>)<br>		__reuseport_get_incoming_cpu(reuse);<br>	<span class="hljs-keyword">else</span> <span class="hljs-keyword">if</span> (old_sk_incoming_cpu &gt;= <span class="hljs-number">0</span> &amp;&amp; val &lt; <span class="hljs-number">0</span>)<br>		__reuseport_put_incoming_cpu(reuse);<br><br>out:<br>	<span class="hljs-comment">// 释放锁。</span><br>	spin_unlock_bh(&amp;reuseport_lock);<br>&#125;<br></code></pre></td></tr></table></figure>
 
+<p>理解了sk_incoming_cpu，其实就可以理解得分,但是事实上开启了SO_REUSEPORT后，选择的函数是<strong>inet_lookup_reuseport</strong>。</p>
 <h3 id="4-2、inet-lookup-reuseport"><a href="#4-2、inet-lookup-reuseport" class="headerlink" title="4.2、inet_lookup_reuseport"></a>4.2、inet_lookup_reuseport</h3><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-comment">// 尝试使用ReusePort特性更新结果套接字，如果成功则直接返回</span><br>			result = inet_lookup_reuseport(net, sk, skb, doff,<br>						       saddr, sport, daddr, hnum, inet_ehashfn);<br>			<span class="hljs-keyword">if</span> (result)<br>				<span class="hljs-keyword">return</span> result;<br></code></pre></td></tr></table></figure>
 
 <p>得分完，如果找到了socket，那就直接返回了，让我们看下<strong>inet_lookup_reuseport</strong>做了什么</p>
@@ -546,7 +546,7 @@
   <div class="license-box my-3">
     <div class="license-title">
       <div>nginx的reuseport特性分析</div>
-      <div>https://zjfans.github.io/2024/04/10/nginx的reuseport特性分析/</div>
+      <div>https://zjfans.github.io/2024/04/12/nginx的reuseport特性分析/</div>
     </div>
     <div class="license-meta">
       
@@ -558,7 +558,7 @@
       
         <div class="license-meta-item license-meta-date">
           <div>发布于</div>
-          <div>2024年4月10日</div>
+          <div>2024年4月12日</div>
         </div>
       
       
@@ -590,12 +590,18 @@
                   <article class="post-prev col-6">
                     
                     
+                      <a href="/2024/04/12/openresty---lua%E8%B0%83%E7%94%A8c%E5%8E%9F%E7%90%86%E5%88%86%E6%9E%90/" title="openresty---lua调用c原理分析">
+                        <i class="iconfont icon-arrowleft"></i>
+                        <span class="hidden-mobile">openresty---lua调用c原理分析</span>
+                        <span class="visible-mobile">上一篇</span>
+                      </a>
+                    
                   </article>
                   <article class="post-next col-6">
                     
                     
-                      <a href="/2024/03/11/openresty---lua%E8%B0%83%E7%94%A8c%E5%8E%9F%E7%90%86%E5%88%86%E6%9E%90/" title="openresty---lua调用c原理分析">
-                        <span class="hidden-mobile">openresty---lua调用c原理分析</span>
+                      <a href="/2024/04/12/Cookie%E5%B1%9E%E6%80%A7%E4%B9%8Bsecure%E3%80%81httponly/" title="Cookie属性之secure、httponly">
+                        <span class="hidden-mobile">Cookie属性之secure、httponly</span>
                         <span class="visible-mobile">下一篇</span>
                         <i class="iconfont icon-arrowright"></i>
                       </a>
