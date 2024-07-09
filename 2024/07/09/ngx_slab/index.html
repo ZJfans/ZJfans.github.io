@@ -16,24 +16,24 @@
   <meta name="author" content="张三疯">
   <meta name="keywords" content="nginx,openresty,网关,HTTP/HTTPS,Websocket">
   
-    <meta name="description" content="ngx_slab共享内存nginx是多进程，实现访问控制、限流功能时，进程需要共享数据，比如一个uri的多笔请求，可能由多个进程处理，此时进程需要判断这个uri是否达到了限制次数，因此访问控制模块和限流模块使用共享内存进行进程间的通信，slab共享内存。 1、初始化共享内存模块在配置初始化时，将会申请一块slab内存池，开发者可以通过ngx_slab_alloc向这个内存池申请内存，当内存池用尽时">
+    <meta name="description" content="nginx是多进程，实现访问控制、限流功能时，进程需要共享数据，比如一个uri的多笔请求，可能由多个进程处理，此时进程需要判断这个uri是否达到了限制次数，因此访问控制模块和限流模块使用共享内存进行进程间的通信，slab共享内存。 1、初始化共享内存模块在配置初始化时，将会申请一块slab内存池，开发者可以通过ngx_slab_alloc向这个内存池申请内存，当内存池用尽时，这个函数就会返回NUL">
 <meta property="og:type" content="article">
-<meta property="og:title" content="ZJfans Blog">
+<meta property="og:title" content="ngx_slab共享内存">
 <meta property="og:url" content="https://zjfans.github.io/2024/07/09/ngx_slab/index.html">
 <meta property="og:site_name" content="ZJfans Blog">
-<meta property="og:description" content="ngx_slab共享内存nginx是多进程，实现访问控制、限流功能时，进程需要共享数据，比如一个uri的多笔请求，可能由多个进程处理，此时进程需要判断这个uri是否达到了限制次数，因此访问控制模块和限流模块使用共享内存进行进程间的通信，slab共享内存。 1、初始化共享内存模块在配置初始化时，将会申请一块slab内存池，开发者可以通过ngx_slab_alloc向这个内存池申请内存，当内存池用尽时">
+<meta property="og:description" content="nginx是多进程，实现访问控制、限流功能时，进程需要共享数据，比如一个uri的多笔请求，可能由多个进程处理，此时进程需要判断这个uri是否达到了限制次数，因此访问控制模块和限流模块使用共享内存进行进程间的通信，slab共享内存。 1、初始化共享内存模块在配置初始化时，将会申请一块slab内存池，开发者可以通过ngx_slab_alloc向这个内存池申请内存，当内存池用尽时，这个函数就会返回NUL">
 <meta property="og:locale" content="zh_CN">
 <meta property="article:published_time" content="2024-07-09T11:30:57.503Z">
-<meta property="article:modified_time" content="2024-07-09T11:30:02.173Z">
+<meta property="article:modified_time" content="2024-07-09T11:35:36.103Z">
 <meta property="article:author" content="张三疯">
-<meta property="article:tag" content="nginx,openresty,网关,HTTP&#x2F;HTTPS,Websocket">
+<meta property="article:tag" content="nginx，slab">
 <meta name="twitter:card" content="summary_large_image">
   
   
     <meta name="referrer" content="no-referrer-when-downgrade">
   
   
-  <title>ZJfans Blog</title>
+  <title>ngx_slab共享内存 - ZJfans Blog</title>
 
   <link  rel="stylesheet" href="https://lib.baomitu.com/twitter-bootstrap/4.6.1/css/bootstrap.min.css" />
 
@@ -226,7 +226,7 @@
       <div class="banner-text text-center fade-in-up">
         <div class="h2">
           
-            <span id="subtitle" data-typed-text=""></span>
+            <span id="subtitle" data-typed-text="ngx_slab共享内存"></span>
           
         </div>
 
@@ -297,12 +297,12 @@
       <div class="container nopadding-x-md" id="board-ctn">
         <div id="board">
           <article class="post-content mx-auto">
-            <h1 id="seo-header"></h1>
+            <h1 id="seo-header">ngx_slab共享内存</h1>
             
             
               <div class="markdown-body">
                 
-                <h1 id="ngx-slab共享内存"><a href="#ngx-slab共享内存" class="headerlink" title="ngx_slab共享内存"></a>ngx_slab共享内存</h1><p>nginx是多进程，实现访问控制、限流功能时，进程需要共享数据，比如一个uri的多笔请求，可能由多个进程处理，此时进程需要判断这个uri是否达到了限制次数，因此访问控制模块和限流模块使用共享内存进行进程间的通信，slab共享内存。</p>
+                <p>nginx是多进程，实现访问控制、限流功能时，进程需要共享数据，比如一个uri的多笔请求，可能由多个进程处理，此时进程需要判断这个uri是否达到了限制次数，因此访问控制模块和限流模块使用共享内存进行进程间的通信，slab共享内存。</p>
 <h2 id="1、初始化共享内存"><a href="#1、初始化共享内存" class="headerlink" title="1、初始化共享内存"></a>1、初始化共享内存</h2><p>模块在配置初始化时，将会申请一块slab内存池，开发者可以通过ngx_slab_alloc向这个内存池申请内存，当内存池用尽时，这个函数就会返回NULL。</p>
 <figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-type">ngx_shm_zone_t</span> *<br><br><span class="hljs-title function_">ngx_shared_memory_add</span><span class="hljs-params">(<span class="hljs-type">ngx_conf_t</span> *cf, <span class="hljs-type">ngx_str_t</span> *name, <span class="hljs-type">size_t</span> size, <span class="hljs-type">void</span>* *tag)</span><br></code></pre></td></tr></table></figure>
 
@@ -335,6 +335,13 @@
               <div class="post-metas my-3">
   
   
+    <div class="post-meta">
+      <i class="iconfont icon-tags"></i>
+      
+        <a href="/tags/nginx%EF%BC%8Cslab/" class="print-no-link">#nginx，slab</a>
+      
+    </div>
+  
 </div>
 
 
@@ -343,7 +350,7 @@
 
   <div class="license-box my-3">
     <div class="license-title">
-      <div></div>
+      <div>ngx_slab共享内存</div>
       <div>https://zjfans.github.io/2024/07/09/ngx_slab/</div>
     </div>
     <div class="license-meta">
