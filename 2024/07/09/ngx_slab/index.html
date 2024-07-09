@@ -1,0 +1,699 @@
+
+
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-color-scheme=auto>
+
+
+
+<head>
+  <meta charset="UTF-8">
+  <link rel="apple-touch-icon" sizes="76x76" href="/img/fluid.png">
+  <link rel="icon" href="/img/fluid.png">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, shrink-to-fit=no">
+  <meta http-equiv="x-ua-compatible" content="ie=edge">
+  
+  <meta name="theme-color" content="#2f4154">
+  <meta name="author" content="张三疯">
+  <meta name="keywords" content="nginx,openresty,网关,HTTP/HTTPS,Websocket">
+  
+    <meta name="description" content="ngx_slab共享内存nginx是多进程，实现访问控制、限流功能时，进程需要共享数据，比如一个uri的多笔请求，可能由多个进程处理，此时进程需要判断这个uri是否达到了限制次数，因此访问控制模块和限流模块使用共享内存进行进程间的通信，slab共享内存。 1、初始化共享内存模块在配置初始化时，将会申请一块slab内存池，开发者可以通过ngx_slab_alloc向这个内存池申请内存，当内存池用尽时">
+<meta property="og:type" content="article">
+<meta property="og:title" content="ZJfans Blog">
+<meta property="og:url" content="https://zjfans.github.io/2024/07/09/ngx_slab/index.html">
+<meta property="og:site_name" content="ZJfans Blog">
+<meta property="og:description" content="ngx_slab共享内存nginx是多进程，实现访问控制、限流功能时，进程需要共享数据，比如一个uri的多笔请求，可能由多个进程处理，此时进程需要判断这个uri是否达到了限制次数，因此访问控制模块和限流模块使用共享内存进行进程间的通信，slab共享内存。 1、初始化共享内存模块在配置初始化时，将会申请一块slab内存池，开发者可以通过ngx_slab_alloc向这个内存池申请内存，当内存池用尽时">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2024-07-09T11:30:57.503Z">
+<meta property="article:modified_time" content="2024-07-09T11:30:02.173Z">
+<meta property="article:author" content="张三疯">
+<meta property="article:tag" content="nginx,openresty,网关,HTTP&#x2F;HTTPS,Websocket">
+<meta name="twitter:card" content="summary_large_image">
+  
+  
+    <meta name="referrer" content="no-referrer-when-downgrade">
+  
+  
+  <title>ZJfans Blog</title>
+
+  <link  rel="stylesheet" href="https://lib.baomitu.com/twitter-bootstrap/4.6.1/css/bootstrap.min.css" />
+
+
+
+  <link  rel="stylesheet" href="https://lib.baomitu.com/github-markdown-css/4.0.0/github-markdown.min.css" />
+
+  <link  rel="stylesheet" href="https://lib.baomitu.com/hint.css/2.7.0/hint.min.css" />
+
+  <link  rel="stylesheet" href="https://lib.baomitu.com/fancybox/3.5.7/jquery.fancybox.min.css" />
+
+
+
+<!-- 主题依赖的图标库，不要自行修改 -->
+<!-- Do not modify the link that theme dependent icons -->
+
+<link rel="stylesheet" href="//at.alicdn.com/t/font_1749284_hj8rtnfg7um.css">
+
+
+
+<link rel="stylesheet" href="//at.alicdn.com/t/font_1736178_lbnruvf0jn.css">
+
+
+<link  rel="stylesheet" href="/css/main.css" />
+
+
+  <link id="highlight-css" rel="stylesheet" href="/css/highlight.css" />
+  
+    <link id="highlight-css-dark" rel="stylesheet" href="/css/highlight-dark.css" />
+  
+
+
+
+
+  <script id="fluid-configs">
+    var Fluid = window.Fluid || {};
+    Fluid.ctx = Object.assign({}, Fluid.ctx)
+    var CONFIG = {"hostname":"zjfans.github.io","root":"/","version":"1.9.7","typing":{"enable":true,"typeSpeed":70,"cursorChar":"_","loop":false,"scope":[]},"anchorjs":{"enable":true,"element":"h1,h2,h3,h4,h5,h6","placement":"left","visible":"hover","icon":""},"progressbar":{"enable":true,"height_px":3,"color":"#29d","options":{"showSpinner":false,"trickleSpeed":100}},"code_language":{"enable":true,"default":"TEXT"},"copy_btn":true,"image_caption":{"enable":true},"image_zoom":{"enable":true,"img_url_replace":["",""]},"toc":{"enable":true,"placement":"right","headingSelector":"h1,h2,h3,h4,h5,h6","collapseDepth":0},"lazyload":{"enable":true,"loading_img":"/img/loading.gif","onlypost":false,"offset_factor":2},"web_analytics":{"enable":true,"follow_dnt":true,"baidu":null,"google":{"measurement_id":null},"tencent":{"sid":null,"cid":null},"woyaola":null,"cnzz":null,"leancloud":{"app_id":null,"app_key":null,"server_url":null,"path":"window.location.pathname","ignore_local":false}},"search_path":"/local-search.xml","include_content_in_search":true};
+
+    if (CONFIG.web_analytics.follow_dnt) {
+      var dntVal = navigator.doNotTrack || window.doNotTrack || navigator.msDoNotTrack;
+      Fluid.ctx.dnt = dntVal && (dntVal.startsWith('1') || dntVal.startsWith('yes') || dntVal.startsWith('on'));
+    }
+  </script>
+  <script  src="/js/utils.js" ></script>
+  <script  src="/js/color-schema.js" ></script>
+  
+
+  
+
+  
+    <!-- Google tag (gtag.js) -->
+    <script async>
+      if (!Fluid.ctx.dnt) {
+        Fluid.utils.createScript("https://www.googletagmanager.com/gtag/js?id=", function() {
+          window.dataLayer = window.dataLayer || [];
+          function gtag() {
+            dataLayer.push(arguments);
+          }
+          gtag('js', new Date());
+          gtag('config', '');
+        });
+      }
+    </script>
+  
+
+  
+
+  
+
+  
+
+  
+
+
+
+  
+<meta name="generator" content="Hexo 6.3.0"></head>
+
+
+<body>
+  
+
+  <header>
+    
+
+<div class="header-inner" style="height: 70vh;">
+  <nav id="navbar" class="navbar fixed-top  navbar-expand-lg navbar-dark scrolling-navbar">
+  <div class="container">
+    <a class="navbar-brand" href="/">
+      <strong>ZJfans Blog</strong>
+    </a>
+
+    <button id="navbar-toggler-btn" class="navbar-toggler" type="button" data-toggle="collapse"
+            data-target="#navbarSupportedContent"
+            aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+      <div class="animated-icon"><span></span><span></span><span></span></div>
+    </button>
+
+    <!-- Collapsible content -->
+    <div class="collapse navbar-collapse" id="navbarSupportedContent">
+      <ul class="navbar-nav ml-auto text-center">
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/" target="_self">
+                <i class="iconfont icon-home-fill"></i>
+                <span>首页</span>
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/archives/" target="_self">
+                <i class="iconfont icon-archive-fill"></i>
+                <span>归档</span>
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/categories/" target="_self">
+                <i class="iconfont icon-category-fill"></i>
+                <span>分类</span>
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/tags/" target="_self">
+                <i class="iconfont icon-tags-fill"></i>
+                <span>标签</span>
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/about/" target="_self">
+                <i class="iconfont icon-user-fill"></i>
+                <span>关于</span>
+              </a>
+            </li>
+          
+        
+        
+          <li class="nav-item" id="search-btn">
+            <a class="nav-link" target="_self" href="javascript:;" data-toggle="modal" data-target="#modalSearch" aria-label="Search">
+              <i class="iconfont icon-search"></i>
+            </a>
+          </li>
+          
+        
+        
+          <li class="nav-item" id="color-toggle-btn">
+            <a class="nav-link" target="_self" href="javascript:;" aria-label="Color Toggle">
+              <i class="iconfont icon-dark" id="color-toggle-icon"></i>
+            </a>
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+</nav>
+
+  
+
+<div id="banner" class="banner" parallax=true
+     style="background: url('/img/default.png') no-repeat center center; background-size: cover;">
+  <div class="full-bg-img">
+    <div class="mask flex-center" style="background-color: rgba(0, 0, 0, 0.3)">
+      <div class="banner-text text-center fade-in-up">
+        <div class="h2">
+          
+            <span id="subtitle" data-typed-text=""></span>
+          
+        </div>
+
+        
+          
+  <div class="mt-3">
+    
+    
+      <span class="post-meta">
+        <i class="iconfont icon-date-fill" aria-hidden="true"></i>
+        <time datetime="2024-07-09 19:30" pubdate>
+          2024年7月9日 晚上
+        </time>
+      </span>
+    
+  </div>
+
+  <div class="mt-1">
+    
+      <span class="post-meta mr-2">
+        <i class="iconfont icon-chart"></i>
+        
+          1.4k 字
+        
+      </span>
+    
+
+    
+      <span class="post-meta mr-2">
+        <i class="iconfont icon-clock-fill"></i>
+        
+        
+        
+          12 分钟
+        
+      </span>
+    
+
+    
+    
+  </div>
+
+
+        
+      </div>
+
+      
+    </div>
+  </div>
+</div>
+
+</div>
+
+  </header>
+
+  <main>
+    
+      
+
+<div class="container-fluid nopadding-x">
+  <div class="row nomargin-x">
+    <div class="side-col d-none d-lg-block col-lg-2">
+      
+
+    </div>
+
+    <div class="col-lg-8 nopadding-x-md">
+      <div class="container nopadding-x-md" id="board-ctn">
+        <div id="board">
+          <article class="post-content mx-auto">
+            <h1 id="seo-header"></h1>
+            
+            
+              <div class="markdown-body">
+                
+                <h1 id="ngx-slab共享内存"><a href="#ngx-slab共享内存" class="headerlink" title="ngx_slab共享内存"></a>ngx_slab共享内存</h1><p>nginx是多进程，实现访问控制、限流功能时，进程需要共享数据，比如一个uri的多笔请求，可能由多个进程处理，此时进程需要判断这个uri是否达到了限制次数，因此访问控制模块和限流模块使用共享内存进行进程间的通信，slab共享内存。</p>
+<h2 id="1、初始化共享内存"><a href="#1、初始化共享内存" class="headerlink" title="1、初始化共享内存"></a>1、初始化共享内存</h2><p>模块在配置初始化时，将会申请一块slab内存池，开发者可以通过ngx_slab_alloc向这个内存池申请内存，当内存池用尽时，这个函数就会返回NULL。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-type">ngx_shm_zone_t</span> *<br><br><span class="hljs-title function_">ngx_shared_memory_add</span><span class="hljs-params">(<span class="hljs-type">ngx_conf_t</span> *cf, <span class="hljs-type">ngx_str_t</span> *name, <span class="hljs-type">size_t</span> size, <span class="hljs-type">void</span>* *tag)</span><br></code></pre></td></tr></table></figure>
+
+<ul>
+<li>ngx_conf_t *cf            &#x2F;&#x2F;全局配置文件</li>
+<li>ngx_str_t *name        &#x2F;&#x2F;这块slab共享内存的名字</li>
+<li>size_t size                   &#x2F;&#x2F;这块共享内存的大小</li>
+<li>void *tag                    &#x2F;&#x2F;防止2个不同模块定义的内存池具有相同的名字，一般传入本模块结构体的地址</li>
+</ul>
+<h2 id="2、操作slab共享内存"><a href="#2、操作slab共享内存" class="headerlink" title="2、操作slab共享内存"></a>2、操作slab共享内存</h2><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-comment">//初始化共享内存</span><br><span class="hljs-type">void</span><br><span class="hljs-title function_">ngx_slab_init</span><span class="hljs-params">(<span class="hljs-type">ngx_slab_pool_t</span> *pool)</span><br><br><span class="hljs-comment">//加锁的内存申请方法</span><br><span class="hljs-type">void</span> *<br><span class="hljs-title function_">ngx_slab_alloc</span><span class="hljs-params">(<span class="hljs-type">ngx_slab_pool_t</span> *pool, <span class="hljs-type">size_t</span> size)</span><br><br><span class="hljs-comment">//不加锁的内存申请方法</span><br><span class="hljs-type">void</span> *<br><span class="hljs-title function_">ngx_slab_alloc_locked</span><span class="hljs-params">(<span class="hljs-type">ngx_slab_pool_t</span> *pool, <span class="hljs-type">size_t</span> size)</span><br><br><span class="hljs-comment">//加锁的内存释放方法</span><br><span class="hljs-type">void</span><br><span class="hljs-title function_">ngx_slab_free</span><span class="hljs-params">(<span class="hljs-type">ngx_slab_pool_t</span> *pool, <span class="hljs-type">void</span> *p)</span><br><br><span class="hljs-comment">//不加锁的内存释放方法</span><br><span class="hljs-type">void</span><br><span class="hljs-title function_">ngx_slab_free_locked</span><span class="hljs-params">(<span class="hljs-type">ngx_slab_pool_t</span> *pool, <span class="hljs-type">void</span> *p)</span><br> <br><br></code></pre></td></tr></table></figure>
+
+<p>nginx多进程结构，需要使用同步锁才能操作共享数据。那为什么还有ngx_slab_alloc_locked？事实上，nginx的代码可能存在多层锁的嵌套，如果外层已经加锁，那么内存是没有必要上锁的，毕竟上锁会增加开销，降低效率。</p>
+<p>需要注意的是，当slab内存池的内存用完时，ngx_slab_alloc会直接返回NULL，因此需要合理评估模块使用的内存大小，如果slab共享内存设置的太小会导致异常。</p>
+<p>以ssl模块为例，共享内存</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><code class="hljs c">sscf-&gt;shm_zone = ngx_shared_memory_add(cf, &amp;name, n,<br>                                                   &amp;ngx_http_ssl_module);<br></code></pre></td></tr></table></figure>
+
+<h2 id="3、API详解"><a href="#3、API详解" class="headerlink" title="3、API详解"></a>3、API详解</h2><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br><span class="line">98</span><br><span class="line">99</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-type">void</span> <span class="hljs-title function_">ngx_slab_free_locked</span><span class="hljs-params">(<span class="hljs-type">ngx_slab_pool_t</span> *pool, <span class="hljs-type">void</span> *p)</span><br>&#123;<br>    <span class="hljs-comment">// 定义局部变量，用于计算和存储内存页和slab信息。</span><br>    <span class="hljs-type">size_t</span>            size;<br>    <span class="hljs-type">uintptr_t</span>         slab, m, *bitmap;<br>    <span class="hljs-type">ngx_uint_t</span>        i, n, type, slot, shift, <span class="hljs-built_in">map</span>;<br>    <span class="hljs-type">ngx_slab_page_t</span>  *slots, *page;<br><br>    <span class="hljs-comment">// 记录调试信息，显示正在释放的内存地址。</span><br>    ngx_log_debug1(NGX_LOG_DEBUG_ALLOC, ngx_cycle-&gt;<span class="hljs-built_in">log</span>, <span class="hljs-number">0</span>, <span class="hljs-string">&quot;slab free: %p&quot;</span>, p);<br><br>    <span class="hljs-comment">// 检查释放的内存地址是否在slab pool的范围内。</span><br>    <span class="hljs-keyword">if</span> ((u_char *) p &lt; pool-&gt;start || (u_char *) p &gt; pool-&gt;end) &#123;<br>        <span class="hljs-comment">// 如果不在范围内，记录错误日志并退出函数。</span><br>        ngx_slab_error(pool, NGX_LOG_ALERT, <span class="hljs-string">&quot;ngx_slab_free(): outside of pool&quot;</span>);<br>        <span class="hljs-keyword">goto</span> fail;<br>    &#125;<br><br>    <span class="hljs-comment">// 计算内存页的索引。</span><br>    n = ((u_char *) p - pool-&gt;start) &gt;&gt; ngx_pagesize_shift;<br>    <span class="hljs-comment">// 获取内存页的指针。</span><br>    page = &amp;pool-&gt;pages[n];<br>    <span class="hljs-comment">// 获取slab的地址。</span><br>    slab = page-&gt;slab;<br>    <span class="hljs-comment">// 获取内存页的类型。</span><br>    type = ngx_slab_page_type(page);<br><br>    <span class="hljs-comment">// 根据内存页类型进行不同的处理。</span><br>    <span class="hljs-keyword">switch</span> (type) &#123;<br>    <span class="hljs-comment">// 小对象内存页的处理。</span><br>    <span class="hljs-keyword">case</span> NGX_SLAB_SMALL:<br>        <span class="hljs-comment">// 计算slab的大小和位移。</span><br>        shift = slab &amp; NGX_SLAB_SHIFT_MASK;<br>        size = (<span class="hljs-type">size_t</span>) <span class="hljs-number">1</span> &lt;&lt; shift;<br><br>        <span class="hljs-comment">// 检查p是否是size的整数倍。</span><br>        <span class="hljs-keyword">if</span> ((<span class="hljs-type">uintptr_t</span>) p &amp; (size - <span class="hljs-number">1</span>)) &#123;<br>            <span class="hljs-keyword">goto</span> wrong_chunk;<br>        &#125;<br><br>        <span class="hljs-comment">// 计算在bitmap中的位置。</span><br>        n = ((<span class="hljs-type">uintptr_t</span>) p &amp; (ngx_pagesize - <span class="hljs-number">1</span>)) &gt;&gt; shift;<br>        m = (<span class="hljs-type">uintptr_t</span>) <span class="hljs-number">1</span> &lt;&lt; (n % (<span class="hljs-number">8</span> * <span class="hljs-keyword">sizeof</span>(<span class="hljs-type">uintptr_t</span>)));<br>        n /= <span class="hljs-number">8</span> * <span class="hljs-keyword">sizeof</span>(<span class="hljs-type">uintptr_t</span>);<br>        bitmap = (<span class="hljs-type">uintptr_t</span> *)((<span class="hljs-type">uintptr_t</span>) p &amp; ~((<span class="hljs-type">uintptr_t</span>) ngx_pagesize - <span class="hljs-number">1</span>));<br><br>        <span class="hljs-comment">// 检查bitmap对应的位是否被设置，即内存块是否已被分配。</span><br>        <span class="hljs-keyword">if</span> (bitmap[n] &amp; m) &#123;<br>            <span class="hljs-comment">// 释放内存块，更新slab的bitmap和内存页的链表。</span><br>            <span class="hljs-comment">// ...</span><br>            <span class="hljs-comment">// 省略了释放内存块的代码。</span><br>        &#125;<br><br>        <span class="hljs-comment">// 如果内存块已经被释放，则报错。</span><br>        <span class="hljs-keyword">goto</span> chunk_already_free;<br><br>    <span class="hljs-comment">// 精确大小内存页的处理。</span><br>    <span class="hljs-keyword">case</span> NGX_SLAB_EXACT:<br>    <span class="hljs-comment">// ...</span><br>    <span class="hljs-comment">// 省略了精确大小内存页的处理代码。</span><br><br>    <span class="hljs-comment">// 大对象内存页的处理。</span><br>    <span class="hljs-keyword">case</span> NGX_SLAB_BIG:<br>    <span class="hljs-comment">// ...</span><br>    <span class="hljs-comment">// 省略了大对象内存页的处理代码。</span><br><br>    <span class="hljs-comment">// 特殊内存页的处理，用于存储大于slab可以分配的最大块大小的对象。</span><br>    <span class="hljs-keyword">case</span> NGX_SLAB_PAGE:<br>    <span class="hljs-comment">// ...</span><br>    <span class="hljs-comment">// 省略了特殊内存页的处理代码。</span><br><br>    <span class="hljs-keyword">default</span>:<br>        <span class="hljs-comment">// 未处理的case，不应该到达这里。</span><br>        <span class="hljs-keyword">break</span>;<br>    &#125;<br><br>    <span class="hljs-comment">// 函数结束，正常释放内存后会执行到这里。</span><br>    <span class="hljs-keyword">return</span>;<br><br>fail:<br>    <span class="hljs-comment">// 释放失败，记录错误日志。</span><br>    <span class="hljs-keyword">return</span>;<br><br>done:<br>    <span class="hljs-comment">// 正常释放内存后更新使用的统计信息，并填充释放的内存以避免重复使用。</span><br>    pool-&gt;stats[slot].used--;<br>    ngx_slab_junk(p, size);<br>    <span class="hljs-keyword">return</span>;<br><br>wrong_chunk:<br>    <span class="hljs-comment">// 释放的内存块地址不正确，记录错误日志。</span><br>    ngx_slab_error(pool, NGX_LOG_ALERT, <span class="hljs-string">&quot;ngx_slab_free(): pointer to wrong chunk&quot;</span>);<br>    <span class="hljs-keyword">goto</span> fail;<br><br>chunk_already_free:<br>    <span class="hljs-comment">// 尝试释放一个已经被释放的内存块，记录错误日志。</span><br>    ngx_slab_error(pool, NGX_LOG_ALERT, <span class="hljs-string">&quot;ngx_slab_free(): chunk is already free&quot;</span>);<br>    <span class="hljs-keyword">goto</span> fail;<br>&#125;<br></code></pre></td></tr></table></figure>
+
+<h2 id="4、释放问题"><a href="#4、释放问题" class="headerlink" title="4、释放问题"></a>4、释放问题</h2><p>ngx_slab_free_locked 函数释放通过 slab 分配器分配的内存时，不会改变指针本身的值，而是将指针指向的内存块标记为可用。这个很关键，因此当一个指针是否持有合理内存时，不能判断是否为NULL。</p>
+<p>内存分配器（如 slab 分配器）负责管理内存块的分配和释放。当一个内存块被分配时，内存分配器会记录该内存块的状态（已分配）。当这个内存块被释放时，内存分配器会更新该内存块的状态（可用）。</p>
+<p>在 C 语言中，指针是用来存储内存地址的变量。指针本身只是一个变量，存储了一个内存地址。在调用 ngx_slab_free_locked 函数时，传递的是指针的值（即内存地址），而不是指针本身。因此，函数内部对内存的操作不会改变传入指针的值。</p>
+<p>指针传递： 当调用 ngx_slab_free_locked(shpool, h) 时，传递的是 h 的值（内存地址）。<br>内存释放： 函数 ngx_slab_free_locked 使用 h 指向的内存地址，在内存池中找到对应的内存块，并将其标记为可用。这涉及到更新 slab 分配器内部的数据结构，但不改变 h 本身的值。</p>
+<p><strong>指针保持不变： 函数调用结束后，h 仍然持有原来的内存地址值。</strong></p>
+
+                
+              </div>
+            
+            <hr/>
+            <div>
+              <div class="post-metas my-3">
+  
+  
+</div>
+
+
+              
+  
+
+  <div class="license-box my-3">
+    <div class="license-title">
+      <div></div>
+      <div>https://zjfans.github.io/2024/07/09/ngx_slab/</div>
+    </div>
+    <div class="license-meta">
+      
+        <div class="license-meta-item">
+          <div>作者</div>
+          <div>张三疯</div>
+        </div>
+      
+      
+        <div class="license-meta-item license-meta-date">
+          <div>发布于</div>
+          <div>2024年7月9日</div>
+        </div>
+      
+      
+      
+        <div class="license-meta-item">
+          <div>许可协议</div>
+          <div>
+            
+              
+              
+                <a class="print-no-link" target="_blank" href="https://creativecommons.org/licenses/by/4.0/">
+                  <span class="hint--top hint--rounded" aria-label="BY - 署名">
+                    <i class="iconfont icon-by"></i>
+                  </span>
+                </a>
+              
+            
+          </div>
+        </div>
+      
+    </div>
+    <div class="license-icon iconfont"></div>
+  </div>
+
+
+
+              
+                <div class="post-prevnext my-3">
+                  <article class="post-prev col-6">
+                    
+                    
+                  </article>
+                  <article class="post-next col-6">
+                    
+                    
+                      <a href="/2024/06/02/Nginx%E8%B4%9F%E8%BD%BD%E5%9D%87%E8%A1%A1%E7%AE%97%E6%B3%95%E8%A7%A3%E6%9E%90/" title="负载均衡算法解析">
+                        <span class="hidden-mobile">负载均衡算法解析</span>
+                        <span class="visible-mobile">下一篇</span>
+                        <i class="iconfont icon-arrowright"></i>
+                      </a>
+                    
+                  </article>
+                </div>
+              
+            </div>
+
+            
+  
+  
+    <article id="comments" lazyload>
+      
+
+    </article>
+  
+
+
+          </article>
+        </div>
+      </div>
+    </div>
+
+    <div class="side-col d-none d-lg-block col-lg-2">
+      
+  <aside class="sidebar" style="margin-left: -1rem">
+    <div id="toc">
+  <p class="toc-header">
+    <i class="iconfont icon-list"></i>
+    <span>目录</span>
+  </p>
+  <div class="toc-body" id="toc-body"></div>
+</div>
+
+
+
+  </aside>
+
+
+    </div>
+  </div>
+</div>
+
+
+
+
+
+  
+
+
+
+  
+
+
+
+  
+
+
+
+  
+
+
+
+  
+
+
+
+
+
+
+
+    
+
+    
+      <a id="scroll-top-button" aria-label="TOP" href="#" role="button">
+        <i class="iconfont icon-arrowup" aria-hidden="true"></i>
+      </a>
+    
+
+    
+      <div class="modal fade" id="modalSearch" tabindex="-1" role="dialog" aria-labelledby="ModalLabel"
+     aria-hidden="true">
+  <div class="modal-dialog modal-dialog-scrollable modal-lg" role="document">
+    <div class="modal-content">
+      <div class="modal-header text-center">
+        <h4 class="modal-title w-100 font-weight-bold">搜索</h4>
+        <button type="button" id="local-search-close" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body mx-3">
+        <div class="md-form mb-5">
+          <input type="text" id="local-search-input" class="form-control validate">
+          <label data-error="x" data-success="v" for="local-search-input">关键词</label>
+        </div>
+        <div class="list-group" id="local-search-result"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+    
+
+    
+  </main>
+
+  <footer>
+    <div class="footer-inner">
+  
+    <div class="footer-content">
+       <a href="https://hexo.io" target="_blank" rel="nofollow noopener"><span>Hexo</span></a> <i class="iconfont icon-love"></i> <a href="https://github.com/fluid-dev/hexo-theme-fluid" target="_blank" rel="nofollow noopener"><span>Fluid</span></a> 
+    </div>
+  
+  
+    <div class="statistics">
+  
+  
+
+  
+    
+      <span id="busuanzi_container_site_pv" style="display: none">
+        总访问量 
+        <span id="busuanzi_value_site_pv"></span>
+         次
+      </span>
+    
+    
+      <span id="busuanzi_container_site_uv" style="display: none">
+        总访客数 
+        <span id="busuanzi_value_site_uv"></span>
+         人
+      </span>
+    
+    
+  
+</div>
+
+  
+  
+  
+</div>
+
+  </footer>
+
+  <!-- Scripts -->
+  
+  <script  src="https://lib.baomitu.com/nprogress/0.2.0/nprogress.min.js" ></script>
+  <link  rel="stylesheet" href="https://lib.baomitu.com/nprogress/0.2.0/nprogress.min.css" />
+
+  <script>
+    NProgress.configure({"showSpinner":false,"trickleSpeed":100})
+    NProgress.start()
+    window.addEventListener('load', function() {
+      NProgress.done();
+    })
+  </script>
+
+
+<script  src="https://lib.baomitu.com/jquery/3.6.4/jquery.min.js" ></script>
+<script  src="https://lib.baomitu.com/twitter-bootstrap/4.6.1/js/bootstrap.min.js" ></script>
+<script  src="/js/events.js" ></script>
+<script  src="/js/plugins.js" ></script>
+
+
+  <script  src="https://lib.baomitu.com/typed.js/2.0.12/typed.min.js" ></script>
+  <script>
+    (function (window, document) {
+      var typing = Fluid.plugins.typing;
+      var subtitle = document.getElementById('subtitle');
+      if (!subtitle || !typing) {
+        return;
+      }
+      var text = subtitle.getAttribute('data-typed-text');
+      
+        typing(text);
+      
+    })(window, document);
+  </script>
+
+
+
+
+  
+    <script  src="/js/img-lazyload.js" ></script>
+  
+
+
+
+
+  
+<script>
+  Fluid.utils.createScript('https://lib.baomitu.com/tocbot/4.20.1/tocbot.min.js', function() {
+    var toc = jQuery('#toc');
+    if (toc.length === 0 || !window.tocbot) { return; }
+    var boardCtn = jQuery('#board-ctn');
+    var boardTop = boardCtn.offset().top;
+
+    window.tocbot.init(Object.assign({
+      tocSelector     : '#toc-body',
+      contentSelector : '.markdown-body',
+      linkClass       : 'tocbot-link',
+      activeLinkClass : 'tocbot-active-link',
+      listClass       : 'tocbot-list',
+      isCollapsedClass: 'tocbot-is-collapsed',
+      collapsibleClass: 'tocbot-is-collapsible',
+      scrollSmooth    : true,
+      includeTitleTags: true,
+      headingsOffset  : -boardTop,
+    }, CONFIG.toc));
+    if (toc.find('.toc-list-item').length > 0) {
+      toc.css('visibility', 'visible');
+    }
+
+    Fluid.events.registerRefreshCallback(function() {
+      if ('tocbot' in window) {
+        tocbot.refresh();
+        var toc = jQuery('#toc');
+        if (toc.length === 0 || !tocbot) {
+          return;
+        }
+        if (toc.find('.toc-list-item').length > 0) {
+          toc.css('visibility', 'visible');
+        }
+      }
+    });
+  });
+</script>
+
+
+  <script src=https://lib.baomitu.com/clipboard.js/2.0.11/clipboard.min.js></script>
+
+  <script>Fluid.plugins.codeWidget();</script>
+
+
+  
+<script>
+  Fluid.utils.createScript('https://lib.baomitu.com/anchor-js/4.3.1/anchor.min.js', function() {
+    window.anchors.options = {
+      placement: CONFIG.anchorjs.placement,
+      visible  : CONFIG.anchorjs.visible
+    };
+    if (CONFIG.anchorjs.icon) {
+      window.anchors.options.icon = CONFIG.anchorjs.icon;
+    }
+    var el = (CONFIG.anchorjs.element || 'h1,h2,h3,h4,h5,h6').split(',');
+    var res = [];
+    for (var item of el) {
+      res.push('.markdown-body > ' + item.trim());
+    }
+    if (CONFIG.anchorjs.placement === 'left') {
+      window.anchors.options.class = 'anchorjs-link-left';
+    }
+    window.anchors.add(res.join(', '));
+
+    Fluid.events.registerRefreshCallback(function() {
+      if ('anchors' in window) {
+        anchors.removeAll();
+        var el = (CONFIG.anchorjs.element || 'h1,h2,h3,h4,h5,h6').split(',');
+        var res = [];
+        for (var item of el) {
+          res.push('.markdown-body > ' + item.trim());
+        }
+        if (CONFIG.anchorjs.placement === 'left') {
+          anchors.options.class = 'anchorjs-link-left';
+        }
+        anchors.add(res.join(', '));
+      }
+    });
+  });
+</script>
+
+
+  
+<script>
+  Fluid.utils.createScript('https://lib.baomitu.com/fancybox/3.5.7/jquery.fancybox.min.js', function() {
+    Fluid.plugins.fancyBox();
+  });
+</script>
+
+
+  <script>Fluid.plugins.imageCaption();</script>
+
+  <script  src="/js/local-search.js" ></script>
+
+  <script defer src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js" ></script>
+
+
+
+
+
+<!-- 主题的启动项，将它保持在最底部 -->
+<!-- the boot of the theme, keep it at the bottom -->
+<script  src="/js/boot.js" ></script>
+
+
+  
+
+  <noscript>
+    <div class="noscript-warning">博客在允许 JavaScript 运行的环境下浏览效果更佳</div>
+  </noscript>
+</body>
+</html>

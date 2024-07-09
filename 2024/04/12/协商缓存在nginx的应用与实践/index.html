@@ -46,8 +46,9 @@
 <meta property="og:image" content="https://zjfans.github.io/img/cache-21.png">
 <meta property="og:image" content="https://zjfans.github.io/img/cache-22.png">
 <meta property="og:image" content="https://zjfans.github.io/img/cache-23.png">
+<meta property="og:image" content="https://zjfans.github.io/img/cache-24.png">
 <meta property="article:published_time" content="2024-04-12T01:41:09.437Z">
-<meta property="article:modified_time" content="2024-06-02T11:35:38.835Z">
+<meta property="article:modified_time" content="2024-07-08T12:10:22.500Z">
 <meta property="article:author" content="张三疯">
 <meta property="article:tag" content="协商缓存">
 <meta property="article:tag" content="no cache nginx">
@@ -274,7 +275,7 @@
       <span class="post-meta mr-2">
         <i class="iconfont icon-chart"></i>
         
-          3.1k 字
+          3.6k 字
         
       </span>
     
@@ -285,7 +286,7 @@
         
         
         
-          26 分钟
+          30 分钟
         
       </span>
     
@@ -407,7 +408,18 @@
 <p><img src="/img/cache-23.png" srcset="/img/loading.gif" lazyload alt="cache-23"></p>
 <p>5、结论</p>
 <p>协商缓存模式下，客户端会对每个已经缓存的资源额外进行一次新鲜度验证，对于网络来说，这是一种开销。但是既要保证资源的新鲜度，又要尽量提高性能，这是很好的策略，毕竟没有完美的人，自然也就没有完美的策略。对于静态资源长时间不发生改变的场景，很明显no-cache不适用，不如使用must-revalidate。</p>
-<h3 id="5-2、特殊请求不生效"><a href="#5-2、特殊请求不生效" class="headerlink" title="5.2、特殊请求不生效"></a>5.2、特殊请求不生效</h3><p>在测试的过程中，一个页面会请求很多静态资源，但是总有几个不会触发协商缓存。但是这几个页面单独拿出来在浏览器请求，协商缓存是可以生效的。这是因为这个静态资源的请求方式和普通方式不同。</p>
+<h3 id="5-2、特殊请求不生效"><a href="#5-2、特殊请求不生效" class="headerlink" title="5.2、特殊请求不生效"></a>5.2、特殊请求不生效</h3><p>在测试的过程中，一个页面会请求很多静态资源，但是总有几个不会触发协商缓存。但是这几个页面单独拿出来在浏览器请求，协商缓存是可以生效的。这是因为这个请求比较特殊。</p>
+<p>当请求获取的html资源中引用了js和css资源，浏览器会先检查index.html，发现index.html没有更新（服务端返回304），然后index.html中引入的js和css就直接都从缓存中去拿，导致协商缓存未生效。</p>
+<p>当然这种情况，我们可以给index.html加时间戳，可以防止被缓存，但是对于前端外框这个最外层的html是没办法的，如果被缓存了，只能手动清缓存或者重新部署。</p>
+<h3 id="5-3、一个GET请求被缓存导致的登录异常"><a href="#5-3、一个GET请求被缓存导致的登录异常" class="headerlink" title="5.3、一个GET请求被缓存导致的登录异常"></a>5.3、一个GET请求被缓存导致的登录异常</h3><p>首先来看下定义：</p>
+<p>在HTTP规范中，GET请求通常用于从服务器检索数据，而不改变服务器的状态。这种操作被认为是安全的和幂等的，因此响应是可以缓存的。</p>
+<p>HTTP规范规定，POST请求是用来提交数据的，可能会导致服务器状态的改变，因此其响应不应被缓存。</p>
+<p>我们的网关层实现了cas单点登录，其中登录过程会调用一个免密接口，主要用于从权限系统获取权限数据以及一些会话数据，这个请求是get请求。</p>
+<p>问题：当登录成功以后，点击浏览器的回退，这时由于浏览器的TGC没有过期，照理应该重新登录进系统，但是登录后发现，页面空白，请求出现401权限丢失的情况，我发现浏览器并没有真实发起免密接口的调用，而是获取了缓存的数据，这时问题就很明确了。</p>
+<p><img src="/img/cache-24.png" srcset="/img/loading.gif" lazyload alt="cache-24"></p>
+<p>1、接口的设计不好，这个接口会改变服务器的状态，应该设计为post，但是被错误的设计为get</p>
+<p>2、如果是get也可以兼容，这个接口在返回响应时，增加no-store的响应头，禁止前端缓存，需要注意的是，这个时候用no-cache是不行的。</p>
+<p>照理，接口改为post是最正确的做法，但是现实是要考虑兼容的问题，我们网关层也是需要做修改的。</p>
 <h2 id="6、总结"><a href="#6、总结" class="headerlink" title="6、总结"></a>6、总结</h2><p>协商缓存不只是一种简单的缓存机制，更是一种很好的理念。对于客户端与服务端数据同步、性能优化都是很好的借鉴，尤其是服务端不能主动向客户端发送请求的场景。例如当有服务以域名的形式注册到nginx时，nginx需要向DNS查询真实ip，为了避免每次请求都会向DNS查询，会对查询到的结果进行缓存，并启动定时器查询真实ip是否发生改变。而定时器的时间就类似于协商缓存的新鲜度，在实际的生产中没有完美的方案，因此需要根据具体的需求偏重来调整可靠性与性能。</p>
 <p>本文从HTTP缓存原理出发，介绍了缓存对系统性能优化的意义，并讲解了HTTP缓存发展过程中存在冗余数据多次传输的问题，以及为了解决这个问题而出现的协商缓存机制。通过对协商缓存的原理与nginx实现协商缓存的源码分析，希望大家可以对HTTP缓存有一定的理解。 </p>
 
