@@ -52,9 +52,9 @@
     
     <tags>
       
-      <tag>负载均衡</tag>
-      
       <tag>nginx</tag>
+      
+      <tag>负载均衡</tag>
       
     </tags>
     
@@ -73,9 +73,9 @@
     
     <tags>
       
-      <tag>nginx</tag>
-      
       <tag>websocket</tag>
+      
+      <tag>nginx</tag>
       
     </tags>
     
@@ -136,11 +136,11 @@
     
     <tags>
       
-      <tag>nginx</tag>
-      
       <tag>websocket</tag>
       
       <tag>socket.io</tag>
+      
+      <tag>nginx</tag>
       
     </tags>
     
