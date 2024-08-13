@@ -256,6 +256,50 @@
     <article class="col-12 col-md-12 mx-auto index-info">
       <h2 class="index-header">
         
+        <a href="/2024/08/13/chunked%E7%BC%96%E7%A0%81%E6%A0%BC%E5%BC%8F%E5%BC%95%E5%8F%91%E7%9A%84%E9%97%AE%E9%A2%98/" target="_self">
+          chunked编码格式引发的问题
+        </a>
+      </h2>
+
+      
+      <a class="index-excerpt index-excerpt__noimg" href="/2024/08/13/chunked%E7%BC%96%E7%A0%81%E6%A0%BC%E5%BC%8F%E5%BC%95%E5%8F%91%E7%9A%84%E9%97%AE%E9%A2%98/" target="_self">
+        <div>
+          1、问题在适配某家的cas时，票据校验时一直失败，通常是以下几个问题引发的问题1、网关与cas服务器的网络不通，导致票校验的请求发送不出去2、cas服务器的票据校验接口，配置了域名，但是在nginx没有配置dns，导致域名无法解析，请求无法发送 3、配置了ip，但是cas服务端限制了host，禁用了ip访问 4、票据校验的请求有问题，service参数组装不正确 经过排查后，发现都不是上面的原因，
+        </div>
+      </a>
+
+      <div class="index-btm post-metas">
+        
+          <div class="post-meta mr-3">
+            <i class="iconfont icon-date"></i>
+            <time datetime="2024-08-13 19:45" pubdate>
+              2024-08-13
+            </time>
+          </div>
+        
+        
+        
+          <div class="post-meta">
+            <i class="iconfont icon-tags"></i>
+            
+              <a href="/tags/http/">#http</a>
+            
+              <a href="/tags/Transfer-Encoding/">#Transfer-Encoding</a>
+            
+              <a href="/tags/chunked/">#chunked</a>
+            
+          </div>
+        
+      </div>
+    </article>
+  </div>
+
+  <div class="row mx-auto index-card">
+    
+    
+    <article class="col-12 col-md-12 mx-auto index-info">
+      <h2 class="index-header">
+        
         <a href="/2024/08/04/SSO/" target="_self">
           SSO实践
         </a>
@@ -406,9 +450,9 @@
           <div class="post-meta">
             <i class="iconfont icon-tags"></i>
             
-              <a href="/tags/%E8%B4%9F%E8%BD%BD%E5%9D%87%E8%A1%A1/">#负载均衡</a>
-            
               <a href="/tags/nginx/">#nginx</a>
+            
+              <a href="/tags/%E8%B4%9F%E8%BD%BD%E5%9D%87%E8%A1%A1/">#负载均衡</a>
             
           </div>
         
@@ -448,9 +492,9 @@
           <div class="post-meta">
             <i class="iconfont icon-tags"></i>
             
-              <a href="/tags/nginx/">#nginx</a>
-            
               <a href="/tags/websocket/">#websocket</a>
+            
+              <a href="/tags/nginx/">#nginx</a>
             
           </div>
         
@@ -574,11 +618,11 @@
           <div class="post-meta">
             <i class="iconfont icon-tags"></i>
             
-              <a href="/tags/nginx/">#nginx</a>
-            
               <a href="/tags/websocket/">#websocket</a>
             
               <a href="/tags/socket-io/">#socket.io</a>
+            
+              <a href="/tags/nginx/">#nginx</a>
             
           </div>
         
@@ -627,52 +671,6 @@
               <a href="/tags/%E5%85%83%E8%A1%A8/">#元表</a>
             
               <a href="/tags/%E5%8D%8F%E7%A8%8B/">#协程</a>
-            
-          </div>
-        
-      </div>
-    </article>
-  </div>
-
-  <div class="row mx-auto index-card">
-    
-    
-    <article class="col-12 col-md-12 mx-auto index-info">
-      <h2 class="index-header">
-        
-        <a href="/2024/04/12/nginx%E7%9A%84reuseport%E7%89%B9%E6%80%A7%E5%88%86%E6%9E%90/" target="_self">
-          nginx的reuseport特性分析
-        </a>
-      </h2>
-
-      
-      <a class="index-excerpt index-excerpt__noimg" href="/2024/04/12/nginx%E7%9A%84reuseport%E7%89%B9%E6%80%A7%E5%88%86%E6%9E%90/" target="_self">
-        <div>
-          1、奇怪的现象1.1、断崖问题业务进行性能测试，发现一个奇怪的现象，整个压测过程中总会有断崖的情况。本来TPS在2万8左右，会直接掉到1500左右，然后又马上恢复，但是只能恢复到2万2，损耗了20%。 现场架构：  现场XXX、nginx、服务都部署在一个机器，配置为： 1234567机器：海光麒麟v10  sp4  x86性能指标：128c  512Gnginx配置：16个work进程，句柄数4
-        </div>
-      </a>
-
-      <div class="index-btm post-metas">
-        
-          <div class="post-meta mr-3">
-            <i class="iconfont icon-date"></i>
-            <time datetime="2024-04-12 09:41" pubdate>
-              2024-04-12
-            </time>
-          </div>
-        
-        
-        
-          <div class="post-meta">
-            <i class="iconfont icon-tags"></i>
-            
-              <a href="/tags/nginx/">#nginx</a>
-            
-              <a href="/tags/reuseport/">#reuseport</a>
-            
-              <a href="/tags/linux%E5%86%85%E6%A0%B8/">#linux内核</a>
-            
-              <a href="/tags/SO-REUSEPORT/">#SO_REUSEPORT</a>
             
           </div>
         
