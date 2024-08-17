@@ -4,6 +4,29 @@
   
   
   <entry>
+    <title>gcc编译选项--fcommon</title>
+    <link href="/2024/08/17/gcc%E7%BC%96%E8%AF%91%E9%80%89%E9%A1%B9--fcommon/"/>
+    <url>/2024/08/17/gcc%E7%BC%96%E8%AF%91%E9%80%89%E9%A1%B9--fcommon/</url>
+    
+    <content type="html"><![CDATA[<h2 id="multiple-definition"><a href="#multiple-definition" class="headerlink" title="multiple definition"></a>multiple definition</h2><p>最近在龙蜥操作系统编译时，出现了multiple definition的错误，重复定义？查看了代码，有几个变量确实是重复定义了，简单来讲就是在一个.h文件定义了一个变量，多个.c文件又包含了这个.h，导致这个变量在多个.c文件重复定义，在编译时报错。</p><p>修复也很简单，.h文件的中的变量统一加extern，然后只有一个.c文件才能定义初始化这个变量，这样就可以避免重复定义，也顺利编译成功。</p><h2 id="gcc的版本"><a href="#gcc的版本" class="headerlink" title="gcc的版本"></a>gcc的版本</h2><p>代码确实存在问题，不过其他操作系统并不会报错，只是一个警告，因此我很好奇这是为什么。网上搜索后，发现了一篇很好的文章：<a href="https://club.rt-thread.org/ask/article/5fb1ecf297a83492.html%EF%BC%8Cgcc%E7%89%88%E6%9C%AC%E5%9C%A810%E7%89%88%E6%9C%AC%E5%90%8E%EF%BC%8C%E5%85%B3%E9%97%AD%E4%BA%86">https://club.rt-thread.org/ask/article/5fb1ecf297a83492.html，gcc版本在10版本后，关闭了</a> fcommon选项，使用了fno-common，来看看这个选项的描述：</p><figure class="highlight livecodeserver"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><code class="hljs livecodeserver">-fcommon<br>In C code, this option controls <span class="hljs-keyword">the</span> placement <span class="hljs-keyword">of</span> <span class="hljs-built_in">global</span> variables defined <span class="hljs-keyword">without</span> <span class="hljs-keyword">an</span> initializer, known <span class="hljs-keyword">as</span> tentative definitions <span class="hljs-keyword">in</span> <span class="hljs-keyword">the</span> C standard. Tentative definitions are distinct <span class="hljs-built_in">from</span> declarations <span class="hljs-keyword">of</span> <span class="hljs-keyword">a</span> <span class="hljs-built_in">variable</span> <span class="hljs-keyword">with</span> <span class="hljs-keyword">the</span> extern keyword, which <span class="hljs-built_in">do</span> <span class="hljs-keyword">not</span> allocate storage.<br><br>The default is -fno-common, which specifies that <span class="hljs-keyword">the</span> compiler places uninitialized <span class="hljs-built_in">global</span> variables <span class="hljs-keyword">in</span> <span class="hljs-keyword">the</span> BSS section <span class="hljs-keyword">of</span> <span class="hljs-keyword">the</span> object <span class="hljs-built_in">file</span>. This inhibits <span class="hljs-keyword">the</span> merging <span class="hljs-keyword">of</span> tentative definitions <span class="hljs-keyword">by</span> <span class="hljs-keyword">the</span> linker so you <span class="hljs-built_in">get</span> <span class="hljs-keyword">a</span> multiple-definition error <span class="hljs-keyword">if</span> <span class="hljs-keyword">the</span> same <span class="hljs-built_in">variable</span> is accidentally defined <span class="hljs-keyword">in</span> more than <span class="hljs-literal">one</span> compilation unit.<br><br>The -fcommon places uninitialized <span class="hljs-built_in">global</span> variables <span class="hljs-keyword">in</span> <span class="hljs-keyword">a</span> common block. This allows <span class="hljs-keyword">the</span> linker <span class="hljs-built_in">to</span> <span class="hljs-built_in">resolve</span> all tentative definitions <span class="hljs-keyword">of</span> <span class="hljs-keyword">the</span> same <span class="hljs-built_in">variable</span> <span class="hljs-keyword">in</span> different compilation units <span class="hljs-built_in">to</span> <span class="hljs-keyword">the</span> same object, <span class="hljs-keyword">or</span> <span class="hljs-built_in">to</span> <span class="hljs-keyword">a</span> non-tentative definition. This behavior is inconsistent <span class="hljs-keyword">with</span> C++, <span class="hljs-keyword">and</span> <span class="hljs-keyword">on</span> <span class="hljs-title">many</span> <span class="hljs-title">targets</span> <span class="hljs-title">implies</span> <span class="hljs-title">a</span> <span class="hljs-title">speed</span> <span class="hljs-title">and</span> <span class="hljs-title">code</span> <span class="hljs-title">size</span> <span class="hljs-title">penalty</span> <span class="hljs-title">on</span> <span class="hljs-title">global</span> <span class="hljs-title">variable</span> <span class="hljs-title">references</span>. <span class="hljs-title">It</span> <span class="hljs-title">is</span> <span class="hljs-title">mainly</span> <span class="hljs-title">useful</span> <span class="hljs-title">to</span> <span class="hljs-title">enable</span> <span class="hljs-title">legacy</span> <span class="hljs-title">code</span> <span class="hljs-title">to</span> <span class="hljs-title">link</span> <span class="hljs-title">without</span> <span class="hljs-title">errors</span>.<br></code></pre></td></tr></table></figure><p>文章已经讲解很清楚，这里作为我的理解</p><p><code>-fno-common</code></p><ul><li><strong>作用</strong>：当使用<code>-fno-common</code>选项时，编译器将未初始化的全局变量放置在BSS段中。</li><li><strong>链接器行为</strong>：未初始化的全局变量会被视为强符号。在链接阶段，如果相同的未初始化全局变量在多个编译单元中被定义，链接器会将其视为重复定义，并报告错误。也就是说，链接器不会合并这些变量的定义，任何多个定义的冲突都会导致链接错误。</li></ul><p><code>-fcommon</code></p><ul><li><strong>作用</strong>：当使用<code>-fcommon </code>选项时，编译器会将未初始化的全局变量放入一个<code>COMMON</code>块中。</li><li><strong>链接器行为</strong>：<code>COMMON</code>块是一种特殊的内存区域，允许链接器在链接阶段合并同名的未初始化全局变量的定义。即使这些变量在多个编译单元中被定义，链接器会将它们合并为一个单一的变量对象。</li></ul><p>也就是使用了fno-common属性后，未初始化的全局变量现在会放到BSS段，属于强符号，不允许重复定义</p><h2 id="内存模型"><a href="#内存模型" class="headerlink" title="内存模型"></a>内存模型</h2><p>C语言程序的内存通常被分为几个主要区域：</p><ul><li><strong>Text段</strong>（代码段）：<ul><li><strong>作用</strong>：存放程序的可执行代码，包括所有函数和指令。</li><li><strong>属性</strong>：通常是只读的，以防止程序代码在运行时被修改，并且可以在多个进程间共享。</li></ul></li><li><strong>Data段</strong>（数据段）：<ul><li><strong>作用</strong>：存放已初始化的全局变量和静态变量。<ul><li><strong><code>.data</code>段</strong>：包含初始化的全局和静态变量。</li><li><strong><code>.rodata</code>段</strong>：包含只读的初始化数据（如字符串常量）。</li></ul></li></ul></li><li><strong>BSS段</strong>：<ul><li><strong>作用</strong>：存放未初始化的全局变量和静态变量。程序加载时，这部分内存会被自动初始化为0。</li><li><strong>特点</strong>：在可执行文件中不占用实际空间，只有在程序运行时才分配内存。</li></ul></li><li><strong>堆</strong>（Heap）：<ul><li><strong>作用</strong>：动态分配内存区域，通过函数如<code>malloc()</code>和<code>free()</code>进行管理。用于存放动态分配的数据结构。</li><li><strong>管理</strong>：需要程序员手动管理内存分配和释放，避免内存泄漏和悬挂指针。</li></ul></li><li><strong>栈</strong>（Stack）：<ul><li><strong>作用</strong>：存放局部变量、函数参数和返回地址。每个函数调用时会在栈上分配一个栈帧。</li><li><strong>特点</strong>：栈内存的分配和释放由系统自动管理。栈大小通常有限，如果超出栈空间会导致栈溢出。</li></ul></li></ul><h2 id="强符号-弱符号"><a href="#强符号-弱符号" class="headerlink" title="强符号&#x2F;弱符号"></a>强符号&#x2F;弱符号</h2><p>对于全局变量来说，如果初始化了不为0的值，那么该全局变量则被保存在data段，如果初始化的值为0，那么将其保存在bss段，如果没有初始化，则将其保存在common段，等到链接时再将其放入到bss段。关于第三点不同编译器行为会不同，有的编译器会把没有初始化的全局变量直接放到bss段，也就是gcc的-fcommon与-fno-common属性的差异。</p><p>绝大多数情况下，函数和已初始化的变量是强符号，而未初始化的变量是弱符号。对于它们，下列三条规则适用：</p><ol><li>同名的强符号只能存在一个。</li><li>一个强符号可以和多个同名的弱符号共存，但调用时会选择强符号的值。</li><li>有多个弱符号时，链接器可以选择其中任意一个。</li></ol><h2 id="librdkafka的编译问题？"><a href="#librdkafka的编译问题？" class="headerlink" title="librdkafka的编译问题？"></a>librdkafka的编译问题？</h2><p>目前librdkafka的最新版本是2.5，最近需要升级这个库，于是我在十几个操作系统编译了一下这个库，有3个编译报错，其中一个是因为依赖的libssl没找到，于是我在lib64指定了一下libssl.so也就编译通过了，而官方最近刚修复了这个问题，也就是没找ssl依赖的情况下，也能编译成功，有点巧。</p><p>还有2个报了<strong>redefinition of typedef</strong>的错误，一个是suse  sp4，一个是centos 6，github搜了一下，发现这是老问题，这个项目以前经常会遇到这个错误，看着是修复过了，现在还会有错误？这2个操作系统的gcc都是4.4，版本比较低，而其他编译过的操作系统，gcc有4.8、7.3、8.3、10.3、12.3，也就是说旧的gcc反而会报错。找了一个变量看下代码</p><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-keyword">typedef</span> <span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">rd_kafka_toppar_s</span> <span class="hljs-title">rd_kafka_toppar_t</span>;</span><br></code></pre></td></tr></table></figure><p>在<strong>rdkafka_int.h</strong>和<strong>rdkafka_op.h</strong>都定义了这个变量，然后 <strong>rdkafka_op.c</strong>都包含了这个头文件，很明显是重复定义了。但是这个符合c语言规则的</p><p>ISO&#x2F;IEC 9899:1999  6.7.3中是这么描述的</p><figure class="highlight scala"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><code class="hljs scala"><span class="hljs-type">If</span> an identifier has no linkage, there shall be no more than one declaration of the identifier<br>(in a declarator or <span class="hljs-class"><span class="hljs-keyword">type</span> <span class="hljs-title">specifier</span>) <span class="hljs-keyword">with</span> <span class="hljs-title">the</span> <span class="hljs-title">same</span> <span class="hljs-title">scope</span> <span class="hljs-title">and</span> <span class="hljs-title">in</span> <span class="hljs-title">the</span> <span class="hljs-title">same</span> <span class="hljs-title">name</span> <span class="hljs-title">space</span>, <span class="hljs-title">except</span></span><br><span class="hljs-keyword">for</span> tags as specified in <span class="hljs-number">6.7</span><span class="hljs-number">.2</span><span class="hljs-number">.3</span>.<br></code></pre></td></tr></table></figure><p>而c99中</p><figure class="highlight livecodeserver"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><code class="hljs livecodeserver">If <span class="hljs-keyword">the</span> same qualifier appears more than once <span class="hljs-keyword">in</span> <span class="hljs-keyword">the</span> same specifier-qualifier-list, either<br>directly <span class="hljs-keyword">or</span> via <span class="hljs-literal">one</span> <span class="hljs-keyword">or</span> more typedefs, <span class="hljs-keyword">the</span> behavior is <span class="hljs-keyword">the</span> same <span class="hljs-keyword">as</span> <span class="hljs-keyword">if</span> <span class="hljs-keyword">it</span> appeared only<br>once.<br></code></pre></td></tr></table></figure><p>其实就是以前的c标准不允许重复重复声明，c99开始允许了，因此代码这么写没有问题，只是老版本的gcc遵循老的c标准，编译会报错。但是librdkafka明确表示以后不支持centos 6和7，所以也没什么好说的。8的gcc版本一般为8.3，可以正常编译，后续其实要推动客户升级操作系统，毕竟后续会出现越来越多的兼容性问题。</p>]]></content>
+    
+    
+    
+    <tags>
+      
+      <tag>gcc</tag>
+      
+      <tag>fcommon</tag>
+      
+      <tag>fno-common</tag>
+      
+    </tags>
+    
+  </entry>
+  
+  
+  
+  <entry>
     <title>chunked编码格式引发的问题</title>
     <link href="/2024/08/13/chunked%E7%BC%96%E7%A0%81%E6%A0%BC%E5%BC%8F%E5%BC%95%E5%8F%91%E7%9A%84%E9%97%AE%E9%A2%98/"/>
     <url>/2024/08/13/chunked%E7%BC%96%E7%A0%81%E6%A0%BC%E5%BC%8F%E5%BC%95%E5%8F%91%E7%9A%84%E9%97%AE%E9%A2%98/</url>
@@ -98,9 +121,9 @@
     
     <tags>
       
-      <tag>nginx</tag>
-      
       <tag>负载均衡</tag>
+      
+      <tag>nginx</tag>
       
     </tags>
     
@@ -119,9 +142,9 @@
     
     <tags>
       
-      <tag>websocket</tag>
-      
       <tag>nginx</tag>
+      
+      <tag>websocket</tag>
       
     </tags>
     
@@ -182,11 +205,11 @@
     
     <tags>
       
+      <tag>nginx</tag>
+      
       <tag>websocket</tag>
       
       <tag>socket.io</tag>
-      
-      <tag>nginx</tag>
       
     </tags>
     
