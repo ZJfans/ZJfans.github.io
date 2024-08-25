@@ -256,6 +256,48 @@
     <article class="col-12 col-md-12 mx-auto index-info">
       <h2 class="index-header">
         
+        <a href="/2024/08/25/ingress-nginx-limit_except%E4%BD%BF%E7%94%A8%E7%9A%84%E5%9D%91/" target="_self">
+          ingress-nginx-limit_except使用的坑
+        </a>
+      </h2>
+
+      
+      <a class="index-excerpt index-excerpt__noimg" href="/2024/08/25/ingress-nginx-limit_except%E4%BD%BF%E7%94%A8%E7%9A%84%E5%9D%91/" target="_self">
+        <div>
+          1、错误的返回-503起因是ingress-nginx有人提了一个issue：https://github.com/kubernetes/ingress-nginx/issues/11742 ，使用limit_except时没有得到预期的403，而是得到了503，首先看下怎么复现 首先得有一个kubernetes环境，启动一个服务节点foo，然后安装ingress-nginx，ingress的配置
+        </div>
+      </a>
+
+      <div class="index-btm post-metas">
+        
+          <div class="post-meta mr-3">
+            <i class="iconfont icon-date"></i>
+            <time datetime="2024-08-25 17:39" pubdate>
+              2024-08-25
+            </time>
+          </div>
+        
+        
+        
+          <div class="post-meta">
+            <i class="iconfont icon-tags"></i>
+            
+              <a href="/tags/ingress-nginx/">#ingress-nginx</a>
+            
+              <a href="/tags/limit-except/">#limit_except</a>
+            
+          </div>
+        
+      </div>
+    </article>
+  </div>
+
+  <div class="row mx-auto index-card">
+    
+    
+    <article class="col-12 col-md-12 mx-auto index-info">
+      <h2 class="index-header">
+        
         <a href="/2024/08/17/gcc%E7%BC%96%E8%AF%91%E9%80%89%E9%A1%B9--fcommon/" target="_self">
           gcc编译选项--fcommon
         </a>
@@ -623,50 +665,6 @@
               <a href="/tags/ssl/">#ssl</a>
             
               <a href="/tags/%E8%AF%81%E4%B9%A6/">#证书</a>
-            
-          </div>
-        
-      </div>
-    </article>
-  </div>
-
-  <div class="row mx-auto index-card">
-    
-    
-    <article class="col-12 col-md-12 mx-auto index-info">
-      <h2 class="index-header">
-        
-        <a href="/2024/04/12/SOCKET.IO%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5-%E4%BB%A3%E7%90%86%E7%AF%87/" target="_self">
-          SOCKET.IO最佳实践-代理篇
-        </a>
-      </h2>
-
-      
-      <a class="index-excerpt index-excerpt__noimg" href="/2024/04/12/SOCKET.IO%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5-%E4%BB%A3%E7%90%86%E7%AF%87/" target="_self">
-        <div>
-          前言：在传统的轮询中，客户端定期向服务器发送请求，询问是否有新的数据可用。这会导致很多不必要的空请求，尤其是在没有新数据可用的时候。而且如果使用的是HTTP&#x2F;1.0版本，每个请求&#x2F;响应都需要打开一个新连接，考虑到连接的建立、关闭、TCP慢启动机制等因素，这是一个很大的开销。因此HTTP&#x2F;1.1引入了2个头部:Connection头部和Upgrade头部，用于协议升级。
-        </div>
-      </a>
-
-      <div class="index-btm post-metas">
-        
-          <div class="post-meta mr-3">
-            <i class="iconfont icon-date"></i>
-            <time datetime="2024-04-12 09:41" pubdate>
-              2024-04-12
-            </time>
-          </div>
-        
-        
-        
-          <div class="post-meta">
-            <i class="iconfont icon-tags"></i>
-            
-              <a href="/tags/nginx/">#nginx</a>
-            
-              <a href="/tags/websocket/">#websocket</a>
-            
-              <a href="/tags/socket-io/">#socket.io</a>
             
           </div>
         
