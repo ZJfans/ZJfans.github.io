@@ -18,7 +18,7 @@
   
     <meta name="description" content="1、错误的返回-503起因是ingress-nginx有人提了一个issue：https:&#x2F;&#x2F;github.com&#x2F;kubernetes&#x2F;ingress-nginx&#x2F;issues&#x2F;11742 ，使用limit_except时没有得到预期的403，而是得到了503，首先看下怎么复现 首先得有一个kubernetes环境，启动一个服务节点foo，然后安装ingress-nginx，ingress的配置">
 <meta property="og:type" content="article">
-<meta property="og:title" content="ingress-nginx-limit_except使用的坑">
+<meta property="og:title" content="ingress-nginx使用limit_except的问题">
 <meta property="og:url" content="https://zjfans.github.io/2024/08/25/ingress-nginx-limit_except%E4%BD%BF%E7%94%A8%E7%9A%84%E5%9D%91/index.html">
 <meta property="og:site_name" content="ZJfans Blog">
 <meta property="og:description" content="1、错误的返回-503起因是ingress-nginx有人提了一个issue：https:&#x2F;&#x2F;github.com&#x2F;kubernetes&#x2F;ingress-nginx&#x2F;issues&#x2F;11742 ，使用limit_except时没有得到预期的403，而是得到了503，首先看下怎么复现 首先得有一个kubernetes环境，启动一个服务节点foo，然后安装ingress-nginx，ingress的配置">
@@ -27,7 +27,7 @@
 <meta property="og:image" content="https://zjfans.github.io/img/limit_except-%E5%9B%BE2.png">
 <meta property="og:image" content="https://zjfans.github.io/img/limit_except-%E5%9B%BE3.png">
 <meta property="article:published_time" content="2024-08-25T09:39:27.382Z">
-<meta property="article:modified_time" content="2024-08-25T10:02:31.189Z">
+<meta property="article:modified_time" content="2024-08-25T11:50:00.384Z">
 <meta property="article:author" content="张三疯">
 <meta property="article:tag" content="ingress-nginx">
 <meta property="article:tag" content="limit_except">
@@ -38,7 +38,7 @@
     <meta name="referrer" content="no-referrer-when-downgrade">
   
   
-  <title>ingress-nginx-limit_except使用的坑 - ZJfans Blog</title>
+  <title>ingress-nginx使用limit_except的问题 - ZJfans Blog</title>
 
   <link  rel="stylesheet" href="https://lib.baomitu.com/twitter-bootstrap/4.6.1/css/bootstrap.min.css" />
 
@@ -231,7 +231,7 @@
       <div class="banner-text text-center fade-in-up">
         <div class="h2">
           
-            <span id="subtitle" data-typed-text="ingress-nginx-limit_except使用的坑"></span>
+            <span id="subtitle" data-typed-text="ingress-nginx使用limit_except的问题"></span>
           
         </div>
 
@@ -302,7 +302,7 @@
       <div class="container nopadding-x-md" id="board-ctn">
         <div id="board">
           <article class="post-content mx-auto">
-            <h1 id="seo-header">ingress-nginx-limit_except使用的坑</h1>
+            <h1 id="seo-header">ingress-nginx使用limit_except的问题</h1>
             
             
               <div class="markdown-body">
@@ -418,7 +418,7 @@
 
   <div class="license-box my-3">
     <div class="license-title">
-      <div>ingress-nginx-limit_except使用的坑</div>
+      <div>ingress-nginx使用limit_except的问题</div>
       <div>https://zjfans.github.io/2024/08/25/ingress-nginx-limit_except使用的坑/</div>
     </div>
     <div class="license-meta">
