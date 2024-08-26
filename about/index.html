@@ -25,7 +25,7 @@
 <meta property="og:locale" content="zh_CN">
 <meta property="og:image" content="https://zjfans.github.io/img/ingmar-h-RWS1FY27DUg-unsplash.jpg">
 <meta property="article:published_time" content="2024-03-24T17:03:18.000Z">
-<meta property="article:modified_time" content="2024-08-25T11:22:19.044Z">
+<meta property="article:modified_time" content="2024-08-26T12:54:56.281Z">
 <meta property="article:author" content="张三疯">
 <meta property="article:tag" content="nginx,openresty,网关,HTTP&#x2F;HTTPS,Websocket">
 <meta name="twitter:card" content="summary_large_image">
@@ -222,7 +222,7 @@
   
 
 <div id="banner" class="banner" parallax=true
-     style="background: url('/img/tobias-reich-zK9gSMQGAc4-unsplash.jpg') no-repeat center center; background-size: cover;">
+     style="background: url('/img/hanny-naibaho-mnyJEvSLtvk-unsplash.jpg') no-repeat center center; background-size: cover;">
   <div class="full-bg-img">
     <div class="mask flex-center" style="background-color: rgba(0, 0, 0, 0.3)">
       <div class="banner-text text-center fade-in-up">
@@ -251,7 +251,7 @@
           >
           
             <div class="about-avatar">
-              <img src="/img/tobias-reich-zK9gSMQGAc4-unsplash.jpg" srcset="/img/loading.gif" lazyload class="img-fluid" alt="avatar">
+              <img src="/img/lQDPKH2W2taQb-vNA2LNA2Kw6rPAOvPWUw8GtU_Z3v_zAA_866_866.jpg" srcset="/img/loading.gif" lazyload class="img-fluid" alt="avatar">
             </div>
           
           <div class="container">
@@ -308,6 +308,41 @@
         
       
       
+    <div id="giscus" class="giscus"></div>
+    <script type="text/javascript">
+      Fluid.utils.loadComments('#giscus', function() {
+        var options = {"repo":"ZJfans/ZJfans.github.io","repo-id":"R_kgDOLYg-XA","category":"Announcements","category-id":"DIC_kwDOLYg-XM4Ceo1C","theme-light":"light","theme-dark":"dark","mapping":"pathname","reactions-enabled":1,"emit-metadata":0,"input-position":"bottom","lang":"zh-CN"};
+        var attributes = {};
+        for (let option in options) {
+          if (!option.startsWith('theme-')) {
+            var key = option.startsWith('data-') ? option : 'data-' + option;
+            attributes[key] = options[option];
+          }
+        }
+        var light = 'light';
+        var dark = 'dark';
+        window.GiscusThemeLight = light;
+        window.GiscusThemeDark = dark;
+        attributes['data-theme'] = document.documentElement.getAttribute('data-user-color-scheme') === 'dark' ? dark : light;
+        for (let attribute in attributes) {
+          var value = attributes[attribute];
+          if (value === undefined || value === null || value === '') {
+            delete attributes[attribute];
+          }
+        }
+        var s = document.createElement('script');
+        s.setAttribute('src', 'https://giscus.app/client.js');
+        s.setAttribute('crossorigin', 'anonymous');
+        for (let attribute in attributes) {
+          s.setAttribute(attribute, attributes[attribute]);
+        }
+        var ss = document.getElementsByTagName('script');
+        var e = ss.length > 0 ? ss[ss.length - 1] : document.head || document.documentElement;
+        e.parentNode.insertBefore(s, e.nextSibling);
+      });
+    </script>
+    <noscript>Please enable JavaScript to view the comments</noscript>
+
 
     </article>
   
