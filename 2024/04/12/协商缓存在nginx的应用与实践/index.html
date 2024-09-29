@@ -48,7 +48,7 @@
 <meta property="og:image" content="https://zjfans.github.io/img/cache-23.png">
 <meta property="og:image" content="https://zjfans.github.io/img/cache-24.png">
 <meta property="article:published_time" content="2024-04-12T01:41:09.437Z">
-<meta property="article:modified_time" content="2024-07-08T12:10:22.500Z">
+<meta property="article:modified_time" content="2024-09-29T12:21:50.279Z">
 <meta property="article:author" content="张三疯">
 <meta property="article:tag" content="协商缓存">
 <meta property="article:tag" content="no cache nginx">
@@ -275,7 +275,7 @@
       <span class="post-meta mr-2">
         <i class="iconfont icon-chart"></i>
         
-          3.6k 字
+          3.3k 字
         
       </span>
     
@@ -286,7 +286,7 @@
         
         
         
-          30 分钟
+          28 分钟
         
       </span>
     
@@ -406,12 +406,7 @@
 <p><img src="/img/cache-22.png" srcset="/img/loading.gif" lazyload alt="cache-22"></p>
 <p>但是当请求的If-Modified-Since、If-None-Match与服务端一致时，服务端验证新鲜度足够，就只会返回304</p>
 <p><img src="/img/cache-23.png" srcset="/img/loading.gif" lazyload alt="cache-23"></p>
-<p>5、结论</p>
-<p>协商缓存模式下，客户端会对每个已经缓存的资源额外进行一次新鲜度验证，对于网络来说，这是一种开销。但是既要保证资源的新鲜度，又要尽量提高性能，这是很好的策略，毕竟没有完美的人，自然也就没有完美的策略。对于静态资源长时间不发生改变的场景，很明显no-cache不适用，不如使用must-revalidate。</p>
-<h3 id="5-2、特殊请求不生效"><a href="#5-2、特殊请求不生效" class="headerlink" title="5.2、特殊请求不生效"></a>5.2、特殊请求不生效</h3><p>在测试的过程中，一个页面会请求很多静态资源，但是总有几个不会触发协商缓存。但是这几个页面单独拿出来在浏览器请求，协商缓存是可以生效的。这是因为这个请求比较特殊。</p>
-<p>当请求获取的html资源中引用了js和css资源，浏览器会先检查index.html，发现index.html没有更新（服务端返回304），然后index.html中引入的js和css就直接都从缓存中去拿，导致协商缓存未生效。</p>
-<p>当然这种情况，我们可以给index.html加时间戳，可以防止被缓存，但是对于前端外框这个最外层的html是没办法的，如果被缓存了，只能手动清缓存或者重新部署。</p>
-<h3 id="5-3、一个GET请求被缓存导致的登录异常"><a href="#5-3、一个GET请求被缓存导致的登录异常" class="headerlink" title="5.3、一个GET请求被缓存导致的登录异常"></a>5.3、一个GET请求被缓存导致的登录异常</h3><p>首先来看下定义：</p>
+<h3 id="5-2、一个GET请求被缓存导致的登录异常"><a href="#5-2、一个GET请求被缓存导致的登录异常" class="headerlink" title="5.2、一个GET请求被缓存导致的登录异常"></a>5.2、一个GET请求被缓存导致的登录异常</h3><p>首先来看下定义：</p>
 <p>在HTTP规范中，GET请求通常用于从服务器检索数据，而不改变服务器的状态。这种操作被认为是安全的和幂等的，因此响应是可以缓存的。</p>
 <p>HTTP规范规定，POST请求是用来提交数据的，可能会导致服务器状态的改变，因此其响应不应被缓存。</p>
 <p>我们的网关层实现了cas单点登录，其中登录过程会调用一个免密接口，主要用于从权限系统获取权限数据以及一些会话数据，这个请求是get请求。</p>
