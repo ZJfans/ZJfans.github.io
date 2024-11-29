@@ -30,7 +30,7 @@
 <meta property="og:image" content="https://zjfans.github.io/img/openresty-1.15.8%E5%BC%80%E5%90%AFreuseport.png">
 <meta property="og:image" content="https://zjfans.github.io/img/openresty-1.25.3%E5%BC%80%E5%90%AFreuseport.png">
 <meta property="article:published_time" content="2024-04-12T01:41:09.424Z">
-<meta property="article:modified_time" content="2024-06-02T11:37:42.422Z">
+<meta property="article:modified_time" content="2024-11-29T14:04:35.750Z">
 <meta property="article:author" content="张三疯">
 <meta property="article:tag" content="nginx">
 <meta property="article:tag" content="reuseport">
@@ -412,7 +412,7 @@
 <p>2、nginx的版本的问题？</p>
 <p>我用的是openresty-1.15.8版本，因此nginx的版本也是15.8，因此我下载了最新的openresty-1.25版本，重新编译启动后，结果如下图，work进程完全符合我的预期！！！</p>
 <p><img src="/img/openresty-1.25.3%E5%BC%80%E5%90%AFreuseport.png" srcset="/img/loading.gif" lazyload alt="openresty-1.25.3开启reuseport"></p>
-<p>因此我去对比了2个版本的代码，发现新版本确实做了优化，**会close”多余的socket”**。</p>
+<p>因此我去对比了2个版本的代码，发现新版本确实做了优化，<strong>会close多余的socket</strong>。</p>
 <p>而且lsof -i出来的也只是绑定的意思，nginx1.15.8版本的nginx进程虽然绑定了多个socket，但是并没有监听每一个，也就是没有把每一个socket放到epoll里面</p>
 <p>nginx-15</p>
 <figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-meta">#<span class="hljs-keyword">if</span> (NGX_HAVE_REUSEPORT)</span><br>        <span class="hljs-keyword">if</span> (ls[i].reuseport &amp;&amp; ls[i].worker != ngx_worker) &#123;<br>            <span class="hljs-keyword">continue</span>;<br>        &#125;<br><span class="hljs-meta">#<span class="hljs-keyword">endif</span></span><br></code></pre></td></tr></table></figure>

@@ -48,7 +48,7 @@
 <meta property="og:image" content="https://zjfans.github.io/img/cache-23.png">
 <meta property="og:image" content="https://zjfans.github.io/img/cache-24.png">
 <meta property="article:published_time" content="2024-04-12T01:41:09.437Z">
-<meta property="article:modified_time" content="2024-09-29T12:21:50.279Z">
+<meta property="article:modified_time" content="2024-09-29T13:23:29.730Z">
 <meta property="article:author" content="张三疯">
 <meta property="article:tag" content="协商缓存">
 <meta property="article:tag" content="no cache nginx">
@@ -382,7 +382,7 @@
 <p><img src="/img/cache-11.png" srcset="/img/loading.gif" lazyload alt="cache-11"></p>
 <p>   这样既可以保证数据的及时更新，又可以减少大量数据的传输，唯一的网络开销是进行新鲜度的再次验证。</p>
 <h3 id="4-2、nginx源码分析If-Modified-Since与If-None-Match"><a href="#4-2、nginx源码分析If-Modified-Since与If-None-Match" class="headerlink" title="4.2、nginx源码分析If-Modified-Since与If-None-Match"></a>4.2、nginx源码分析If-Modified-Since与If-None-Match</h3><p><strong>etag的生成</strong></p>
-<p>nginx的etag的生成方式比较简单，由last-modified与content-length转换为十六进制组合而成。</p>
+<p>nginx的etag的生成方式比较简单，由last-modified_time与content_length_n转换为十六进制组合而成。其中last-modified_time是通过系统调用，获取的文件最后修改时间，对应操作系统文件结构stat中st_mtime; content-length_n是文件的大小，对应操作系统文件结构stat中st_size;</p>
 <p><img src="/img/cache-12.png" srcset="/img/loading.gif" lazyload alt="cache-12"></p>
 <p>缓存请求数据时，在响应头返回给缓存。</p>
 <p><img src="/img/cache-13.png" srcset="/img/loading.gif" lazyload alt="cache-13"></p>

@@ -1,0 +1,953 @@
+
+
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-color-scheme=auto>
+
+
+
+<head>
+  <meta charset="UTF-8">
+  <link rel="apple-touch-icon" sizes="76x76" href="/img/fluid.png">
+  <link rel="icon" href="/img/fluid.png">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, shrink-to-fit=no">
+  <meta http-equiv="x-ua-compatible" content="ie=edge">
+  
+  <meta name="theme-color" content="#2f4154">
+  <meta name="author" content="张三疯">
+  <meta name="keywords" content="nginx,openresty,网关,HTTP/HTTPS,Websocket">
+  
+    <meta name="description" content="1、内核如何接收数据不同主机通过网卡进行数据的交互，网卡将电磁波转换为模拟信号，再转换为数字信号，再由OSI模型传到应用层，变成人可以识别的数据。信号转换属于通信相关的知识，所以从接收到数字信号开始分析数据的流转。  首先当数据帧从网线到达网卡上的时候，第一站是网卡的接收队列。网卡在分配给自己的RingBuffer中寻找可用的内存位置，找到后DMA引擎会把数据DMA到网卡之前关联的内存里，这个时候">
+<meta property="og:type" content="article">
+<meta property="og:title" content="网络部分-epoll分析">
+<meta property="og:url" content="https://zjfans.github.io/2024/11/29/%E7%BD%91%E7%BB%9CIO/index.html">
+<meta property="og:site_name" content="ZJfans Blog">
+<meta property="og:description" content="1、内核如何接收数据不同主机通过网卡进行数据的交互，网卡将电磁波转换为模拟信号，再转换为数字信号，再由OSI模型传到应用层，变成人可以识别的数据。信号转换属于通信相关的知识，所以从接收到数字信号开始分析数据的流转。  首先当数据帧从网线到达网卡上的时候，第一站是网卡的接收队列。网卡在分配给自己的RingBuffer中寻找可用的内存位置，找到后DMA引擎会把数据DMA到网卡之前关联的内存里，这个时候">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://zjfans.github.io/img/%E5%BC%80%E5%90%AFreuseport.png">
+<meta property="og:image" content="https://zjfans.github.io/img/%E5%A4%9A%E8%BF%9B%E7%A8%8B%E7%9B%91%E5%90%AC%E4%B8%80%E4%B8%AAsocket.png">
+<meta property="article:published_time" content="2024-11-29T13:58:25.570Z">
+<meta property="article:modified_time" content="2024-11-29T14:03:01.120Z">
+<meta property="article:author" content="张三疯">
+<meta property="article:tag" content="nginx，socket">
+<meta property="article:tag" content="epoll">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://zjfans.github.io/img/%E5%BC%80%E5%90%AFreuseport.png">
+  
+  
+    <meta name="referrer" content="no-referrer-when-downgrade">
+  
+  
+  <title>网络部分-epoll分析 - ZJfans Blog</title>
+
+  <link  rel="stylesheet" href="https://lib.baomitu.com/twitter-bootstrap/4.6.1/css/bootstrap.min.css" />
+
+
+
+  <link  rel="stylesheet" href="https://lib.baomitu.com/github-markdown-css/4.0.0/github-markdown.min.css" />
+
+  <link  rel="stylesheet" href="https://lib.baomitu.com/hint.css/2.7.0/hint.min.css" />
+
+  <link  rel="stylesheet" href="https://lib.baomitu.com/fancybox/3.5.7/jquery.fancybox.min.css" />
+
+
+
+<!-- 主题依赖的图标库，不要自行修改 -->
+<!-- Do not modify the link that theme dependent icons -->
+
+<link rel="stylesheet" href="//at.alicdn.com/t/font_1749284_hj8rtnfg7um.css">
+
+
+
+<link rel="stylesheet" href="//at.alicdn.com/t/font_1736178_lbnruvf0jn.css">
+
+
+<link  rel="stylesheet" href="/css/main.css" />
+
+
+  <link id="highlight-css" rel="stylesheet" href="/css/highlight.css" />
+  
+    <link id="highlight-css-dark" rel="stylesheet" href="/css/highlight-dark.css" />
+  
+
+
+
+
+  <script id="fluid-configs">
+    var Fluid = window.Fluid || {};
+    Fluid.ctx = Object.assign({}, Fluid.ctx)
+    var CONFIG = {"hostname":"zjfans.github.io","root":"/","version":"1.9.7","typing":{"enable":true,"typeSpeed":70,"cursorChar":"_","loop":false,"scope":[]},"anchorjs":{"enable":true,"element":"h1,h2,h3,h4,h5,h6","placement":"left","visible":"hover","icon":""},"progressbar":{"enable":true,"height_px":3,"color":"#29d","options":{"showSpinner":false,"trickleSpeed":100}},"code_language":{"enable":true,"default":"TEXT"},"copy_btn":true,"image_caption":{"enable":true},"image_zoom":{"enable":true,"img_url_replace":["",""]},"toc":{"enable":true,"placement":"right","headingSelector":"h1,h2,h3,h4,h5,h6","collapseDepth":0},"lazyload":{"enable":true,"loading_img":"/img/loading.gif","onlypost":false,"offset_factor":2},"web_analytics":{"enable":true,"follow_dnt":true,"baidu":null,"google":{"measurement_id":null},"tencent":{"sid":null,"cid":null},"woyaola":null,"cnzz":null,"leancloud":{"app_id":null,"app_key":null,"server_url":null,"path":"window.location.pathname","ignore_local":false}},"search_path":"/local-search.xml","include_content_in_search":true};
+
+    if (CONFIG.web_analytics.follow_dnt) {
+      var dntVal = navigator.doNotTrack || window.doNotTrack || navigator.msDoNotTrack;
+      Fluid.ctx.dnt = dntVal && (dntVal.startsWith('1') || dntVal.startsWith('yes') || dntVal.startsWith('on'));
+    }
+  </script>
+  <script  src="/js/utils.js" ></script>
+  <script  src="/js/color-schema.js" ></script>
+  
+
+  
+
+  
+    <!-- Google tag (gtag.js) -->
+    <script async>
+      if (!Fluid.ctx.dnt) {
+        Fluid.utils.createScript("https://www.googletagmanager.com/gtag/js?id=", function() {
+          window.dataLayer = window.dataLayer || [];
+          function gtag() {
+            dataLayer.push(arguments);
+          }
+          gtag('js', new Date());
+          gtag('config', '');
+        });
+      }
+    </script>
+  
+
+  
+
+  
+
+  
+
+  
+
+
+
+  
+<meta name="generator" content="Hexo 6.3.0"></head>
+
+
+<body>
+  
+
+  <header>
+    
+
+<div class="header-inner" style="height: 70vh;">
+  <nav id="navbar" class="navbar fixed-top  navbar-expand-lg navbar-dark scrolling-navbar">
+  <div class="container">
+    <a class="navbar-brand" href="/">
+      <strong>ZJfans Blog</strong>
+    </a>
+
+    <button id="navbar-toggler-btn" class="navbar-toggler" type="button" data-toggle="collapse"
+            data-target="#navbarSupportedContent"
+            aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+      <div class="animated-icon"><span></span><span></span><span></span></div>
+    </button>
+
+    <!-- Collapsible content -->
+    <div class="collapse navbar-collapse" id="navbarSupportedContent">
+      <ul class="navbar-nav ml-auto text-center">
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/" target="_self">
+                <i class="iconfont icon-home-fill"></i>
+                <span>首页</span>
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/archives/" target="_self">
+                <i class="iconfont icon-archive-fill"></i>
+                <span>归档</span>
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/categories/" target="_self">
+                <i class="iconfont icon-category-fill"></i>
+                <span>分类</span>
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/tags/" target="_self">
+                <i class="iconfont icon-tags-fill"></i>
+                <span>标签</span>
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/about/" target="_self">
+                <i class="iconfont icon-user-fill"></i>
+                <span>关于</span>
+              </a>
+            </li>
+          
+        
+        
+          <li class="nav-item" id="search-btn">
+            <a class="nav-link" target="_self" href="javascript:;" data-toggle="modal" data-target="#modalSearch" aria-label="Search">
+              <i class="iconfont icon-search"></i>
+            </a>
+          </li>
+          
+        
+        
+          <li class="nav-item" id="color-toggle-btn">
+            <a class="nav-link" target="_self" href="javascript:;" aria-label="Color Toggle">
+              <i class="iconfont icon-dark" id="color-toggle-icon"></i>
+            </a>
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+</nav>
+
+  
+
+<div id="banner" class="banner" parallax=true
+     style="background: url('/img/ai-generated-8631634_1280.jpg') no-repeat center center; background-size: cover;">
+  <div class="full-bg-img">
+    <div class="mask flex-center" style="background-color: rgba(0, 0, 0, 0.3)">
+      <div class="banner-text text-center fade-in-up">
+        <div class="h2">
+          
+            <span id="subtitle" data-typed-text="网络部分-epoll分析"></span>
+          
+        </div>
+
+        
+          
+  <div class="mt-3">
+    
+    
+      <span class="post-meta">
+        <i class="iconfont icon-date-fill" aria-hidden="true"></i>
+        <time datetime="2024-11-29 21:58" pubdate>
+          2024年11月29日 晚上
+        </time>
+      </span>
+    
+  </div>
+
+  <div class="mt-1">
+    
+      <span class="post-meta mr-2">
+        <i class="iconfont icon-chart"></i>
+        
+          6.3k 字
+        
+      </span>
+    
+
+    
+      <span class="post-meta mr-2">
+        <i class="iconfont icon-clock-fill"></i>
+        
+        
+        
+          53 分钟
+        
+      </span>
+    
+
+    
+    
+  </div>
+
+
+        
+      </div>
+
+      
+    </div>
+  </div>
+</div>
+
+</div>
+
+  </header>
+
+  <main>
+    
+      
+
+<div class="container-fluid nopadding-x">
+  <div class="row nomargin-x">
+    <div class="side-col d-none d-lg-block col-lg-2">
+      
+
+    </div>
+
+    <div class="col-lg-8 nopadding-x-md">
+      <div class="container nopadding-x-md" id="board-ctn">
+        <div id="board">
+          <article class="post-content mx-auto">
+            <h1 id="seo-header">网络部分-epoll分析</h1>
+            
+            
+              <div class="markdown-body">
+                
+                <h2 id="1、内核如何接收数据"><a href="#1、内核如何接收数据" class="headerlink" title="1、内核如何接收数据"></a>1、内核如何接收数据</h2><p>不同主机通过网卡进行数据的交互，网卡将电磁波转换为模拟信号，再转换为数字信号，再由OSI模型传到应用层，变成人可以识别的数据。信号转换属于通信相关的知识，所以从接收到数字信号开始分析数据的流转。</p>
+<ol>
+<li>首先当数据帧从网线到达网卡上的时候，第一站是网卡的接收队列。网卡在分配给自己的RingBuffer中寻找可用的内存位置，找到后DMA引擎会把数据DMA到网卡之前关联的内存里，这个时候CPU都是无感的。当DMA操作完成以后，网卡会像CPU发起一个硬中断，通知CPU有数据到达。</li>
+<li>Linux在硬中断里只完成简单必要的工作，剩下的大部分的处理都是转交给软中断的，硬中断处理过程真的是非常短。只是记录了一个寄存器，修改了一下下CPU的poll_list，然后发出个软中断。</li>
+<li>软中断和硬中断中调用了同一个函数<code>local_softirq_pending</code>。使用方式不同的是硬中断位置是为了写入标记，这里仅仅只是读取这个标记。</li>
+<li>把数据帧从RingBuffer上取下来，数据包将被送到协议栈中，ip  -&gt;   tcp&#x2F;udp，tcpdump就是在这里获取数据包</li>
+<li>对应的协议栈将数据送往对应的socket，socket通知对应的进程</li>
+</ol>
+<h2 id="2、socket的概念"><a href="#2、socket的概念" class="headerlink" title="2、socket的概念"></a>2、socket的概念</h2><h3 id="2-1、通过socket唤醒各个进程"><a href="#2-1、通过socket唤醒各个进程" class="headerlink" title="2.1、通过socket唤醒各个进程"></a>2.1、通过socket唤醒各个进程</h3><p>用户进程可以通过socket接口与内核进行数据的交互，当一个进程想要listen一个端口时，首先需要创建一个socket绑定这个端口，当这个端口收到数据时，内核先将数据送往对应的协议栈，协议栈主要做2个事情</p>
+<ul>
+<li>保存数据到socket的接收缓冲队列</li>
+<li>唤醒队列上的进程</li>
+</ul>
+<p>拿多进程举例子，如果master监听了某端口后，会创建对应的socket，后续fork时，子进程也共享这个打开的socket，也会”监听”这个socket（当某个进程调用 accept() 时，内核会动态地将该进程注册到 socket 的等待队列中），这就导致socket的等待队列会有多个work进程阻塞在这里，也就是说socket的等待队列存在多个进程。</p>
+<p>​                                                                                                  多进程共享一个socket，但是进程各自有epoll</p>
+<p>在唤醒进程时，如果唤醒所有的进程，就会引发惊群效应。有了epoll后，每个进程都会有自己的epoll，相当于会唤醒所有的epoll ，唤醒本质就是调用epoll注册的回调函数。</p>
+<h3 id="2-2、通过epoll唤醒各个进程"><a href="#2-2、通过epoll唤醒各个进程" class="headerlink" title="2.2、通过epoll唤醒各个进程"></a>2.2、通过epoll唤醒各个进程</h3><p>根据socket等待队列中的元素，找到对应的epoll和epitem，这个回调函数第一时间会把epitem放到epoll对象的就绪链表里面，后续epoll_wait就会从就绪链表读取事件进行处理。</p>
+<p>同样唤醒时可以选择唤醒一个进程还是多个</p>
+<p>​                                                                                                   多进程共享一个epoll</p>
+<h2 id="3、惊群效应"><a href="#3、惊群效应" class="headerlink" title="3、惊群效应"></a>3、惊群效应</h2><p>当讨论到惊群效应，其实要分层次讨论，因为socket和epoll都会有惊群效应。简单来说先fork再epoll_create()，socket的等待队列会存在多个””进程”; 先epoll_create()再fork，epoll的等待队列会有多个进程；</p>
+<h3 id="3-1、socket的惊群效应"><a href="#3-1、socket的惊群效应" class="headerlink" title="3.1、socket的惊群效应"></a>3.1、socket的惊群效应</h3><p>多个进程共享一个socket，即主进程create、bind、listen，然后fork子进程后，多个进程共享一个socket，进行accept的场景，这时候socket的等待队列会存在多个进程。</p>
+<p>当使用epoll时，那就意味着socket的等待队列存在多个epoll。比如nginx的每个work都会有自己的epoll，会把这个socket注册到epoll，相应的注册回调到socket的等待队列，相当于把本进程注册到socket。</p>
+<p>当数据被送到socket时，socket会”唤醒”等待队列的各个进程（其实是调用epoll注册的回调函数），这时候如果唤醒所有的进程，就会引发惊群效应，因为只有一个进程会accept成功。</p>
+<p>解决办法</p>
+<ol>
+<li>使用WQ_FLAG_EXCLUSIVE，在唤醒进程时，不会唤醒所有的进程，只会唤醒一个进程，但是解决不了epoll的场景。（ Linux 2.6 版本中引入）</li>
+<li>使用SO_REUSEPORT，每个进程都有自己的socket，大家不共享socket，由内核负载socket。 （Linux 3.9 版本中引入）</li>
+<li>使用锁，在应用层解决竞争关系，只有拿到锁的进程才能accept，nginx早期就是这么做的</li>
+</ol>
+<p>对于epoll，用户层可以调用的EPOLLEXCLUSIVE，实际使用的就是WQ_FLAG_EXCLUSIVE，使用EPOLLEXCLUSIVE ，添加事件时，epoll 会将对应的 epitem 节点标记为“独占模式” ，带有 EPOLLEXCLUSIVE 的监听者会被加入独占等待队列中，而非普通等待队列。如果有多个监听者，只会唤醒等待队列中第一个处于 EPOLLEXCLUSIVE 模式的监听者。如果没有 EPOLLEXCLUSIVE 模式监听者，唤醒其他普通监听者。（Linux 4.5 版本中引入）</p>
+<h3 id="3-2、epoll的惊群效应"><a href="#3-2、epoll的惊群效应" class="headerlink" title="3.2、epoll的惊群效应"></a>3.2、epoll的惊群效应</h3><p>多进程共享一个epoll，即多个进程共享一个epoll的对象。一个主进程先epoll_create()，然后再fork() 创建多个进程。其实这种模式常见于多线程(其实也不常见吧，应该不会有人会这么设计吧？)，使用pthread_create()创建线程，本质上和fork没区别，实际上进程和进程也没区别，都会调用到 kernel_clone()，区别在于传入的参数不一样，这个函数会根据参数的不同，执行不同的逻辑，结果就是子进程会不会与父进程共享地址等等。</p>
+<p>各个进程调用epoll_wait时，会把自己注册到epoll的等待队列，这会导致epoll的等待队列存在多个进程。</p>
+<p>当socket执行到epoll的回调函数时，epoll首先会把自己的epitem放到就绪链表，然后唤醒等待队列的进程，其实就是执行等待队列元素的回调函数。如果唤醒所有的进程，那就会引发惊群效应。</p>
+<p>解决办法</p>
+<ol>
+<li><p>实际查看linux代码，epoll_wait会默认设置独占模式。用户调用 epoll_wait 进入阻塞状态，如果没有事件，就阻塞自己，把当前进程写入到epoll元素的等待队列中，并设置WQ_FLAG_EXCLUSIVE。那其实就意味着这种场景没有惊群效应。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-type">static</span> <span class="hljs-keyword">inline</span> <span class="hljs-type">void</span><br>__add_wait_queue_exclusive(<span class="hljs-keyword">struct</span> wait_queue_head *wq_head, <span class="hljs-keyword">struct</span> wait_queue_entry *wq_entry)<br>&#123;<br>	wq_entry-&gt;flags |= WQ_FLAG_EXCLUSIVE;  <span class="hljs-comment">//设置WQ_FLAG_EXCLUSIVE</span><br>	__add_wait_queue(wq_head, wq_entry);<br>&#125;<br></code></pre></td></tr></table></figure></li>
+</ol>
+<p>不过一般多线程的架构设计不会这么设计，一般会主线程负责accept，在创建新的socket连接后，交由work线程，work会把这个新的socket加到自己的epoll，然后处理后续的事件。</p>
+<p>不过多进程共享一个epoll绝对是不好的设计。</p>
+<h3 id="3-3、各个属性分析"><a href="#3-3、各个属性分析" class="headerlink" title="3.3、各个属性分析"></a>3.3、各个属性分析</h3><p>1、WQ_FLAG_EXCLUSIVE</p>
+<ol>
+<li>减少惊群效应：<code>WQ_FLAG_EXCLUSIVE</code> 主要用于减少多个进程或进程同时被唤醒的情况，即惊群效应。当多个进程或进程等待同一个socket上的事件时，一个新连接的到来会导致所有阻塞在该socket上的进程或进程都被唤醒，但最终只有一个能处理这个连接，其余的进程或进程会重新进入等待状态。</li>
+<li>内核层面的优化：<code>WQ_FLAG_EXCLUSIVE</code> 通过内核排他性唤醒机制，确保一次只唤醒一个等待队列中的进程，从而减少不必要的上下文切换和性能损耗。</li>
+</ol>
+<p>2、SO_REUSEPORT</p>
+<ol>
+<li>端口复用：<code>SO_REUSEPORT</code> 允许多个进程或进程绑定到同一端口上，每个进程或进程独立处理收到的数据。这在传统的socket编程中是不允许的，因为一个端口只能被一个进程绑定。</li>
+<li>负载均衡：<code>SO_REUSEPORT</code> 不仅允许多个进程绑定到同一端口，还能在内核层面实现负载均衡，将新连接均匀分配给不同的进程或进程，从而提高多核系统的并行处理能力和整体性能。</li>
+</ol>
+<p>区别和联系</p>
+<ul>
+<li>作用层面：<code>WQ_FLAG_EXCLUSIVE</code> 主要是在内核层面减少不必要的进程唤醒，而 <code>SO_REUSEPORT</code> 是在应用层面允许多个进程或进程共享同一个端口，并在内核层面实现负载均衡。</li>
+<li>应用场景：<code>WQ_FLAG_EXCLUSIVE</code> 更适用于单个进程内部的进程间协作，减少进程间的唤醒竞争；而 <code>SO_REUSEPORT</code> 更适用于多个进程间共享端口资源，提高系统的并发处理能力。</li>
+<li>性能优化：<code>WQ_FLAG_EXCLUSIVE</code> 通过减少不必要的进程唤醒来优化性能；<code>SO_REUSEPORT</code> 通过负载均衡和多进程&#x2F;进程处理来提高性能。</li>
+</ul>
+<h3 id="3-4、源码分析"><a href="#3-4、源码分析" class="headerlink" title="3.4、源码分析"></a>3.4、源码分析</h3><p>1、对于socket</p>
+<p>到达协议栈后，最终会调用__wake_up_sync_key唤醒进程</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-type">void</span> __wake_up_sync_key(<span class="hljs-keyword">struct</span> wait_queue_head *wq_head, <span class="hljs-type">unsigned</span> <span class="hljs-type">int</span> mode,<br>			<span class="hljs-type">void</span> *key)<br>&#123;<br>    <span class="hljs-keyword">if</span> (unlikely(!wq_head))<br>        <span class="hljs-keyword">return</span>;<br>    <br>    __wake_up_common_lock(wq_head, mode, <span class="hljs-number">1</span>, WF_SYNC, key);   <span class="hljs-comment">//这里的参数传了1</span><br>&#125;<br></code></pre></td></tr></table></figure>
+
+<p>调用到wake_up_common_lock  -&gt; __wake_up_common，其中nr_exclusive传了1</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-type">static</span> <span class="hljs-type">int</span> __wake_up_common(<span class="hljs-keyword">struct</span> wait_queue_head *wq_head, <span class="hljs-type">unsigned</span> <span class="hljs-type">int</span> mode,<br>			<span class="hljs-type">int</span> nr_exclusive, <span class="hljs-type">int</span> wake_flags, <span class="hljs-type">void</span> *key)<br>&#123;<br>	<span class="hljs-type">wait_queue_entry_t</span> *curr, *next;<br>	lockdep_assert_held(&amp;wq_head-&gt;lock);<br>	curr = list_first_entry(&amp;wq_head-&gt;head, <span class="hljs-type">wait_queue_entry_t</span>, entry);<br><br>	<span class="hljs-comment">// 如果列表为空，则直接返回未使用的独占型进程唤醒名额</span><br>	<span class="hljs-keyword">if</span> (&amp;curr-&gt;entry == &amp;wq_head-&gt;head)<br>		<span class="hljs-keyword">return</span> nr_exclusive;<br><br>	<span class="hljs-comment">// 安全地遍历等待队列</span><br>	list_for_each_entry_safe_from(curr, next, &amp;wq_head-&gt;head, entry) &#123;<br>		<span class="hljs-type">unsigned</span> flags = curr-&gt;flags;<br>		<span class="hljs-type">int</span> ret;<br>		<span class="hljs-comment">// 调用当前队列项的唤醒函数</span><br>		ret = curr-&gt;func(curr, mode, wake_flags, key);<br>		<span class="hljs-comment">// 如果唤醒函数返回负值，则停止遍历</span><br>		<span class="hljs-keyword">if</span> (ret &lt; <span class="hljs-number">0</span>)<br>			<span class="hljs-keyword">break</span>;<br>		<span class="hljs-comment">// 如果唤醒成功且当前队列项是独占型的，则减少剩余的独占型进程唤醒名额</span><br>		<span class="hljs-keyword">if</span> (ret &amp;&amp; (flags &amp; WQ_FLAG_EXCLUSIVE) &amp;&amp; !--nr_exclusive)      <span class="hljs-comment">//关键在这里</span><br>			<span class="hljs-keyword">break</span>;<br>	&#125;<br>	<span class="hljs-comment">// 返回未使用的独占型进程唤醒名额</span><br>	<span class="hljs-keyword">return</span> nr_exclusive;<br>&#125;<br></code></pre></td></tr></table></figure>
+
+<p>重点在于</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-keyword">if</span> (ret &amp;&amp; (flags &amp; WQ_FLAG_EXCLUSIVE) &amp;&amp; !--nr_exclusive)<br>			<span class="hljs-keyword">break</span>;<br></code></pre></td></tr></table></figure>
+
+<ul>
+<li><strong><code>ret</code></strong>: 唤醒操作是否成功。如果为 <code>true</code>，表示有进程被成功唤醒。</li>
+<li><strong><code>flags &amp; WQ_FLAG_EXCLUSIVE</code></strong>: 检查当前队列项是否为独占型。<code>WQ_FLAG_EXCLUSIVE</code> 是一个标志位，表示该队列项是独占型的。</li>
+<li><strong><code>!--nr_exclusive</code></strong>: 减少剩余的独占型进程唤醒名额，并检查是否已经用完所有名额。<code>--nr_exclusive</code> 先将 <code>nr_exclusive</code> 减 1，然后取其值。如果减 1 后 <code>nr_exclusive</code> 变为 0，则 <code>!</code> 运算符将其转换为 <code>true</code>。</li>
+</ul>
+<p>代码逻辑分析</p>
+<ol>
+<li>唤醒成功：<code>ret</code> 为 <code>true</code>，表示有进程被成功唤醒。</li>
+<li>独占型队列项：<code>flags &amp; WQ_FLAG_EXCLUSIVE</code> 为 <code>true</code>，表示当前队列项是独占型的。</li>
+<li>减少独占型唤醒名额：<code>--nr_exclusive</code> 将 <code>nr_exclusive</code> 减 1。</li>
+<li>检查名额是否用完：如果 <code>nr_exclusive</code> 减 1 后变为 0，则 <code>!</code> 运算符将其转换为 <code>true</code>，执行 <code>break</code> 语句，跳出循环。</li>
+</ol>
+<p>通常nr_exclusive为1，也就是唤醒独占型的1个进程。但是会不会发生下面的场景呢？非独占型的进程在前面，独占型的进程在后面</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-comment">/*假设队列为：A（非独占） → B（独占） → C（独占） → D（非独占）</span><br><span class="hljs-comment">任务 A（非独占）：</span><br><span class="hljs-comment"></span><br><span class="hljs-comment">被唤醒（ret = 1），继续遍历。</span><br><span class="hljs-comment">任务 B（独占）：</span><br><span class="hljs-comment"></span><br><span class="hljs-comment">被唤醒（ret = 1），nr_exclusive--。</span><br><span class="hljs-comment">此时 nr_exclusive = 0，触发 break。</span><br><span class="hljs-comment">循环终止，任务 C 和任务 D 不会被处理。*/</span><br></code></pre></td></tr></table></figure>
+
+<p>但是实际linux在添加进程时，会优先把独占型的进程添加到头部，新的独占型总会加到独占型的最后一个，如果没有他就会第一个，例如</p>
+<ul>
+<li>A（非独占）B（独占）C（独占）D（非独占）</li>
+</ul>
+<p>A</p>
+<p>B-&gt;A</p>
+<p>B-&gt;C-&gt;A</p>
+<p>B-&gt;C-&gt;A-&gt;D</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-type">static</span> <span class="hljs-keyword">inline</span> <span class="hljs-type">void</span> __add_wait_queue(<span class="hljs-keyword">struct</span> wait_queue_head *wq_head, <span class="hljs-keyword">struct</span> wait_queue_entry *wq_entry)<br>&#123;<br>    <span class="hljs-comment">// 获取等待队列头部的列表头指针。</span><br>    <span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">list_head</span> *<span class="hljs-title">head</span> =</span> &amp;wq_head-&gt;head;<br>    <span class="hljs-comment">// 定义一个等待队列项指针，用于遍历等待队列。</span><br>    <span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">wait_queue_entry</span> *<span class="hljs-title">wq</span>;</span><br><br>    <span class="hljs-comment">// 遍历等待队列头部中的所有等待队列项。</span><br>    list_for_each_entry(wq, &amp;wq_head-&gt;head, entry) &#123;<br>        <span class="hljs-comment">// 检查当前等待队列项是否具有优先级标志。</span><br>        <span class="hljs-keyword">if</span> (!(wq-&gt;flags &amp; WQ_FLAG_PRIORITY))<br>            <span class="hljs-keyword">break</span>;<br>        <span class="hljs-comment">// 如果当前项有优先级标志，则更新列表头指针为当前项的列表入口。</span><br>        head = &amp;wq-&gt;entry;<br>    &#125;<br>    <span class="hljs-comment">// 将新的等待队列项添加到找到的位置之前。</span><br>    list_add(&amp;wq_entry-&gt;entry, head);<br>&#125;<br></code></pre></td></tr></table></figure>
+
+<p>所以如果有独占型的进程，那确实不会唤醒其他非独占型的进程，WQ_FLAG_PRIORITY和nr_exclusive决定了最终唤醒的结果，让我们分析下4种组合的情况</p>
+<hr>
+<table>
+<thead>
+<tr>
+<th><strong>场景</strong></th>
+<th><strong>队列中是否有 <code>WQ_FLAG_EXCLUSIVE</code></strong></th>
+<th><strong><code>nr_exclusive</code></strong></th>
+<th><strong>结果</strong></th>
+<th><strong>返回值</strong></th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>1</strong> 无独占任务</td>
+<td>否</td>
+<td>1</td>
+<td>所有非独占任务被唤醒；<code>nr_exclusive</code> 不减少</td>
+<td>1</td>
+</tr>
+<tr>
+<td><strong>2</strong> 无独占任务</td>
+<td>否</td>
+<td>0</td>
+<td>所有非独占任务被唤醒；<code>nr_exclusive</code> 不减少</td>
+<td>0</td>
+</tr>
+<tr>
+<td><strong>3</strong> 有独占任务</td>
+<td>是</td>
+<td>1</td>
+<td>唤醒一个独占任务后退出；</td>
+<td>0</td>
+</tr>
+<tr>
+<td><strong>4</strong> 有独占任务</td>
+<td>是</td>
+<td>0</td>
+<td>所有任务（独占和非独占）都被唤醒；<code>nr_exclusive</code> 递减到负数</td>
+<td>负数（最终值）</td>
+</tr>
+</tbody></table>
+<hr>
+<p>其实socket的处理过程中，nr_exclusive一直是1，所以到底唤醒一个进程还是多个，由用户层决定，毕竟WQ_FLAG_EXCLUSIVE是可以设置的。</p>
+<p>2、对于epoll</p>
+<p>epoll在唤醒它的等待队列中的元素时，依次调用了 wake_up_locked() -&gt; __wake_up_locked -&gt; wake_up_common</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-meta">#<span class="hljs-keyword">define</span> wake_up_locked(x)		__wake_up_locked((x), TASK_NORMAL, 1)</span><br><span class="hljs-meta">#<span class="hljs-keyword">define</span> wake_up_all_locked(x)		__wake_up_locked((x), TASK_NORMAL, 0)</span><br></code></pre></td></tr></table></figure>
+
+<p>wake_up_locked() 和 wake_up_all_locked() 都是用于唤醒等待队列中的进程的宏，最后都调用了 wake_up_common，原理也如上述所示。</p>
+<p>但是因为epoll_wait，将进程设置到epoll的等待链表时，会默认设置WQ_FLAG_EXCLUSIVE（要明白，这里区别于socket的等待队列，因为socket设置时并不会默认设置WQ_FLAG_EXCLUSIVE），且nr_exclusive传了1，按照组合的情况，只会唤醒一个独占进程。</p>
+<h2 id="4、epoll实现原理"><a href="#4、epoll实现原理" class="headerlink" title="4、epoll实现原理"></a>4、epoll实现原理</h2><p>epoll主要涉及3个接口</p>
+<ul>
+<li>epoll_create：创建一个 epoll 对象</li>
+<li>epoll_ctl：向 epoll 对象中添加要管理的连接</li>
+<li>epoll_wait：等待其管理的连接上的 IO 事件</li>
+</ul>
+<h3 id="4-1、epoll-create"><a href="#4-1、epoll-create" class="headerlink" title="4.1、epoll_create"></a>4.1、epoll_create</h3><p>在用户进程调用 epoll_create 时，内核会创建一个 struct eventpoll 的内核对象</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">eventpoll</span> &#123;</span><br><br>    <span class="hljs-comment">//sys_epoll_wait用到的等待队列</span><br>    <span class="hljs-type">wait_queue_head_t</span> wq;<br><br>    <span class="hljs-comment">//接收就绪的描述符都会放到这里</span><br>    <span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">list_head</span> <span class="hljs-title">rdllist</span>;</span><br><br>    <span class="hljs-comment">//每个epoll对象中都有一颗红黑树</span><br>    <span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">rb_root</span> <span class="hljs-title">rbr</span>;</span><br><br>    ......<br>&#125;<br></code></pre></td></tr></table></figure>
+
+<p>eventpoll 这个结构体中的几个成员的含义如下：</p>
+<ul>
+<li><strong>wq：</strong> 等待队列链表。软中断数据就绪的时候会通过 wq 来找到阻塞在 epoll 对象上的用户进程。</li>
+<li><strong>rbr：</strong> 一棵红黑树。为了支持对海量连接的高效查找、插入和删除，eventpoll 内部使用了一棵红黑树。通过这棵树来管理用户进程下添加进来的所有 socket 连接。</li>
+<li><strong>rdllist：</strong> 就绪的描述符的链表。当有的连接就绪的时候，内核会把就绪的连接放到 rdllist 链表里。这样应用进程只需要判断链表就能找出就绪进程，而不用去遍历整棵树。</li>
+</ul>
+<h3 id="4-2、epoll-ctl"><a href="#4-2、epoll-ctl" class="headerlink" title="4.2、epoll_ctl"></a>4.2、epoll_ctl</h3><p>使用 epoll_ctl 注册每一个 socket 的时候，内核会做如下三件事情</p>
+<ul>
+<li>1.分配一个红黑树节点对象 epitem，</li>
+<li>2.添加等待事件到 socket 的等待队列中，其回调函数是 ep_poll_callback</li>
+<li>3.将 epitem 插入到 epoll 对象的红黑树里</li>
+</ul>
+<p>对于每一个 socket，调用 epoll_ctl 的时候，都会为之分配一个 epitem。该结构的主要数据如下：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-comment">//file: fs/eventpoll.c</span><br><span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">epitem</span> &#123;</span><br><br>    <span class="hljs-comment">//红黑树节点</span><br>    <span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">rb_node</span> <span class="hljs-title">rbn</span>;</span><br><br>    <span class="hljs-comment">//socket文件描述符信息</span><br>    <span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">epoll_filefd</span> <span class="hljs-title">ffd</span>;</span><br><br>    <span class="hljs-comment">//所归属的 eventpoll 对象</span><br>    <span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">eventpoll</span> *<span class="hljs-title">ep</span>;</span><br><br>    <span class="hljs-comment">//等待队列</span><br>    <span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">list_head</span> <span class="hljs-title">pwqlist</span>;</span><br>&#125;<br></code></pre></td></tr></table></figure>
+
+<p>在创建 epitem 并初始化之后，ep_insert 中第二件事情就是设置 socket 对象上的等待任务队列。并把函数 fs&#x2F;eventpoll.c 文件下的 ep_poll_callback 设置为数据就绪时候的回调函数。</p>
+<p>在这个函数里它获取了 sock 对象下的等待队列列表头 wait_queue_head_t，待会等待队列项就插入这里。这里稍微注意下，是 socket 的等待队列，不是 epoll 对象的</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-comment">//file:include/linux/wait.h</span><br><span class="hljs-type">static</span> <span class="hljs-keyword">inline</span> <span class="hljs-type">void</span> <span class="hljs-title function_">init_waitqueue_func_entry</span><span class="hljs-params">(</span><br><span class="hljs-params">    <span class="hljs-type">wait_queue_t</span> *q, <span class="hljs-type">wait_queue_func_t</span> func)</span><br>&#123;<br>    q-&gt;flags = <span class="hljs-number">0</span>;<br>    q-&gt;private = <span class="hljs-literal">NULL</span>;<br><br>    <span class="hljs-comment">//ep_poll_callback 注册到 wait_queue_t对象上</span><br>    <span class="hljs-comment">//有数据到达的时候调用 q-&gt;func</span><br>    q-&gt;func = func;   <br>&#125;<br></code></pre></td></tr></table></figure>
+
+<p>分配完 epitem 对象后，紧接着并把它插入到红黑树中</p>
+<h3 id="4-3、epoll-wait"><a href="#4-3、epoll-wait" class="headerlink" title="4.3、epoll_wait"></a>4.3、epoll_wait</h3><p>当它被调用时它观察 eventpoll-&gt;rdllist 链表里有没有数据即可。有数据就返回，没有数据就创建一个等待队列项，将其添加到 eventpoll 的等待队列上，然后把自己阻塞掉。</p>
+<p>再回顾一下，这里添加到 eventpoll 的等待队列上时，会附带WQ_FLAG_EXCLUSIVE属性。</p>
+<h3 id="4-4、接收数据"><a href="#4-4、接收数据" class="headerlink" title="4.4、接收数据"></a>4.4、接收数据</h3><p>当网卡的数据交到tcp协议栈时，协议栈会找到对应的socket，然后回调socket等待队列中的”epoll”们，找到了 socket 等待队列项里注册的函数 ep_poll_callback，软中断接着就会调用它。首先把自己的 epitem 添加到 epoll 的就绪队列中。接着它又会查看 eventpoll 对象上的等待队列里是否有等待项（epoll_wait 执行的时候会设置）。</p>
+<p>在 __wake_up_common里， 调用 curr-&gt;func。这里的 func 是在 epoll_wait 是传入的 default_wake_function 函数。在default_wake_function 中找到等待队列项里的进程描述符，然后唤醒之。将epoll_wait进程推入可运行队列，等待内核重新调度进程。然后epoll_wait对应的这个进程重新运行后，就从 schedule 恢复</p>
+<p>当进程醒来后，继续从 epoll_wait 时暂停的代码继续执行。把 rdlist 中就绪的事件返回给用户进程，用户进程对其进行处理。</p>
+<hr>
+<p>我觉得epoll的关键就在于一个进程在运行时可以处理多个socket，而不是每次处理一个socket，然后阻塞睡眠，然后再唤醒，这会导致大量的进程切换。所以快就快在减少了进程切换带来的损耗。</p>
+<p>当然如果没有事件触发，epoll就会阻塞自己，可以说epoll本身是阻塞的，但是socket可以设置为非阻塞，即read 和 write都是非阻塞的。</p>
+<p>epoll 不负责真正的数据读写，它只是告诉用户程序哪些 <code>socket</code> 可以进行读写操作。在真正的异步 I&#x2F;O 模型（如 <code>io_uring</code> 或 POSIX AIO）中，应用程序发起 I&#x2F;O 操作后立即返回，由内核或驱动完成 I&#x2F;O 操作，并通过回调或信号通知操作结果。所以epoll 的工作方式仍然需要应用程序显式调用处理函数，因此是同步的。</p>
+<p>整体属于同步非阻塞。</p>
+<hr>
+<h2 id="5、nginx如何支持IO复用"><a href="#5、nginx如何支持IO复用" class="headerlink" title="5、nginx如何支持IO复用"></a>5、nginx如何支持IO复用</h2><p>nginx本质上属于同步非阻塞，当socket触发事件时，Nginx 自己去处理事件数据，操作和完成整个流程，而不是像真正的异步模型那样由底层系统自动完成。</p>
+<h3 id="5-1、nginx怎么选择IO复用"><a href="#5-1、nginx怎么选择IO复用" class="headerlink" title="5.1、nginx怎么选择IO复用"></a>5.1、nginx怎么选择IO复用</h3><p>nginx在初始化事件模块时，根据系统支持的事件模型（如epoll、devpoll、kqueue、select）选择一个合适的事件模块，支持哪些模型由编译期决定，比如linux支持epoll，windows支持kqueue，因此编译的宏也是不一样的。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-meta">#<span class="hljs-keyword">if</span> (NGX_HAVE_EPOLL) &amp;&amp; !(NGX_TEST_BUILD_EPOLL)</span><br><br>    fd = epoll_create(<span class="hljs-number">100</span>);<br><br>    <span class="hljs-keyword">if</span> (fd != <span class="hljs-number">-1</span>) &#123;<br>        (<span class="hljs-type">void</span>) close(fd);<br>        module = &amp;ngx_epoll_module;<br><br>    &#125; <span class="hljs-keyword">else</span> <span class="hljs-keyword">if</span> (ngx_errno != NGX_ENOSYS) &#123;<br>        module = &amp;ngx_epoll_module;<br>    &#125;<br><br><span class="hljs-meta">#<span class="hljs-keyword">endif</span></span><br><br>...........................<br>    <br>    event_module = module-&gt;ctx;<br></code></pre></td></tr></table></figure>
+
+<p>定义ngx_epoll_module_ctx</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-keyword">typedef</span> <span class="hljs-class"><span class="hljs-keyword">struct</span> &#123;</span><br>    <span class="hljs-type">ngx_str_t</span>              *name;<br><br>    <span class="hljs-type">void</span>                 *(*create_conf)(<span class="hljs-type">ngx_cycle_t</span> *cycle);<br>    <span class="hljs-type">char</span>                 *(*init_conf)(<span class="hljs-type">ngx_cycle_t</span> *cycle, <span class="hljs-type">void</span> *conf);<br><br>    <span class="hljs-type">ngx_event_actions_t</span>     actions;   <span class="hljs-comment">//定义的方法集合</span><br>&#125; <span class="hljs-type">ngx_event_module_t</span>;<br><br><span class="hljs-type">static</span> <span class="hljs-type">ngx_event_module_t</span>  ngx_epoll_module_ctx = &#123;<br>    &amp;epoll_name,<br>    ngx_epoll_create_conf,               <span class="hljs-comment">/* create configuration */</span><br>    ngx_epoll_init_conf,                 <span class="hljs-comment">/* init configuration */</span><br><br>    &#123;<br>        ngx_epoll_add_event,             <span class="hljs-comment">/* add an event */</span><br>        ngx_epoll_del_event,             <span class="hljs-comment">/* delete an event */</span><br>        ngx_epoll_add_event,             <span class="hljs-comment">/* enable an event */</span><br>        ngx_epoll_del_event,             <span class="hljs-comment">/* disable an event */</span><br>        ngx_epoll_add_connection,        <span class="hljs-comment">/* add an connection */</span><br>        ngx_epoll_del_connection,        <span class="hljs-comment">/* delete an connection */</span><br><span class="hljs-meta">#<span class="hljs-keyword">if</span> (NGX_HAVE_EVENTFD)</span><br>        ngx_epoll_notify,                <span class="hljs-comment">/* trigger a notify */</span><br><span class="hljs-meta">#<span class="hljs-keyword">else</span></span><br>        <span class="hljs-literal">NULL</span>,                            <span class="hljs-comment">/* trigger a notify */</span><br><span class="hljs-meta">#<span class="hljs-keyword">endif</span></span><br>        ngx_epoll_process_events,        <span class="hljs-comment">/* process the events */</span><br>        ngx_epoll_init,                  <span class="hljs-comment">/* init the events */</span><br>        ngx_epoll_done,                  <span class="hljs-comment">/* done the events */</span><br>    &#125;<br>&#125;;<br></code></pre></td></tr></table></figure>
+
+<p>epoll初始化时</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><code class="hljs c">ngx_event_actions = ngx_epoll_module_ctx.actions;<br></code></pre></td></tr></table></figure>
+
+<p>设置事件模块的回调为epoll的函数，如果使用的是poll，那将会是poll的方法</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-meta">#<span class="hljs-keyword">define</span> ngx_process_events   ngx_event_actions.process_events</span><br><span class="hljs-meta">#<span class="hljs-keyword">define</span> ngx_done_events      ngx_event_actions.done</span><br><br><span class="hljs-meta">#<span class="hljs-keyword">define</span> ngx_add_event        ngx_event_actions.add</span><br><span class="hljs-meta">#<span class="hljs-keyword">define</span> ngx_del_event        ngx_event_actions.del</span><br><span class="hljs-meta">#<span class="hljs-keyword">define</span> ngx_add_conn         ngx_event_actions.add_conn</span><br><span class="hljs-meta">#<span class="hljs-keyword">define</span> ngx_del_conn         ngx_event_actions.del_conn</span><br><br><span class="hljs-meta">#<span class="hljs-keyword">define</span> ngx_notify           ngx_event_actions.notify</span><br></code></pre></td></tr></table></figure>
+
+<h3 id="5-2、SO-REUSEPORT属性"><a href="#5-2、SO-REUSEPORT属性" class="headerlink" title="5.2、SO_REUSEPORT属性"></a>5.2、SO_REUSEPORT属性</h3><p>首先在进程初始化解析配置时，会判断一个端口是否开启了reuseport，如果开启了，套接字 <code>nls[n]</code> 的 <code>reuseport</code> 标志为真</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-meta">#<span class="hljs-keyword">if</span> (NGX_HAVE_REUSEPORT)</span><br>                    <span class="hljs-keyword">if</span> (nls[n].reuseport &amp;&amp; !ls[i].reuseport) &#123;<br>                        nls[n].add_reuseport = <span class="hljs-number">1</span>;  <span class="hljs-comment">//</span><br>                    &#125;<br><span class="hljs-meta">#<span class="hljs-keyword">endif</span></span><br></code></pre></td></tr></table></figure>
+
+<p>每个进程初始化event模块配置时</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-meta">#<span class="hljs-keyword">if</span> (NGX_HAVE_REUSEPORT)</span><br><br>    <span class="hljs-comment">// 获取核心配置结构体</span><br>    ccf = (<span class="hljs-type">ngx_core_conf_t</span> *) ngx_get_conf(cycle-&gt;conf_ctx, ngx_core_module);<br><br>    <span class="hljs-comment">// 如果不是测试配置且master进程存在，则进行端口复用处理</span><br>    <span class="hljs-keyword">if</span> (!ngx_test_config &amp;&amp; ccf-&gt;master) &#123;<br><br>        <span class="hljs-comment">// 获取监听套接字数组</span><br>        ls = cycle-&gt;listening.elts;<br>        <span class="hljs-comment">// 遍历所有监听套接字</span><br>        <span class="hljs-keyword">for</span> (i = <span class="hljs-number">0</span>; i &lt; cycle-&gt;listening.nelts; i++) &#123;<br><br>            <span class="hljs-comment">// 跳过未启用reuseport或worker不为0的监听套接字</span><br>            <span class="hljs-keyword">if</span> (!ls[i].reuseport || ls[i].worker != <span class="hljs-number">0</span>) &#123;<br>                <span class="hljs-keyword">continue</span>;<br>            &#125;<br><br>            <span class="hljs-comment">// 克隆监听套接字，如果克隆失败，则返回配置错误</span><br>            <span class="hljs-keyword">if</span> (ngx_clone_listening(cycle, &amp;ls[i]) != NGX_OK) &#123;<br>                <span class="hljs-keyword">return</span> NGX_CONF_ERROR;<br>            &#125;<br><br>            <span class="hljs-comment">// 克隆操作可能更改cycle-&gt;listening.elts指针，因此重新获取指针</span><br>            ls = cycle-&gt;listening.elts;<br>        &#125;<br>    &#125;<br><br><span class="hljs-meta">#<span class="hljs-keyword">endif</span></span><br></code></pre></td></tr></table></figure>
+
+<p>关键是ngx_clone_listening：克隆当前监听套接字，为每个 <code>worker</code> 进程创建一个独立的监听实例，并设置其worker属性</p>
+<ul>
+<li>每个克隆的监听套接字会分配给一个 <code>worker</code>，并具有独立的监听队列。</li>
+<li>这样每个进程能独立处理自己的客户端连接，避免锁争用，提高性能。</li>
+</ul>
+<p>每个进程初始化时，确保每个工作进程（worker）只保留属于自己的监听套接字，关闭那些不属于自己的套接字</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-meta">#<span class="hljs-keyword">if</span> (NGX_HAVE_REUSEPORT)</span><br>        <span class="hljs-comment">// 检查当前监听套接字是否启用了reuseport选项并且不是当前工作进程的</span><br>        <span class="hljs-keyword">if</span> (ls[i].reuseport &amp;&amp; ls[i].worker != ngx_worker) &#123;<br>            <span class="hljs-comment">// 如果是，记录调试信息并关闭该套接字</span><br>            ngx_log_debug2(NGX_LOG_DEBUG_CORE, cycle-&gt;<span class="hljs-built_in">log</span>, <span class="hljs-number">0</span>,<br>                           <span class="hljs-string">&quot;closing unused fd:%d listening on %V&quot;</span>,<br>                           ls[i].fd, &amp;ls[i].addr_text);<br><br>            <span class="hljs-comment">// 关闭套接字并检查是否成功</span><br>            <span class="hljs-keyword">if</span> (ngx_close_socket(ls[i].fd) == <span class="hljs-number">-1</span>) &#123;<br>                <span class="hljs-comment">// 如果关闭失败，记录错误信息</span><br>                ngx_log_error(NGX_LOG_EMERG, cycle-&gt;<span class="hljs-built_in">log</span>, ngx_socket_errno,<br>                              ngx_close_socket_n <span class="hljs-string">&quot; %V failed&quot;</span>,<br>                              &amp;ls[i].addr_text);<br>            &#125;<br><br>            <span class="hljs-comment">// 将套接字描述符设置为无效值</span><br>            ls[i].fd = (<span class="hljs-type">ngx_socket_t</span>) <span class="hljs-number">-1</span>;<br><br>            <span class="hljs-comment">// 继续处理下一个监听套接字</span><br>            <span class="hljs-keyword">continue</span>;<br>        &#125;<br><span class="hljs-meta">#<span class="hljs-keyword">endif</span></span><br></code></pre></td></tr></table></figure>
+
+<p>最后看一下将epoll注册到socket内核中，ngx_add_event  -&gt;  epoll_ctl</p>
+<ul>
+<li>开启了reuseport时，将本进程的epoll注册到socket</li>
+<li>开启了EPOLLEXCLUSIVE时，将本进程的epoll独占式的注册到socket</li>
+<li>如果什么都没开启，则将本进程的epoll注册到socket</li>
+</ul>
+<p>其中<br>c &#x3D; rev-&gt;-&gt;data</p>
+<p>c-&gt;fd就是本进程监听的socket，在上面已经设置过了</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-comment">// 如果定义了NGX_HAVE_REUSEPORT宏</span><br><span class="hljs-meta">#<span class="hljs-keyword">if</span> (NGX_HAVE_REUSEPORT)</span><br><br>        <span class="hljs-comment">// 如果当前监听套接字启用了reuseport选项</span><br>        <span class="hljs-keyword">if</span> (ls[i].reuseport) &#123;<br>            <span class="hljs-comment">// 尝试为读事件添加epoll事件，如果不成功则返回错误</span><br>            <span class="hljs-keyword">if</span> (ngx_add_event(rev, NGX_READ_EVENT, <span class="hljs-number">0</span>) == NGX_ERROR) &#123;<br>                <span class="hljs-keyword">return</span> NGX_ERROR;<br>            &#125;<br><br>            <span class="hljs-comment">// 继续处理下一个监听套接字</span><br>            <span class="hljs-keyword">continue</span>;<br>        &#125;<br><br><span class="hljs-meta">#<span class="hljs-keyword">endif</span></span><br><br>        <span class="hljs-comment">// 如果使用了accept mutex机制，则跳过添加epoll事件</span><br>        <span class="hljs-keyword">if</span> (ngx_use_accept_mutex) &#123;<br>            <span class="hljs-keyword">continue</span>;<br>        &#125;<br><br><span class="hljs-comment">// 如果定义了NGX_HAVE_EPOLLEXCLUSIVE宏</span><br><span class="hljs-meta">#<span class="hljs-keyword">if</span> (NGX_HAVE_EPOLLEXCLUSIVE)</span><br><br>        <span class="hljs-comment">// 如果使用了epoll事件模型且配置了多个工作进程</span><br>        <span class="hljs-keyword">if</span> ((ngx_event_flags &amp; NGX_USE_EPOLL_EVENT)<br>            &amp;&amp; ccf-&gt;worker_processes &gt; <span class="hljs-number">1</span>)<br>        &#123;<br>            <span class="hljs-comment">// 启用exclusive accept模式</span><br>            ngx_use_exclusive_accept = <span class="hljs-number">1</span>;<br><br>            <span class="hljs-comment">// 尝试以独占方式为读事件添加epoll事件，如果不成功则返回错误</span><br>            <span class="hljs-keyword">if</span> (ngx_add_event(rev, NGX_READ_EVENT, NGX_EXCLUSIVE_EVENT)<br>                == NGX_ERROR)<br>            &#123;<br>                <span class="hljs-keyword">return</span> NGX_ERROR;<br>            &#125;<br><br>            <span class="hljs-comment">// 继续处理下一个监听套接字</span><br>            <span class="hljs-keyword">continue</span>;<br>        &#125;<br><br><span class="hljs-meta">#<span class="hljs-keyword">endif</span></span><br><br>        <span class="hljs-comment">// 如果上述条件都不满足，尝试为读事件添加epoll事件，如果不成功则返回错误</span><br>        <span class="hljs-keyword">if</span> (ngx_add_event(rev, NGX_READ_EVENT, <span class="hljs-number">0</span>) == NGX_ERROR) &#123;<br>            <span class="hljs-keyword">return</span> NGX_ERROR;<br>        &#125;<br></code></pre></td></tr></table></figure>
+
+<p>最后再看下不使用reuseport，常规使用锁的情况</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-comment">// 检查是否需要使用接受互斥锁</span><br><span class="hljs-keyword">if</span> (ngx_use_accept_mutex) &#123;<br>    <span class="hljs-comment">// 如果接受互斥锁被禁用，则递减禁用计数器</span><br>    <span class="hljs-keyword">if</span> (ngx_accept_disabled &gt; <span class="hljs-number">0</span>) &#123;<br>        ngx_accept_disabled--;<br><br>    &#125; <span class="hljs-keyword">else</span> &#123;<br>        <span class="hljs-comment">// 尝试获取接受互斥锁</span><br>        <span class="hljs-keyword">if</span> (ngx_trylock_accept_mutex(cycle) == NGX_ERROR) &#123;<br>            <span class="hljs-keyword">return</span>;<br>        &#125;<br><br>        <span class="hljs-comment">// 根据互斥锁是否已被持有来决定事件的处理方式</span><br>        <span class="hljs-keyword">if</span> (ngx_accept_mutex_held) &#123;<br>            flags |= NGX_POST_EVENTS;<br><br>        &#125; <span class="hljs-keyword">else</span> &#123;<br>            <span class="hljs-comment">// 调整定时器以适应接受互斥锁的延迟</span><br>            <span class="hljs-keyword">if</span> (timer == NGX_TIMER_INFINITE<br>                || timer &gt; ngx_accept_mutex_delay)<br>            &#123;<br>                timer = ngx_accept_mutex_delay;<br>            &#125;<br>        &#125;<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+
+<h3 id="5-3、实际操作"><a href="#5-3、实际操作" class="headerlink" title="5.3、实际操作"></a>5.3、实际操作</h3><p>nginx开启了1个master，2个work，且开启了reuseport</p>
+<p><img src="/img/%E5%BC%80%E5%90%AFreuseport.png" srcset="/img/loading.gif" lazyload alt="开启reuseport"></p>
+<p>来看下没有启用reuseport的情况</p>
+<p><img src="/img/%E5%A4%9A%E8%BF%9B%E7%A8%8B%E7%9B%91%E5%90%AC%E4%B8%80%E4%B8%AAsocket.png" srcset="/img/loading.gif" lazyload alt="多进程监听一个socket"></p>
+<p>可以明显看到开启reuseport后，不同的work会监听自己的socket。而根据实际的性能测试来看，开启reuseport可以明显提升性能。</p>
+<h2 id="参考"><a href="#参考" class="headerlink" title="参考"></a>参考</h2><p>参考自：《深入理解linux网络》第三章<br>linux版本：6.12<br>nginx代码：1.27</p>
+<p>随便聊聊：有段时间没有看书了，看书的时候顺便记录一下，仅此而已，别觉得我太八股，其实有不少客户的架构会问网关的架构、性能之类，懂这一块其实就很唬人。再一个这是一些基础的东西，看懂了其实每个网关都一样，只是语言层面的区别吧。不过感觉后来的学习有点功利性了，总想着直接上来给几个项目做点pr，但是急而不得，没有认真花时间研究，自己也不是什么天才，所以今年在开源这块确实没什么收获，一个都没，太挫败。确实该想想后续怎么计划一下了，断断续续看了几个网关，感觉研究了，其实太表面，也没有实际的使用场景，实际0进度。</p>
+<p>工作几年，代码确实没写多少，有点焦虑，，看了不少，有点纸上谈兵的意思，就是解决问题的能力还算可以，真的是熟能生巧。github的大牛太多，点开看的话，确实更加焦虑了，起点低一些，也只能慢慢进步了吧。</p>
+<p>感觉工作也到了快乐到痛苦的转变期了，有点无聊，过于重复机械性，没有一点刺激。准备研究下envoy，看看什么时候能入门吧。</p>
+<p>就这。</p>
+
+                
+              </div>
+            
+            <hr/>
+            <div>
+              <div class="post-metas my-3">
+  
+  
+    <div class="post-meta">
+      <i class="iconfont icon-tags"></i>
+      
+        <a href="/tags/nginx%EF%BC%8Csocket/" class="print-no-link">#nginx，socket</a>
+      
+        <a href="/tags/epoll/" class="print-no-link">#epoll</a>
+      
+    </div>
+  
+</div>
+
+
+              
+  
+
+  <div class="license-box my-3">
+    <div class="license-title">
+      <div>网络部分-epoll分析</div>
+      <div>https://zjfans.github.io/2024/11/29/网络IO/</div>
+    </div>
+    <div class="license-meta">
+      
+        <div class="license-meta-item">
+          <div>作者</div>
+          <div>张三疯</div>
+        </div>
+      
+      
+        <div class="license-meta-item license-meta-date">
+          <div>发布于</div>
+          <div>2024年11月29日</div>
+        </div>
+      
+      
+      
+        <div class="license-meta-item">
+          <div>许可协议</div>
+          <div>
+            
+              
+              
+                <a class="print-no-link" target="_blank" href="https://creativecommons.org/licenses/by/4.0/">
+                  <span class="hint--top hint--rounded" aria-label="BY - 署名">
+                    <i class="iconfont icon-by"></i>
+                  </span>
+                </a>
+              
+            
+          </div>
+        </div>
+      
+    </div>
+    <div class="license-icon iconfont"></div>
+  </div>
+
+
+
+              
+                <div class="post-prevnext my-3">
+                  <article class="post-prev col-6">
+                    
+                    
+                  </article>
+                  <article class="post-next col-6">
+                    
+                    
+                      <a href="/2024/08/25/Problems%20with%20ingress-nginx%20using%20limit_except/" title="ingress-nginx使用limit_except的问题">
+                        <span class="hidden-mobile">ingress-nginx使用limit_except的问题</span>
+                        <span class="visible-mobile">下一篇</span>
+                        <i class="iconfont icon-arrowright"></i>
+                      </a>
+                    
+                  </article>
+                </div>
+              
+            </div>
+
+            
+  
+  
+    <article id="comments" lazyload>
+      
+    <div id="giscus" class="giscus"></div>
+    <script type="text/javascript">
+      Fluid.utils.loadComments('#giscus', function() {
+        var options = {"repo":"ZJfans/ZJfans.github.io","repo-id":"R_kgDOLYg-XA","category":"Announcements","category-id":"DIC_kwDOLYg-XM4Ceo1C","theme-light":"light","theme-dark":"dark","mapping":"pathname","reactions-enabled":1,"emit-metadata":0,"input-position":"bottom","lang":"zh-CN"};
+        var attributes = {};
+        for (let option in options) {
+          if (!option.startsWith('theme-')) {
+            var key = option.startsWith('data-') ? option : 'data-' + option;
+            attributes[key] = options[option];
+          }
+        }
+        var light = 'light';
+        var dark = 'dark';
+        window.GiscusThemeLight = light;
+        window.GiscusThemeDark = dark;
+        attributes['data-theme'] = document.documentElement.getAttribute('data-user-color-scheme') === 'dark' ? dark : light;
+        for (let attribute in attributes) {
+          var value = attributes[attribute];
+          if (value === undefined || value === null || value === '') {
+            delete attributes[attribute];
+          }
+        }
+        var s = document.createElement('script');
+        s.setAttribute('src', 'https://giscus.app/client.js');
+        s.setAttribute('crossorigin', 'anonymous');
+        for (let attribute in attributes) {
+          s.setAttribute(attribute, attributes[attribute]);
+        }
+        var ss = document.getElementsByTagName('script');
+        var e = ss.length > 0 ? ss[ss.length - 1] : document.head || document.documentElement;
+        e.parentNode.insertBefore(s, e.nextSibling);
+      });
+    </script>
+    <noscript>Please enable JavaScript to view the comments</noscript>
+
+
+    </article>
+  
+
+
+          </article>
+        </div>
+      </div>
+    </div>
+
+    <div class="side-col d-none d-lg-block col-lg-2">
+      
+  <aside class="sidebar" style="margin-left: -1rem">
+    <div id="toc">
+  <p class="toc-header">
+    <i class="iconfont icon-list"></i>
+    <span>目录</span>
+  </p>
+  <div class="toc-body" id="toc-body"></div>
+</div>
+
+
+
+  </aside>
+
+
+    </div>
+  </div>
+</div>
+
+
+
+
+
+  
+
+
+
+  
+
+
+
+  
+
+
+
+  
+
+
+
+  
+
+
+
+
+
+
+
+    
+
+    
+      <a id="scroll-top-button" aria-label="TOP" href="#" role="button">
+        <i class="iconfont icon-arrowup" aria-hidden="true"></i>
+      </a>
+    
+
+    
+      <div class="modal fade" id="modalSearch" tabindex="-1" role="dialog" aria-labelledby="ModalLabel"
+     aria-hidden="true">
+  <div class="modal-dialog modal-dialog-scrollable modal-lg" role="document">
+    <div class="modal-content">
+      <div class="modal-header text-center">
+        <h4 class="modal-title w-100 font-weight-bold">搜索</h4>
+        <button type="button" id="local-search-close" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body mx-3">
+        <div class="md-form mb-5">
+          <input type="text" id="local-search-input" class="form-control validate">
+          <label data-error="x" data-success="v" for="local-search-input">关键词</label>
+        </div>
+        <div class="list-group" id="local-search-result"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+    
+
+    
+  </main>
+
+  <footer>
+    <div class="footer-inner">
+  
+    <div class="footer-content">
+       <a href="https://hexo.io" target="_blank" rel="nofollow noopener"><span>Hexo</span></a> <i class="iconfont icon-love"></i> <a href="https://github.com/fluid-dev/hexo-theme-fluid" target="_blank" rel="nofollow noopener"><span>Fluid</span></a> 
+    </div>
+  
+  
+    <div class="statistics">
+  
+  
+
+  
+    
+      <span id="busuanzi_container_site_pv" style="display: none">
+        总访问量 
+        <span id="busuanzi_value_site_pv"></span>
+         次
+      </span>
+    
+    
+      <span id="busuanzi_container_site_uv" style="display: none">
+        总访客数 
+        <span id="busuanzi_value_site_uv"></span>
+         人
+      </span>
+    
+    
+  
+</div>
+
+  
+  
+  
+</div>
+
+  </footer>
+
+  <!-- Scripts -->
+  
+  <script  src="https://lib.baomitu.com/nprogress/0.2.0/nprogress.min.js" ></script>
+  <link  rel="stylesheet" href="https://lib.baomitu.com/nprogress/0.2.0/nprogress.min.css" />
+
+  <script>
+    NProgress.configure({"showSpinner":false,"trickleSpeed":100})
+    NProgress.start()
+    window.addEventListener('load', function() {
+      NProgress.done();
+    })
+  </script>
+
+
+<script  src="https://lib.baomitu.com/jquery/3.6.4/jquery.min.js" ></script>
+<script  src="https://lib.baomitu.com/twitter-bootstrap/4.6.1/js/bootstrap.min.js" ></script>
+<script  src="/js/events.js" ></script>
+<script  src="/js/plugins.js" ></script>
+
+
+  <script  src="https://lib.baomitu.com/typed.js/2.0.12/typed.min.js" ></script>
+  <script>
+    (function (window, document) {
+      var typing = Fluid.plugins.typing;
+      var subtitle = document.getElementById('subtitle');
+      if (!subtitle || !typing) {
+        return;
+      }
+      var text = subtitle.getAttribute('data-typed-text');
+      
+        typing(text);
+      
+    })(window, document);
+  </script>
+
+
+
+
+  
+    <script  src="/js/img-lazyload.js" ></script>
+  
+
+
+
+
+  
+<script>
+  Fluid.utils.createScript('https://lib.baomitu.com/tocbot/4.20.1/tocbot.min.js', function() {
+    var toc = jQuery('#toc');
+    if (toc.length === 0 || !window.tocbot) { return; }
+    var boardCtn = jQuery('#board-ctn');
+    var boardTop = boardCtn.offset().top;
+
+    window.tocbot.init(Object.assign({
+      tocSelector     : '#toc-body',
+      contentSelector : '.markdown-body',
+      linkClass       : 'tocbot-link',
+      activeLinkClass : 'tocbot-active-link',
+      listClass       : 'tocbot-list',
+      isCollapsedClass: 'tocbot-is-collapsed',
+      collapsibleClass: 'tocbot-is-collapsible',
+      scrollSmooth    : true,
+      includeTitleTags: true,
+      headingsOffset  : -boardTop,
+    }, CONFIG.toc));
+    if (toc.find('.toc-list-item').length > 0) {
+      toc.css('visibility', 'visible');
+    }
+
+    Fluid.events.registerRefreshCallback(function() {
+      if ('tocbot' in window) {
+        tocbot.refresh();
+        var toc = jQuery('#toc');
+        if (toc.length === 0 || !tocbot) {
+          return;
+        }
+        if (toc.find('.toc-list-item').length > 0) {
+          toc.css('visibility', 'visible');
+        }
+      }
+    });
+  });
+</script>
+
+
+  <script src=https://lib.baomitu.com/clipboard.js/2.0.11/clipboard.min.js></script>
+
+  <script>Fluid.plugins.codeWidget();</script>
+
+
+  
+<script>
+  Fluid.utils.createScript('https://lib.baomitu.com/anchor-js/4.3.1/anchor.min.js', function() {
+    window.anchors.options = {
+      placement: CONFIG.anchorjs.placement,
+      visible  : CONFIG.anchorjs.visible
+    };
+    if (CONFIG.anchorjs.icon) {
+      window.anchors.options.icon = CONFIG.anchorjs.icon;
+    }
+    var el = (CONFIG.anchorjs.element || 'h1,h2,h3,h4,h5,h6').split(',');
+    var res = [];
+    for (var item of el) {
+      res.push('.markdown-body > ' + item.trim());
+    }
+    if (CONFIG.anchorjs.placement === 'left') {
+      window.anchors.options.class = 'anchorjs-link-left';
+    }
+    window.anchors.add(res.join(', '));
+
+    Fluid.events.registerRefreshCallback(function() {
+      if ('anchors' in window) {
+        anchors.removeAll();
+        var el = (CONFIG.anchorjs.element || 'h1,h2,h3,h4,h5,h6').split(',');
+        var res = [];
+        for (var item of el) {
+          res.push('.markdown-body > ' + item.trim());
+        }
+        if (CONFIG.anchorjs.placement === 'left') {
+          anchors.options.class = 'anchorjs-link-left';
+        }
+        anchors.add(res.join(', '));
+      }
+    });
+  });
+</script>
+
+
+  
+<script>
+  Fluid.utils.createScript('https://lib.baomitu.com/fancybox/3.5.7/jquery.fancybox.min.js', function() {
+    Fluid.plugins.fancyBox();
+  });
+</script>
+
+
+  <script>Fluid.plugins.imageCaption();</script>
+
+  <script  src="/js/local-search.js" ></script>
+
+  <script defer src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js" ></script>
+
+
+
+
+
+<!-- 主题的启动项，将它保持在最底部 -->
+<!-- the boot of the theme, keep it at the bottom -->
+<script  src="/js/boot.js" ></script>
+
+
+  
+
+  <noscript>
+    <div class="noscript-warning">博客在允许 JavaScript 运行的环境下浏览效果更佳</div>
+  </noscript>
+</body>
+</html>

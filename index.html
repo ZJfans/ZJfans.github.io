@@ -256,6 +256,48 @@
     <article class="col-12 col-md-12 mx-auto index-info">
       <h2 class="index-header">
         
+        <a href="/2024/11/29/%E7%BD%91%E7%BB%9CIO/" target="_self">
+          网络部分-epoll分析
+        </a>
+      </h2>
+
+      
+      <a class="index-excerpt index-excerpt__noimg" href="/2024/11/29/%E7%BD%91%E7%BB%9CIO/" target="_self">
+        <div>
+          1、内核如何接收数据不同主机通过网卡进行数据的交互，网卡将电磁波转换为模拟信号，再转换为数字信号，再由OSI模型传到应用层，变成人可以识别的数据。信号转换属于通信相关的知识，所以从接收到数字信号开始分析数据的流转。  首先当数据帧从网线到达网卡上的时候，第一站是网卡的接收队列。网卡在分配给自己的RingBuffer中寻找可用的内存位置，找到后DMA引擎会把数据DMA到网卡之前关联的内存里，这个时候
+        </div>
+      </a>
+
+      <div class="index-btm post-metas">
+        
+          <div class="post-meta mr-3">
+            <i class="iconfont icon-date"></i>
+            <time datetime="2024-11-29 21:58" pubdate>
+              2024-11-29
+            </time>
+          </div>
+        
+        
+        
+          <div class="post-meta">
+            <i class="iconfont icon-tags"></i>
+            
+              <a href="/tags/nginx%EF%BC%8Csocket/">#nginx，socket</a>
+            
+              <a href="/tags/epoll/">#epoll</a>
+            
+          </div>
+        
+      </div>
+    </article>
+  </div>
+
+  <div class="row mx-auto index-card">
+    
+    
+    <article class="col-12 col-md-12 mx-auto index-info">
+      <h2 class="index-header">
+        
         <a href="/2024/08/25/Problems%20with%20ingress-nginx%20using%20limit_except/" target="_self">
           ingress-nginx使用limit_except的问题
         </a>
@@ -623,48 +665,6 @@
               <a href="/tags/%E5%8D%8F%E5%95%86%E7%BC%93%E5%AD%98/">#协商缓存</a>
             
               <a href="/tags/no-cache-nginx/">#no cache nginx</a>
-            
-          </div>
-        
-      </div>
-    </article>
-  </div>
-
-  <div class="row mx-auto index-card">
-    
-    
-    <article class="col-12 col-md-12 mx-auto index-info">
-      <h2 class="index-header">
-        
-        <a href="/2024/04/12/ssl%E5%8F%8C%E5%90%91%E9%AA%8C%E8%AF%81%E2%80%94%20ssl_verify_depth%E7%9A%84%E4%BD%9C%E7%94%A8/" target="_self">
-          ssl双向验证— ssl_verify_depth的作用
-        </a>
-      </h2>
-
-      
-      <a class="index-excerpt index-excerpt__noimg" href="/2024/04/12/ssl%E5%8F%8C%E5%90%91%E9%AA%8C%E8%AF%81%E2%80%94%20ssl_verify_depth%E7%9A%84%E4%BD%9C%E7%94%A8/" target="_self">
-        <div>
-          前言关键词：根证书、中间证书、验证深度、ssl_verify_depth 根证书与中间证书在进行ssl验证前，服务器一般会向CA申请公钥证书，即将自己的公开密钥交给CA，CA用自己的私钥向服务器的公钥数字签名并返回公钥证书，在数字签名的过程中，CA一般会用根目录颁发证书，这种证书叫做根证书。 问题是，万一根目录颁发错了证书，或者需要撤销根，这时所有根目录颁发的证书都将失效，这样代价是巨大的，因此出
-        </div>
-      </a>
-
-      <div class="index-btm post-metas">
-        
-          <div class="post-meta mr-3">
-            <i class="iconfont icon-date"></i>
-            <time datetime="2024-04-12 09:41" pubdate>
-              2024-04-12
-            </time>
-          </div>
-        
-        
-        
-          <div class="post-meta">
-            <i class="iconfont icon-tags"></i>
-            
-              <a href="/tags/ssl/">#ssl</a>
-            
-              <a href="/tags/%E8%AF%81%E4%B9%A6/">#证书</a>
             
           </div>
         
