@@ -1,0 +1,1142 @@
+
+
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-color-scheme=auto>
+
+
+
+<head>
+  <meta charset="UTF-8">
+  <link rel="apple-touch-icon" sizes="76x76" href="/img/fluid.png">
+  <link rel="icon" href="/img/fluid.png">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, shrink-to-fit=no">
+  <meta http-equiv="x-ua-compatible" content="ie=edge">
+  
+  <meta name="theme-color" content="#2f4154">
+  <meta name="author" content="张三疯">
+  <meta name="keywords" content="nginx,openresty,网关,HTTP/HTTPS,Websocket">
+  
+    <meta name="description" content="1、内核支持io_uring最近发现linux新增了2个补丁，关于支持io_uring，事实上linux在5.1版本就引入了io_uring，有点好奇这次的补丁是实现什么功能 https:&#x2F;&#x2F;git.kernel.org&#x2F;pub&#x2F;scm&#x2F;linux&#x2F;kernel&#x2F;git&#x2F;netdev&#x2F;net-next.git&#x2F;commit&#x2F;?id&#x3D;71f0dd5a3293d75d26d405ffbaedfdda4">
+<meta property="og:type" content="article">
+<meta property="og:title" content="linux对于io_uring的应用">
+<meta property="og:url" content="https://zjfans.github.io/2025/02/12/linux%E5%AF%B9%E4%BA%8Eio_uring%E7%9A%84%E5%BA%94%E7%94%A8/index.html">
+<meta property="og:site_name" content="ZJfans Blog">
+<meta property="og:description" content="1、内核支持io_uring最近发现linux新增了2个补丁，关于支持io_uring，事实上linux在5.1版本就引入了io_uring，有点好奇这次的补丁是实现什么功能 https:&#x2F;&#x2F;git.kernel.org&#x2F;pub&#x2F;scm&#x2F;linux&#x2F;kernel&#x2F;git&#x2F;netdev&#x2F;net-next.git&#x2F;commit&#x2F;?id&#x3D;71f0dd5a3293d75d26d405ffbaedfdda4">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2025-02-12T11:51:02.180Z">
+<meta property="article:modified_time" content="2025-02-12T11:50:25.666Z">
+<meta property="article:author" content="张三疯">
+<meta property="article:tag" content="linux，io_uring">
+<meta property="article:tag" content="epoll">
+<meta name="twitter:card" content="summary_large_image">
+  
+  
+    <meta name="referrer" content="no-referrer-when-downgrade">
+  
+  
+  <title>linux对于io_uring的应用 - ZJfans Blog</title>
+
+  <link  rel="stylesheet" href="https://lib.baomitu.com/twitter-bootstrap/4.6.1/css/bootstrap.min.css" />
+
+
+
+  <link  rel="stylesheet" href="https://lib.baomitu.com/github-markdown-css/4.0.0/github-markdown.min.css" />
+
+  <link  rel="stylesheet" href="https://lib.baomitu.com/hint.css/2.7.0/hint.min.css" />
+
+  <link  rel="stylesheet" href="https://lib.baomitu.com/fancybox/3.5.7/jquery.fancybox.min.css" />
+
+
+
+<!-- 主题依赖的图标库，不要自行修改 -->
+<!-- Do not modify the link that theme dependent icons -->
+
+<link rel="stylesheet" href="//at.alicdn.com/t/font_1749284_hj8rtnfg7um.css">
+
+
+
+<link rel="stylesheet" href="//at.alicdn.com/t/font_1736178_lbnruvf0jn.css">
+
+
+<link  rel="stylesheet" href="/css/main.css" />
+
+
+  <link id="highlight-css" rel="stylesheet" href="/css/highlight.css" />
+  
+    <link id="highlight-css-dark" rel="stylesheet" href="/css/highlight-dark.css" />
+  
+
+
+
+
+  <script id="fluid-configs">
+    var Fluid = window.Fluid || {};
+    Fluid.ctx = Object.assign({}, Fluid.ctx)
+    var CONFIG = {"hostname":"zjfans.github.io","root":"/","version":"1.9.7","typing":{"enable":true,"typeSpeed":70,"cursorChar":"_","loop":false,"scope":[]},"anchorjs":{"enable":true,"element":"h1,h2,h3,h4,h5,h6","placement":"left","visible":"hover","icon":""},"progressbar":{"enable":true,"height_px":3,"color":"#29d","options":{"showSpinner":false,"trickleSpeed":100}},"code_language":{"enable":true,"default":"TEXT"},"copy_btn":true,"image_caption":{"enable":true},"image_zoom":{"enable":true,"img_url_replace":["",""]},"toc":{"enable":true,"placement":"right","headingSelector":"h1,h2,h3,h4,h5,h6","collapseDepth":0},"lazyload":{"enable":true,"loading_img":"/img/loading.gif","onlypost":false,"offset_factor":2},"web_analytics":{"enable":true,"follow_dnt":true,"baidu":null,"google":{"measurement_id":null},"tencent":{"sid":null,"cid":null},"woyaola":null,"cnzz":null,"leancloud":{"app_id":null,"app_key":null,"server_url":null,"path":"window.location.pathname","ignore_local":false}},"search_path":"/local-search.xml","include_content_in_search":true};
+
+    if (CONFIG.web_analytics.follow_dnt) {
+      var dntVal = navigator.doNotTrack || window.doNotTrack || navigator.msDoNotTrack;
+      Fluid.ctx.dnt = dntVal && (dntVal.startsWith('1') || dntVal.startsWith('yes') || dntVal.startsWith('on'));
+    }
+  </script>
+  <script  src="/js/utils.js" ></script>
+  <script  src="/js/color-schema.js" ></script>
+  
+
+  
+
+  
+    <!-- Google tag (gtag.js) -->
+    <script async>
+      if (!Fluid.ctx.dnt) {
+        Fluid.utils.createScript("https://www.googletagmanager.com/gtag/js?id=", function() {
+          window.dataLayer = window.dataLayer || [];
+          function gtag() {
+            dataLayer.push(arguments);
+          }
+          gtag('js', new Date());
+          gtag('config', '');
+        });
+      }
+    </script>
+  
+
+  
+
+  
+
+  
+
+  
+
+
+
+  
+<meta name="generator" content="Hexo 6.3.0"></head>
+
+
+<body>
+  
+
+  <header>
+    
+
+<div class="header-inner" style="height: 70vh;">
+  <nav id="navbar" class="navbar fixed-top  navbar-expand-lg navbar-dark scrolling-navbar">
+  <div class="container">
+    <a class="navbar-brand" href="/">
+      <strong>ZJfans Blog</strong>
+    </a>
+
+    <button id="navbar-toggler-btn" class="navbar-toggler" type="button" data-toggle="collapse"
+            data-target="#navbarSupportedContent"
+            aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+      <div class="animated-icon"><span></span><span></span><span></span></div>
+    </button>
+
+    <!-- Collapsible content -->
+    <div class="collapse navbar-collapse" id="navbarSupportedContent">
+      <ul class="navbar-nav ml-auto text-center">
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/" target="_self">
+                <i class="iconfont icon-home-fill"></i>
+                <span>首页</span>
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/archives/" target="_self">
+                <i class="iconfont icon-archive-fill"></i>
+                <span>归档</span>
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/categories/" target="_self">
+                <i class="iconfont icon-category-fill"></i>
+                <span>分类</span>
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/tags/" target="_self">
+                <i class="iconfont icon-tags-fill"></i>
+                <span>标签</span>
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/about/" target="_self">
+                <i class="iconfont icon-user-fill"></i>
+                <span>关于</span>
+              </a>
+            </li>
+          
+        
+        
+          <li class="nav-item" id="search-btn">
+            <a class="nav-link" target="_self" href="javascript:;" data-toggle="modal" data-target="#modalSearch" aria-label="Search">
+              <i class="iconfont icon-search"></i>
+            </a>
+          </li>
+          
+        
+        
+          <li class="nav-item" id="color-toggle-btn">
+            <a class="nav-link" target="_self" href="javascript:;" aria-label="Color Toggle">
+              <i class="iconfont icon-dark" id="color-toggle-icon"></i>
+            </a>
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+</nav>
+
+  
+
+<div id="banner" class="banner" parallax=true
+     style="background: url('/img/theodor-lundqvist-WHhbYArwFt8-unsplash.jpg') no-repeat center center; background-size: cover;">
+  <div class="full-bg-img">
+    <div class="mask flex-center" style="background-color: rgba(0, 0, 0, 0.3)">
+      <div class="banner-text text-center fade-in-up">
+        <div class="h2">
+          
+            <span id="subtitle" data-typed-text="linux对于io_uring的应用"></span>
+          
+        </div>
+
+        
+          
+  <div class="mt-3">
+    
+    
+      <span class="post-meta">
+        <i class="iconfont icon-date-fill" aria-hidden="true"></i>
+        <time datetime="2025-02-12 19:51" pubdate>
+          2025年2月12日 晚上
+        </time>
+      </span>
+    
+  </div>
+
+  <div class="mt-1">
+    
+      <span class="post-meta mr-2">
+        <i class="iconfont icon-chart"></i>
+        
+          3.4k 字
+        
+      </span>
+    
+
+    
+      <span class="post-meta mr-2">
+        <i class="iconfont icon-clock-fill"></i>
+        
+        
+        
+          29 分钟
+        
+      </span>
+    
+
+    
+    
+  </div>
+
+
+        
+      </div>
+
+      
+    </div>
+  </div>
+</div>
+
+</div>
+
+  </header>
+
+  <main>
+    
+      
+
+<div class="container-fluid nopadding-x">
+  <div class="row nomargin-x">
+    <div class="side-col d-none d-lg-block col-lg-2">
+      
+
+    </div>
+
+    <div class="col-lg-8 nopadding-x-md">
+      <div class="container nopadding-x-md" id="board-ctn">
+        <div id="board">
+          <article class="post-content mx-auto">
+            <h1 id="seo-header">linux对于io_uring的应用</h1>
+            
+            
+              <div class="markdown-body">
+                
+                <h2 id="1、内核支持io-uring"><a href="#1、内核支持io-uring" class="headerlink" title="1、内核支持io_uring"></a>1、内核支持io_uring</h2><p>最近发现linux新增了2个补丁，关于支持io_uring，事实上linux在5.1版本就引入了io_uring，有点好奇这次的补丁是实现什么功能</p>
+<p><a target="_blank" rel="noopener" href="https://git.kernel.org/pub/scm/linux/kernel/git/netdev/net-next.git/commit/?id=71f0dd5a3293d75d26d405ffbaedfdda4836af32">https://git.kernel.org/pub/scm/linux/kernel/git/netdev/net-next.git/commit/?id=71f0dd5a3293d75d26d405ffbaedfdda4836af32</a></p>
+<p><a target="_blank" rel="noopener" href="https://git.kernel.org/pub/scm/linux/kernel/git/netdev/net-next.git/commit/?id=dcc0113acd3b77cca3c7e805fffd8ea4c5a675b3">netdev: add io_uring memory provider info - kernel&#x2F;git&#x2F;netdev&#x2F;net-next.git - Netdev Group’s -next networking tree</a></p>
+<p>看了一下文档，这个补丁通过 <code>io_uring</code> 提供了零拷贝接收功能，使得硬件接收到的数据可以直接传输到用户空间，避免了内核和用户空间之间的数据拷贝。具体是内核会预先配置了一个页面池，这些页面是由用户空间应用程序申请的，且当硬件接收到数据时，会通过 <strong>DMA</strong> 直接将数据传输到这些用户空间页面中，比起常规的数据接收，减少了一次数据拷贝。不过有个问题是，不知道会不会影响tcpdump抓包，毕竟整个流转发生了变化。</p>
+<h2 id="2、liburing"><a href="#2、liburing" class="headerlink" title="2、liburing"></a>2、liburing</h2><p>目前流行的是liburing这个库，对整个io_uring做了一层封装，github有3k+⭐</p>
+<h2 id="3、nginx支持io-uring"><a href="#3、nginx支持io-uring" class="headerlink" title="3、nginx支持io_uring"></a>3、nginx支持io_uring</h2><p>nginx目前还没有支持io_uring，io_uring会对nginx的性能有一些提升，尤其是零拷贝，大数据量下肯定会有很大的提升</p>
+<h2 id="4、内核补丁"><a href="#4、内核补丁" class="headerlink" title="4、内核补丁"></a>4、内核补丁</h2><h3 id="4-1、描述"><a href="#4-1、描述" class="headerlink" title="4.1、描述"></a>4.1、描述</h3><p>io_uring 零拷贝 rx</p>
+<p>此补丁集包含新 io_uring 请求所需的 net&#x2F; 补丁，该请求将零拷贝 rx 实现到用户空间页面，从而消除了内核到用户的复制。</p>
+<p>我们配置了一个页面池，驱动程序使用它来填充 hw rx 队列以分发用户页面而不是内核页面。因此，任何最终到达此 hw rx 队列的数据都将直接通过 dma 进入用户空间内存，而无需通过内核内存反弹。从套接字中“读取”数据反而成为一种_通知_机制，内核会告诉用户空间数据在哪里。总体方法类似于 devmem TCP 提案。</p>
+<p>这依赖于 hw 标头&#x2F;数据拆分、流控制和 RSS，以确保数据包标头保留在内核内存中，并且只有所需的流才会到达配置为零拷贝的 hw rx 队列。配置它超出了此补丁集的范围。</p>
+<p>我们与 devmem TCP 共享 netdev 核心基础设施。主要区别在于 io_uring 用于 uAPI，并且所有对象的生命周期都绑定到 io_uring 实例。使用新的 io_uring 请求类型“读取”数据。完成后，数据通过新的共享重新填充队列返回。零拷贝页面池直接从此重新填充队列重新填充 hw rx 队列。当然，这些数据缓冲区的生命周期由 io_uring 而不是网络堆栈管理，具有不同的引用计数规则。</p>
+<p>此补丁集是添加基本零拷贝支持的第一步。我们将使用新功能迭代扩展它，例如动态分配的零拷贝区域、THP 支持、dmabuf 支持、改进的复制回退、一般优化等。</p>
+<p>在 netdev 支持方面，我们首先针对 Broadcom bnxt。补丁不包括在内，因为 Taehee Yoo 已经在 [1] 中发送了一个更全面的补丁集来添加支持。 Google gve 应该已经支持此功能，<br>而 Mellanox mlx5 支持仍在进行中，有待驱动程序更改。</p>
+<p>&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D; Performance &#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;</p>
+<p>注意：与 epoll + TCP_ZEROCOPY_RECEIVE 的比较尚未完成。</p>
+<p>测试设置：</p>
+<ul>
+<li>AMD EPYC 9454</li>
+<li>Broadcom BCM957508 200G</li>
+<li>内核 v6.11 基础 [2]</li>
+<li>liburing fork [3]</li>
+<li>kperf fork [4]</li>
+<li>4K MTU</li>
+<li>单个 TCP 流</li>
+</ul>
+<p>将应用程序线程 + net rx softirq 固定到 <em>不同</em> 核心：</p>
+<p>使用应用程序线程 + net rx softirq 固定到 <em>不同</em> 核心：</p>
+<table>
+<thead>
+<tr>
+<th>epoll</th>
+<th>io_uring</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>82.2 Gbps</td>
+<td>116.2 Gbps (+41%)</td>
+</tr>
+</tbody></table>
+<p>固定到 <em>相同</em> 核心：</p>
+<table>
+<thead>
+<tr>
+<th>epoll</th>
+<th>io_uring</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>62.6 Gbps</td>
+<td>80.9 Gbps (+29%)</td>
+</tr>
+</tbody></table>
+<p><a target="_blank" rel="noopener" href="https://git.kernel.org/pub/scm/linux/kernel/git/netdev/net-next.git/diff/?id=71f0dd5a3293d75d26d405ffbaedfdda4836af32">Diffstat</a></p>
+<table>
+<thead>
+<tr>
+<th>-rw-r–r–</th>
+<th><a target="_blank" rel="noopener" href="https://git.kernel.org/pub/scm/linux/kernel/git/netdev/net-next.git/diff/Documentation/netlink/specs/netdev.yaml?id=71f0dd5a3293d75d26d405ffbaedfdda4836af32">Documentation&#x2F;netlink&#x2F;specs&#x2F;netdev.yaml</a></th>
+<th>15</th>
+<th></th>
+</tr>
+</thead>
+<tbody><tr>
+<td>-rw-r–r–</td>
+<td><a target="_blank" rel="noopener" href="https://git.kernel.org/pub/scm/linux/kernel/git/netdev/net-next.git/diff/include/net/netmem.h?id=71f0dd5a3293d75d26d405ffbaedfdda4836af32">include&#x2F;net&#x2F;netmem.h</a></td>
+<td>21</td>
+<td></td>
+</tr>
+<tr>
+<td>-rw-r–r–</td>
+<td><a target="_blank" rel="noopener" href="https://git.kernel.org/pub/scm/linux/kernel/git/netdev/net-next.git/diff/include/net/page_pool/memory_provider.h?id=71f0dd5a3293d75d26d405ffbaedfdda4836af32">include&#x2F;net&#x2F;page_pool&#x2F;memory_provider.h</a></td>
+<td>45</td>
+<td></td>
+</tr>
+<tr>
+<td>-rw-r–r–</td>
+<td><a target="_blank" rel="noopener" href="https://git.kernel.org/pub/scm/linux/kernel/git/netdev/net-next.git/diff/include/net/page_pool/types.h?id=71f0dd5a3293d75d26d405ffbaedfdda4836af32">include&#x2F;net&#x2F;page_pool&#x2F;types.h</a></td>
+<td>4</td>
+<td></td>
+</tr>
+<tr>
+<td>-rw-r–r–</td>
+<td><a target="_blank" rel="noopener" href="https://git.kernel.org/pub/scm/linux/kernel/git/netdev/net-next.git/diff/include/uapi/linux/netdev.h?id=71f0dd5a3293d75d26d405ffbaedfdda4836af32">include&#x2F;uapi&#x2F;linux&#x2F;netdev.h</a></td>
+<td>7</td>
+<td></td>
+</tr>
+<tr>
+<td>-rw-r–r–</td>
+<td><a target="_blank" rel="noopener" href="https://git.kernel.org/pub/scm/linux/kernel/git/netdev/net-next.git/diff/net/core/dev.c?id=71f0dd5a3293d75d26d405ffbaedfdda4836af32">net&#x2F;core&#x2F;dev.c</a></td>
+<td>16</td>
+<td></td>
+</tr>
+<tr>
+<td>-rw-r–r–</td>
+<td><a target="_blank" rel="noopener" href="https://git.kernel.org/pub/scm/linux/kernel/git/netdev/net-next.git/diff/net/core/devmem.c?id=71f0dd5a3293d75d26d405ffbaedfdda4836af32">net&#x2F;core&#x2F;devmem.c</a></td>
+<td>93</td>
+<td></td>
+</tr>
+<tr>
+<td>-rw-r–r–</td>
+<td><a target="_blank" rel="noopener" href="https://git.kernel.org/pub/scm/linux/kernel/git/netdev/net-next.git/diff/net/core/devmem.h?id=71f0dd5a3293d75d26d405ffbaedfdda4836af32">net&#x2F;core&#x2F;devmem.h</a></td>
+<td>49</td>
+<td></td>
+</tr>
+<tr>
+<td>-rw-r–r–</td>
+<td><a target="_blank" rel="noopener" href="https://git.kernel.org/pub/scm/linux/kernel/git/netdev/net-next.git/diff/net/core/netdev-genl.c?id=71f0dd5a3293d75d26d405ffbaedfdda4836af32">net&#x2F;core&#x2F;netdev-genl.c</a></td>
+<td>11</td>
+<td></td>
+</tr>
+<tr>
+<td>-rw-r–r–</td>
+<td><a target="_blank" rel="noopener" href="https://git.kernel.org/pub/scm/linux/kernel/git/netdev/net-next.git/diff/net/core/netdev_rx_queue.c?id=71f0dd5a3293d75d26d405ffbaedfdda4836af32">net&#x2F;core&#x2F;netdev_rx_queue.c</a></td>
+<td>69</td>
+<td></td>
+</tr>
+<tr>
+<td>-rw-r–r–</td>
+<td><a target="_blank" rel="noopener" href="https://git.kernel.org/pub/scm/linux/kernel/git/netdev/net-next.git/diff/net/core/page_pool.c?id=71f0dd5a3293d75d26d405ffbaedfdda4836af32">net&#x2F;core&#x2F;page_pool.c</a></td>
+<td>51</td>
+<td></td>
+</tr>
+<tr>
+<td>-rw-r–r–</td>
+<td><a target="_blank" rel="noopener" href="https://git.kernel.org/pub/scm/linux/kernel/git/netdev/net-next.git/diff/net/core/page_pool_user.c?id=71f0dd5a3293d75d26d405ffbaedfdda4836af32">net&#x2F;core&#x2F;page_pool_user.c</a></td>
+<td>7</td>
+<td></td>
+</tr>
+<tr>
+<td>-rw-r–r–</td>
+<td><a target="_blank" rel="noopener" href="https://git.kernel.org/pub/scm/linux/kernel/git/netdev/net-next.git/diff/net/ipv4/tcp.c?id=71f0dd5a3293d75d26d405ffbaedfdda4836af32">net&#x2F;ipv4&#x2F;tcp.c</a></td>
+<td>7</td>
+<td></td>
+</tr>
+<tr>
+<td>-rw-r–r–</td>
+<td><a target="_blank" rel="noopener" href="https://git.kernel.org/pub/scm/linux/kernel/git/netdev/net-next.git/diff/tools/include/uapi/linux/netdev.h?id=71f0dd5a3293d75d26d405ffbaedfdda4836af32">tools&#x2F;include&#x2F;uapi&#x2F;linux&#x2F;netdev.h</a></td>
+<td>7</td>
+<td></td>
+</tr>
+</tbody></table>
+<h3 id="4-2、代码解析"><a href="#4-2、代码解析" class="headerlink" title="4.2、代码解析"></a>4.2、代码解析</h3><p>一、Netlink 及 UAPI 接口扩展</p>
+<p>1.1 修改 Documentation&#x2F;netlink&#x2F;specs&#x2F;netdev.yaml</p>
+<ul>
+<li>新增属性集 “io-uring-provider-info”<ul>
+<li>在属性集定义中增加了一个名为 <code>io-uring-provider-info</code> 的空属性集，作为嵌套属性使用的模板。</li>
+</ul>
+</li>
+<li>扩展 page-pool 属性<ul>
+<li>在 page-pool 的属性中，除了原来的 <code>dmabuf</code> 属性，还增加了一个嵌套属性 <code>io-uring</code>，其嵌套属性集就是前面定义的 <code>io-uring-provider-info</code>。</li>
+<li>同样，在队列属性中也增加了 <code>io-uring</code> 字段，这样用户空间通过 Netlink 获取设备信息时，可以看到和配置 io_uring 内存提供者相关的信息。</li>
+</ul>
+</li>
+</ul>
+<p>1.2 修改 UAPI 头文件 tools&#x2F;include&#x2F;uapi&#x2F;linux&#x2F;netdev.h 和 include&#x2F;uapi&#x2F;linux&#x2F;netdev.h</p>
+<ul>
+<li>新增枚举值<ul>
+<li>分别为 page-pool 和队列属性增加了 <code>NETDEV_A_PAGE_POOL_IO_URING</code> 与 <code>NETDEV_A_QUEUE_IO_URING</code> 枚举值，以及 <code>NETDEV_A_IO_URING_PROVIDER_INFO_MAX</code>。</li>
+<li>这些修改使得内核在通过 Netlink 通知用户空间时，能传递与 io_uring 内存提供相关的配置信息。</li>
+</ul>
+</li>
+</ul>
+<hr>
+<p>二、内存向量与页面池相关改动</p>
+<p>2.1 修改 include&#x2F;net&#x2F;netmem.h</p>
+<ul>
+<li>更新 net_iov 结构体<ul>
+<li>原来 <code>net_iov</code> 结构体中 <code>owner</code> 字段由指向 <code>dmabuf_genpool_chunk_owner</code> 修改为指向新定义的 <code>net_iov_area</code>。</li>
+</ul>
+</li>
+<li>新增结构体 net_iov_area<ul>
+<li>用于管理一片区域内的 net_iov 数组，包含：<ul>
+<li><code>niovs</code>：指向 net_iov 数组的指针；</li>
+<li><code>num_niovs</code>：数组中 net_iov 的数量；</li>
+<li><code>base_virtual</code>：表示该区域在 dma-buf 中起始的虚拟偏移。</li>
+</ul>
+</li>
+</ul>
+</li>
+<li>新增内联辅助函数<ul>
+<li><code>net_iov_owner()</code> 用于获取 net_iov 的所属区域；</li>
+<li><code>net_iov_idx()</code> 用于计算 net_iov 在所属区域内的索引。</li>
+</ul>
+</li>
+</ul>
+<p>2.2 修改 include&#x2F;net&#x2F;page_pool&#x2F;types.h</p>
+<ul>
+<li>整合内存提供者接口<ul>
+<li>在 <code>pp_memory_provider_params</code> 结构中增加了一个指向 <code>memory_provider_ops</code> 的指针。</li>
+<li>同时，在 <code>struct page_pool</code> 中也新增了同样的指针。这样页面池在初始化、分配、释放、销毁等操作时，可以通过统一的接口调用不同内存提供者的实现。</li>
+</ul>
+</li>
+</ul>
+<p>2.3 新增内存提供者接口定义（include&#x2F;net&#x2F;page_pool&#x2F;memory_provider.h）</p>
+<ul>
+<li>定义结构体 memory_provider_ops<ul>
+<li>包含一系列函数指针，主要操作包括：<ul>
+<li><code>alloc_netmems</code>：分配 netmem；</li>
+<li><code>release_netmem</code>：释放 netmem；</li>
+<li><code>init</code> 和 <code>destroy</code>：初始化和销毁内存提供者；</li>
+<li><code>nl_fill</code>：用于通过 Netlink 填充内存提供者相关的信息；</li>
+<li><code>uninstall</code>：在设备注销时卸载内存提供者。</li>
+</ul>
+</li>
+</ul>
+</li>
+<li>辅助函数声明<ul>
+<li>声明了设置 DMA 地址、关联&#x2F;解除页面池与 net_iov 的函数，以及打开&#x2F;关闭 RX 队列时的接口。</li>
+</ul>
+</li>
+</ul>
+<hr>
+<p>三、核心代码中的内存提供者支持</p>
+<p>3.1 在 net&#x2F;core&#x2F;dev.c 中</p>
+<ul>
+<li>新增 dev_memory_provider_uninstall()<ul>
+<li>遍历设备的所有 RX 队列，检查各队列是否已绑定内存提供者（通过 mp_ops 字段），如果绑定，则调用对应的 uninstall 回调函数。</li>
+</ul>
+</li>
+<li>修改注销流程<ul>
+<li>在注销设备时，用 dev_memory_provider_uninstall() 替代了原来的 dev_dmabuf_uninstall，确保所有内存提供者资源得到正确清理。</li>
+</ul>
+</li>
+</ul>
+<p>3.2 在 net&#x2F;core&#x2F;devmem.c 中</p>
+<ul>
+<li>调整对 net_iov 的访问<ul>
+<li>将原来直接使用 <code>owner-&gt;niovs</code> 改为通过 <code>owner-&gt;area.niovs</code>，并更新 <code>num_niovs</code> 为 <code>owner-&gt;area.num_niovs</code>。</li>
+</ul>
+</li>
+<li>更新绑定与释放逻辑<ul>
+<li>修改了函数 net_devmem_bind_dmabuf_to_queue、net_devmem_alloc_dmabuf、net_devmem_free_dmabuf 等，使其使用新结构来处理内存提供者信息。</li>
+</ul>
+</li>
+<li>实现 dmabuf_devmem_ops<ul>
+<li>定义了一个静态的 <code>memory_provider_ops</code> 结构 dmabuf_devmem_ops，将初始化、销毁、分配、释放、Netlink 填充（nl_fill）和卸载函数关联起来，为 dmabuf 类型的内存提供者提供实现。</li>
+</ul>
+</li>
+</ul>
+<p>3.3 在 net&#x2F;core&#x2F;netdev-genl.c 中</p>
+<ul>
+<li>调整 Netlink 填充逻辑<ul>
+<li>修改 netdev_nl_queue_fill_one 函数，使其在处理 RX 队列时，如果队列绑定了内存提供者，则调用内存提供者的 nl_fill() 回调来填充 Netlink 消息。</li>
+</ul>
+</li>
+</ul>
+<p>3.4 在 net&#x2F;core&#x2F;netdev_rx_queue.c 中</p>
+<ul>
+<li>新增 RX 队列内存提供者管理函数<ul>
+<li>实现了 net_mp_open_rxq 和 net_mp_close_rxq 接口，用于在特定 RX 队列上绑定和解绑内存提供者。这包括对 mp_params 的设置和队列重启的调用。</li>
+</ul>
+</li>
+</ul>
+<p>3.5 在 net&#x2F;core&#x2F;page_pool.c 与 page_pool_user.c 中</p>
+<ul>
+<li>整合内存提供者接口<ul>
+<li>在页面池初始化、分配、释放和销毁过程中，均通过检查 pool-&gt;mp_ops 是否设置，来决定是否调用内存提供者的相关接口。</li>
+<li>新增辅助函数 net_mp_niov_set_dma_addr、net_mp_niov_set_page_pool、net_mp_niov_clear_page_pool，分别用于设置 DMA 地址、关联和解除页面池与 net_iov 之间的关系。</li>
+</ul>
+</li>
+<li>更新 Netlink 填充逻辑<ul>
+<li>在 page_pool_nl_fill 函数中，调用内存提供者的 nl_fill() 回调，以将相关信息填入消息。</li>
+</ul>
+</li>
+</ul>
+<p>3.6 在 net&#x2F;ipv4&#x2F;tcp.c 中</p>
+<ul>
+<li>修改 TCP 接收逻辑<ul>
+<li>在 tcp_recvmsg_dmabuf 函数中，将原来调用 net_iov_binding_id 改为 net_devmem_iov_binding_id，以使用新接口获取绑定 ID，从而适配新的内存提供者机制。</li>
+</ul>
+</li>
+</ul>
+<hr>
+<p>四、总结</p>
+<p>这份补丁的主要改动可以总结为以下几点：</p>
+<ol>
+<li><strong>扩展 Netlink&#x2F;UAPI 接口</strong><ul>
+<li>在文档和 UAPI 头文件中新增了 io_uring 内存提供者相关的属性，方便用户空间配置与监控。</li>
+</ul>
+</li>
+<li><strong>引入统一的内存提供者接口</strong><ul>
+<li>通过新增 memory_provider_ops 接口，统一管理各种内存提供者（如 dmabuf 和未来的 io_uring 零拷贝方案）的分配、释放、初始化、销毁和卸载等操作。</li>
+<li>修改页面池（page pool）和 netmem 相关数据结构，引入 net_iov_area 来代替原来的直接指针，并新增辅助函数。</li>
+</ul>
+</li>
+<li><strong>修改核心网络代码以支持新接口</strong><ul>
+<li>在网络设备注销、RX 队列绑定、页面池操作和 TCP 接收逻辑中，均调用新的内存提供者接口，从而实现对内存提供者（包括未来的 io_uring 零拷贝）的统一支持。</li>
+</ul>
+</li>
+</ol>
+<p>总体来说，这套改动为内核网络子系统引入了更灵活、统一的内存管理机制，为未来支持基于 io_uring 的零拷贝网络接收铺平了道路。通过这一改动，数据在网络接收过程中可以直接从硬件 DMA 到用户空间内存（零拷贝），减少了不必要的数据复制，从而在高吞吐量、低延迟的场景下提升系统性能。</p>
+<h2 id="5、接口"><a href="#5、接口" class="headerlink" title="5、接口"></a>5、接口</h2><ol>
+<li><code>io_uring_setup</code></li>
+</ol>
+<ul>
+<li><p><strong>原型</strong>：<code>int io_uring_setup(unsigned entries, struct io_uring_params *p);</code></p>
+</li>
+<li><p><strong>作用</strong>：创建一个 <code>io_uring</code> 实例，初始化提交队列和完成队列，并返回一个文件描述符（<code>fd</code>）来与内核进行后续的 I&#x2F;O 操作。</p>
+</li>
+<li><p>参数</p>
+<p>：</p>
+<ul>
+<li><code>entries</code>：提交队列和完成队列的条目数。</li>
+<li><code>p</code>：一个 <code>io_uring_params</code> 结构体，用于传递内核参数（如队列大小、特性标志等）。</li>
+</ul>
+</li>
+<li><p><strong>返回值</strong>：成功返回一个文件描述符，用于后续操作；失败返回负数错误码。</p>
+</li>
+</ul>
+<ol start="2">
+<li><code>io_uring_enter</code></li>
+</ol>
+<ul>
+<li><p><strong>原型</strong>：<code>int io_uring_enter(int fd, unsigned to_submit, unsigned min_complete, unsigned flags, sigset_t *sig);</code></p>
+</li>
+<li><p><strong>作用</strong>：提交 I&#x2F;O 请求并等待完成。它将请求从用户空间提交到内核，并在必要时等待 I&#x2F;O 请求的完成。</p>
+</li>
+<li><p>参数</p>
+<p>：</p>
+<ul>
+<li><code>fd</code>：<code>io_uring</code> 实例的文件描述符。</li>
+<li><code>to_submit</code>：提交的 I&#x2F;O 请求数量。</li>
+<li><code>min_complete</code>：最小完成队列条目数，表示内核完成的请求数量。</li>
+<li><code>flags</code>：标志位，控制操作的行为。</li>
+<li><code>sig</code>：信号掩码，指定在等待时要屏蔽的信号。</li>
+</ul>
+</li>
+<li><p><strong>返回值</strong>：成功返回已提交的条目数；失败返回负数错误码。</p>
+</li>
+</ul>
+<ol start="3">
+<li><code>io_uring_register</code></li>
+</ol>
+<ul>
+<li><p><strong>原型</strong>：<code>int io_uring_register(int fd, unsigned opcode, void *arg, unsigned arg2);</code></p>
+</li>
+<li><p><strong>作用</strong>：用于注册一些额外的内核行为，例如注册文件描述符、缓冲区等。此函数允许用户为 <code>io_uring</code> 实例注册一些资源，供后续 I&#x2F;O 操作使用。</p>
+</li>
+<li><p>参数</p>
+<p>：</p>
+<ul>
+<li><code>fd</code>：<code>io_uring</code> 实例的文件描述符。</li>
+<li><code>opcode</code>：操作码，表示要执行的注册操作类型（如注册文件描述符、缓冲区等）。</li>
+<li><code>arg</code>：操作所需的参数（例如文件描述符、缓冲区地址等）。</li>
+<li><code>arg2</code>：额外的参数（根据操作类型不同而不同）。</li>
+</ul>
+</li>
+<li><p><strong>返回值</strong>：成功时返回 0，失败时返回负数错误码。</p>
+</li>
+</ul>
+<ol start="4">
+<li><code>io_uring_unregister</code></li>
+</ol>
+<ul>
+<li><p><strong>原型</strong>：<code>int io_uring_unregister(int fd, unsigned opcode);</code></p>
+</li>
+<li><p><strong>作用</strong>：撤销之前注册的资源，例如取消对某些文件描述符的注册。</p>
+</li>
+<li><p>参数</p>
+<p>：</p>
+<ul>
+<li><code>fd</code>：<code>io_uring</code> 实例的文件描述符。</li>
+<li><code>opcode</code>：操作码，指定要撤销的注册资源。</li>
+</ul>
+</li>
+<li><p><strong>返回值</strong>：成功时返回 0，失败时返回负数错误码。</p>
+</li>
+</ul>
+<ol start="5">
+<li><code>io_uring_peek_cqe</code></li>
+</ol>
+<ul>
+<li><p><strong>原型</strong>：<code>int io_uring_peek_cqe(int fd, struct io_uring_cqe **cqe);</code></p>
+</li>
+<li><p><strong>作用</strong>：检查完成队列中是否有完成的 I&#x2F;O 请求，而不阻塞。如果有，返回一个指向完成队列条目的指针。</p>
+</li>
+<li><p>参数</p>
+<p>：</p>
+<ul>
+<li><code>fd</code>：<code>io_uring</code> 实例的文件描述符。</li>
+<li><code>cqe</code>：指向指针的指针，用于返回完成队列条目。</li>
+</ul>
+</li>
+<li><p><strong>返回值</strong>：成功时返回 0，失败时返回负数错误码。</p>
+</li>
+</ul>
+<ol start="6">
+<li><code>io_uring_wait_cqe</code></li>
+</ol>
+<ul>
+<li><p><strong>原型</strong>：<code>int io_uring_wait_cqe(int fd, struct io_uring_cqe **cqe);</code></p>
+</li>
+<li><p><strong>作用</strong>：等待并返回一个已完成的 I&#x2F;O 请求的完成队列条目。</p>
+</li>
+<li><p>参数</p>
+<p>：</p>
+<ul>
+<li><code>fd</code>：<code>io_uring</code> 实例的文件描述符。</li>
+<li><code>cqe</code>：指向指针的指针，用于返回完成队列条目。</li>
+</ul>
+</li>
+<li><p><strong>返回值</strong>：成功时返回 0，失败时返回负数错误码。</p>
+</li>
+</ul>
+<ol start="7">
+<li><code>io_uring_cq_advance</code></li>
+</ol>
+<ul>
+<li><p><strong>原型</strong>：<code>void io_uring_cq_advance(int fd, unsigned count);</code></p>
+</li>
+<li><p><strong>作用</strong>：推进完成队列，通常在用户空间处理完一个或多个完成队列条目后调用，以通知内核已处理。</p>
+</li>
+<li><p>参数</p>
+<p>：</p>
+<ul>
+<li><code>fd</code>：<code>io_uring</code> 实例的文件描述符。</li>
+<li><code>count</code>：推进的完成队列条目数。</li>
+</ul>
+</li>
+<li><p><strong>返回值</strong>：无返回值。</p>
+</li>
+</ul>
+
+                
+              </div>
+            
+            <hr/>
+            <div>
+              <div class="post-metas my-3">
+  
+  
+    <div class="post-meta">
+      <i class="iconfont icon-tags"></i>
+      
+        <a href="/tags/linux%EF%BC%8Cio-uring/" class="print-no-link">#linux，io_uring</a>
+      
+        <a href="/tags/epoll/" class="print-no-link">#epoll</a>
+      
+    </div>
+  
+</div>
+
+
+              
+  
+
+  <div class="license-box my-3">
+    <div class="license-title">
+      <div>linux对于io_uring的应用</div>
+      <div>https://zjfans.github.io/2025/02/12/linux对于io_uring的应用/</div>
+    </div>
+    <div class="license-meta">
+      
+        <div class="license-meta-item">
+          <div>作者</div>
+          <div>张三疯</div>
+        </div>
+      
+      
+        <div class="license-meta-item license-meta-date">
+          <div>发布于</div>
+          <div>2025年2月12日</div>
+        </div>
+      
+      
+      
+        <div class="license-meta-item">
+          <div>许可协议</div>
+          <div>
+            
+              
+              
+                <a class="print-no-link" target="_blank" href="https://creativecommons.org/licenses/by/4.0/">
+                  <span class="hint--top hint--rounded" aria-label="BY - 署名">
+                    <i class="iconfont icon-by"></i>
+                  </span>
+                </a>
+              
+            
+          </div>
+        </div>
+      
+    </div>
+    <div class="license-icon iconfont"></div>
+  </div>
+
+
+
+              
+                <div class="post-prevnext my-3">
+                  <article class="post-prev col-6">
+                    
+                    
+                  </article>
+                  <article class="post-next col-6">
+                    
+                    
+                      <a href="/2024/11/29/%E7%BD%91%E7%BB%9CIO/" title="网络部分-epoll分析">
+                        <span class="hidden-mobile">网络部分-epoll分析</span>
+                        <span class="visible-mobile">下一篇</span>
+                        <i class="iconfont icon-arrowright"></i>
+                      </a>
+                    
+                  </article>
+                </div>
+              
+            </div>
+
+            
+  
+  
+    <article id="comments" lazyload>
+      
+    <div id="giscus" class="giscus"></div>
+    <script type="text/javascript">
+      Fluid.utils.loadComments('#giscus', function() {
+        var options = {"repo":"ZJfans/ZJfans.github.io","repo-id":"R_kgDOLYg-XA","category":"Announcements","category-id":"DIC_kwDOLYg-XM4Ceo1C","theme-light":"light","theme-dark":"dark","mapping":"pathname","reactions-enabled":1,"emit-metadata":0,"input-position":"bottom","lang":"zh-CN"};
+        var attributes = {};
+        for (let option in options) {
+          if (!option.startsWith('theme-')) {
+            var key = option.startsWith('data-') ? option : 'data-' + option;
+            attributes[key] = options[option];
+          }
+        }
+        var light = 'light';
+        var dark = 'dark';
+        window.GiscusThemeLight = light;
+        window.GiscusThemeDark = dark;
+        attributes['data-theme'] = document.documentElement.getAttribute('data-user-color-scheme') === 'dark' ? dark : light;
+        for (let attribute in attributes) {
+          var value = attributes[attribute];
+          if (value === undefined || value === null || value === '') {
+            delete attributes[attribute];
+          }
+        }
+        var s = document.createElement('script');
+        s.setAttribute('src', 'https://giscus.app/client.js');
+        s.setAttribute('crossorigin', 'anonymous');
+        for (let attribute in attributes) {
+          s.setAttribute(attribute, attributes[attribute]);
+        }
+        var ss = document.getElementsByTagName('script');
+        var e = ss.length > 0 ? ss[ss.length - 1] : document.head || document.documentElement;
+        e.parentNode.insertBefore(s, e.nextSibling);
+      });
+    </script>
+    <noscript>Please enable JavaScript to view the comments</noscript>
+
+
+    </article>
+  
+
+
+          </article>
+        </div>
+      </div>
+    </div>
+
+    <div class="side-col d-none d-lg-block col-lg-2">
+      
+  <aside class="sidebar" style="margin-left: -1rem">
+    <div id="toc">
+  <p class="toc-header">
+    <i class="iconfont icon-list"></i>
+    <span>目录</span>
+  </p>
+  <div class="toc-body" id="toc-body"></div>
+</div>
+
+
+
+  </aside>
+
+
+    </div>
+  </div>
+</div>
+
+
+
+
+
+  
+
+
+
+  
+
+
+
+  
+
+
+
+  
+
+
+
+  
+
+
+
+
+
+
+
+    
+
+    
+      <a id="scroll-top-button" aria-label="TOP" href="#" role="button">
+        <i class="iconfont icon-arrowup" aria-hidden="true"></i>
+      </a>
+    
+
+    
+      <div class="modal fade" id="modalSearch" tabindex="-1" role="dialog" aria-labelledby="ModalLabel"
+     aria-hidden="true">
+  <div class="modal-dialog modal-dialog-scrollable modal-lg" role="document">
+    <div class="modal-content">
+      <div class="modal-header text-center">
+        <h4 class="modal-title w-100 font-weight-bold">搜索</h4>
+        <button type="button" id="local-search-close" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body mx-3">
+        <div class="md-form mb-5">
+          <input type="text" id="local-search-input" class="form-control validate">
+          <label data-error="x" data-success="v" for="local-search-input">关键词</label>
+        </div>
+        <div class="list-group" id="local-search-result"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+    
+
+    
+  </main>
+
+  <footer>
+    <div class="footer-inner">
+  
+    <div class="footer-content">
+       <a href="https://hexo.io" target="_blank" rel="nofollow noopener"><span>Hexo</span></a> <i class="iconfont icon-love"></i> <a href="https://github.com/fluid-dev/hexo-theme-fluid" target="_blank" rel="nofollow noopener"><span>Fluid</span></a> 
+    </div>
+  
+  
+    <div class="statistics">
+  
+  
+
+  
+    
+      <span id="busuanzi_container_site_pv" style="display: none">
+        总访问量 
+        <span id="busuanzi_value_site_pv"></span>
+         次
+      </span>
+    
+    
+      <span id="busuanzi_container_site_uv" style="display: none">
+        总访客数 
+        <span id="busuanzi_value_site_uv"></span>
+         人
+      </span>
+    
+    
+  
+</div>
+
+  
+  
+  
+</div>
+
+  </footer>
+
+  <!-- Scripts -->
+  
+  <script  src="https://lib.baomitu.com/nprogress/0.2.0/nprogress.min.js" ></script>
+  <link  rel="stylesheet" href="https://lib.baomitu.com/nprogress/0.2.0/nprogress.min.css" />
+
+  <script>
+    NProgress.configure({"showSpinner":false,"trickleSpeed":100})
+    NProgress.start()
+    window.addEventListener('load', function() {
+      NProgress.done();
+    })
+  </script>
+
+
+<script  src="https://lib.baomitu.com/jquery/3.6.4/jquery.min.js" ></script>
+<script  src="https://lib.baomitu.com/twitter-bootstrap/4.6.1/js/bootstrap.min.js" ></script>
+<script  src="/js/events.js" ></script>
+<script  src="/js/plugins.js" ></script>
+
+
+  <script  src="https://lib.baomitu.com/typed.js/2.0.12/typed.min.js" ></script>
+  <script>
+    (function (window, document) {
+      var typing = Fluid.plugins.typing;
+      var subtitle = document.getElementById('subtitle');
+      if (!subtitle || !typing) {
+        return;
+      }
+      var text = subtitle.getAttribute('data-typed-text');
+      
+        typing(text);
+      
+    })(window, document);
+  </script>
+
+
+
+
+  
+    <script  src="/js/img-lazyload.js" ></script>
+  
+
+
+
+
+  
+<script>
+  Fluid.utils.createScript('https://lib.baomitu.com/tocbot/4.20.1/tocbot.min.js', function() {
+    var toc = jQuery('#toc');
+    if (toc.length === 0 || !window.tocbot) { return; }
+    var boardCtn = jQuery('#board-ctn');
+    var boardTop = boardCtn.offset().top;
+
+    window.tocbot.init(Object.assign({
+      tocSelector     : '#toc-body',
+      contentSelector : '.markdown-body',
+      linkClass       : 'tocbot-link',
+      activeLinkClass : 'tocbot-active-link',
+      listClass       : 'tocbot-list',
+      isCollapsedClass: 'tocbot-is-collapsed',
+      collapsibleClass: 'tocbot-is-collapsible',
+      scrollSmooth    : true,
+      includeTitleTags: true,
+      headingsOffset  : -boardTop,
+    }, CONFIG.toc));
+    if (toc.find('.toc-list-item').length > 0) {
+      toc.css('visibility', 'visible');
+    }
+
+    Fluid.events.registerRefreshCallback(function() {
+      if ('tocbot' in window) {
+        tocbot.refresh();
+        var toc = jQuery('#toc');
+        if (toc.length === 0 || !tocbot) {
+          return;
+        }
+        if (toc.find('.toc-list-item').length > 0) {
+          toc.css('visibility', 'visible');
+        }
+      }
+    });
+  });
+</script>
+
+
+  <script src=https://lib.baomitu.com/clipboard.js/2.0.11/clipboard.min.js></script>
+
+  <script>Fluid.plugins.codeWidget();</script>
+
+
+  
+<script>
+  Fluid.utils.createScript('https://lib.baomitu.com/anchor-js/4.3.1/anchor.min.js', function() {
+    window.anchors.options = {
+      placement: CONFIG.anchorjs.placement,
+      visible  : CONFIG.anchorjs.visible
+    };
+    if (CONFIG.anchorjs.icon) {
+      window.anchors.options.icon = CONFIG.anchorjs.icon;
+    }
+    var el = (CONFIG.anchorjs.element || 'h1,h2,h3,h4,h5,h6').split(',');
+    var res = [];
+    for (var item of el) {
+      res.push('.markdown-body > ' + item.trim());
+    }
+    if (CONFIG.anchorjs.placement === 'left') {
+      window.anchors.options.class = 'anchorjs-link-left';
+    }
+    window.anchors.add(res.join(', '));
+
+    Fluid.events.registerRefreshCallback(function() {
+      if ('anchors' in window) {
+        anchors.removeAll();
+        var el = (CONFIG.anchorjs.element || 'h1,h2,h3,h4,h5,h6').split(',');
+        var res = [];
+        for (var item of el) {
+          res.push('.markdown-body > ' + item.trim());
+        }
+        if (CONFIG.anchorjs.placement === 'left') {
+          anchors.options.class = 'anchorjs-link-left';
+        }
+        anchors.add(res.join(', '));
+      }
+    });
+  });
+</script>
+
+
+  
+<script>
+  Fluid.utils.createScript('https://lib.baomitu.com/fancybox/3.5.7/jquery.fancybox.min.js', function() {
+    Fluid.plugins.fancyBox();
+  });
+</script>
+
+
+  <script>Fluid.plugins.imageCaption();</script>
+
+  <script  src="/js/local-search.js" ></script>
+
+  <script defer src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js" ></script>
+
+
+
+
+
+<!-- 主题的启动项，将它保持在最底部 -->
+<!-- the boot of the theme, keep it at the bottom -->
+<script  src="/js/boot.js" ></script>
+
+
+  
+
+  <noscript>
+    <div class="noscript-warning">博客在允许 JavaScript 运行的环境下浏览效果更佳</div>
+  </noscript>
+</body>
+</html>
