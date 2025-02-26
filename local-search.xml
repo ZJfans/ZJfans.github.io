@@ -4,6 +4,25 @@
   
   
   <entry>
+    <title>Chrome 133 引发 net::ERR_CONTENT_LENGTH_MISMATCH 问题的分析与解决</title>
+    <link href="/2025/02/26/chrome-netERR_CONTENT_LENGTH_MISMATCH/"/>
+    <url>/2025/02/26/chrome-netERR_CONTENT_LENGTH_MISMATCH/</url>
+    
+    <content type="html"><![CDATA[<p><strong>【现象】</strong></p><p>最近有用户反馈，在使用 Chrome 133 访问系统时，部分静态资源请求出现 <code>net::ERR_CONTENT_LENGTH_MISMATCH</code> 错误。<br>具体现象：</p><ul><li>页面请求 多个静态资源（HTML&#x2F;JS&#x2F;CSS），但部分请求随机失败。</li><li>每次刷新，失败的资源 不固定，但问题持续发生。</li><li>使用 Chrome 131 及以下版本、Edge、Firefox 均无法复现。</li><li>升级到 Chrome 133 后，问题立即复现。</li></ul><p><strong>【排查】</strong></p><p><strong><code>ERR_CONTENT_LENGTH_MISMATCH</code> 的常见原因：</strong></p><ul><li>服务器返回的数据 大小 与 <code>Content-Length</code> 不匹配。</li><li>数据传输中断，导致客户端未接收完整数据。</li><li>代理层或防火墙 可能影响数据完整性</li></ul><p>因此在网关侧和windows侧同时抓包，发现2个问题</p><p>1、nginx返回的数据没有异常</p><p>2、在传输几十ms后，数据还没传输完，客户端给nginx发送了FIN，<strong>也就是说chrome在数据没有传输完成时，发送了FIN，断开了连接</strong>。RST很好理解，nginx接收FIN后，立马close这个连接的socket，后续请求来临时，内核不识别这条连接直接返回RST</p><p><img src="/C:/Users\zhangjie42067\AppData\Roaming\Typora\typora-user-images\image-20250226141602032.png" alt="image-20250226141602032"></p><p>同时查看了windows侧抓的包，确认确实是chrome发出的FIN，排除现场防火墙拦截的可能性。</p><p><strong>【初步结论】</strong></p><ul><li>Chrome 133 在数据传输未完成时，主动发送 FIN 终止连接，导致 部分静态资源加载失败。</li><li>Edge、Chrome 131 及以下版本均无此问题，升级至 Chrome 133 后，问题立即复现。</li><li>结论：Chrome 133 的 TCP 处理逻辑存在 Bug，并非 Nginx 或防火墙导致的问题。</li></ul><p><strong>【Bug 反馈 &amp; 官方响应】</strong></p><ul><li>我在 Chromium Bug Tracker <ul><li><a href="https://issues.chromium.org/issues/397848897">https://issues.chromium.org/issues/397848897</a></li></ul></li><li>但是发现该问题已有人提交：<ul><li><a href="https://issues.chromium.org/issues/391126826">https://issues.chromium.org/issues/391126826</a></li></ul></li><li>官方确认：问题由 <code>TcpSocketIoCompletionPortWin</code> 引发。</li><li>Chrome 133.0.6943.142 版本默认关闭该特性，作为临时解决方案。</li></ul><p><strong>【TcpSocketIoCompletionPortWin】</strong></p><p>TcpSocketIoCompletionPortWin&#96; 在 Chrome 网络栈中的作用</p><ul><li>负责 Windows 平台的 TCP 异步 I&#x2F;O 处理，使用 IOCP（I&#x2F;O Completion Port）机制 进行高效管理。</li><li>影响范围：<ol><li>HTTP(S) 连接：网页加载的所有 TCP 请求（包括静态资源）。</li><li>WebSocket 连接：影响 WebSocket 长连接数据传输。</li><li>Chromium IPC（进程间通信）：影响 Chrome 进程间的数据传输。</li><li>QUIC&#x2F;TLS 连接：影响 TLS 加密连接的数据流控制。</li></ol></li></ul><p>源码主要在</p><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><code class="hljs c">net/socket/tcp_socket_win.cc<br>net/socket/tcp_socket_win.h<br>net/socket/tcp_socket_io_completion_port_win.cc<br>net/socket/tcp_socket_io_completion_port_win.h<br></code></pre></td></tr></table></figure><p><a href="https://source.chromium.org/chromium/chromium/src/+/main:net/socket/tcp_socket_io_completion_port_win.cc">https://source.chromium.org/chromium/chromium/src/+/main:net/socket/tcp_socket_io_completion_port_win.cc</a></p><p>虽然对网络这块很感兴趣，不过这里还是不为难自己了，关注一下后续怎么修复</p>]]></content>
+    
+    
+    
+    <tags>
+      
+      <tag>nginx，chrome</tag>
+      
+    </tags>
+    
+  </entry>
+  
+  
+  
+  <entry>
     <title>linux对于io_uring的应用</title>
     <link href="/2025/02/12/linux%E5%AF%B9%E4%BA%8Eio_uring%E7%9A%84%E5%BA%94%E7%94%A8/"/>
     <url>/2025/02/12/linux%E5%AF%B9%E4%BA%8Eio_uring%E7%9A%84%E5%BA%94%E7%94%A8/</url>
