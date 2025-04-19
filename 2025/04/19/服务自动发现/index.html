@@ -1,0 +1,961 @@
+
+
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-color-scheme=auto>
+
+
+
+<head>
+  <meta charset="UTF-8">
+  <link rel="apple-touch-icon" sizes="76x76" href="/img/fluid.png">
+  <link rel="icon" href="/img/fluid.png">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, shrink-to-fit=no">
+  <meta http-equiv="x-ua-compatible" content="ie=edge">
+  
+  <meta name="theme-color" content="#2f4154">
+  <meta name="author" content="张三疯">
+  <meta name="keywords" content="nginx,openresty,网关,HTTP/HTTPS,Websocket">
+  
+    <meta name="description" content="Nginx 采用 master–worker 多进程模型，其中 master 进程负责管理和信号交互，worker 进程执行网络 I&#x2F;O、定时器和延迟队列事件循环 。 1、nginx的原理1.1、配置解析与端口初始化1 Master 进程：解析配置与打开监听端口  配置解析：在 main() 中，master 进程首先调用 ngx_init_cycle()，该函数基于 ngx_conf_">
+<meta property="og:type" content="article">
+<meta property="og:title" content="服务自动发现">
+<meta property="og:url" content="https://zjfans.github.io/2025/04/19/%E6%9C%8D%E5%8A%A1%E8%87%AA%E5%8A%A8%E5%8F%91%E7%8E%B0/index.html">
+<meta property="og:site_name" content="ZJfans Blog">
+<meta property="og:description" content="Nginx 采用 master–worker 多进程模型，其中 master 进程负责管理和信号交互，worker 进程执行网络 I&#x2F;O、定时器和延迟队列事件循环 。 1、nginx的原理1.1、配置解析与端口初始化1 Master 进程：解析配置与打开监听端口  配置解析：在 main() 中，master 进程首先调用 ngx_init_cycle()，该函数基于 ngx_conf_">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2025-04-19T10:30:48.854Z">
+<meta property="article:modified_time" content="2025-04-19T10:31:03.739Z">
+<meta property="article:author" content="张三疯">
+<meta property="article:tag" content="nginx，work">
+<meta property="article:tag" content="zookeeper">
+<meta name="twitter:card" content="summary_large_image">
+  
+  
+    <meta name="referrer" content="no-referrer-when-downgrade">
+  
+  
+  <title>服务自动发现 - ZJfans Blog</title>
+
+  <link  rel="stylesheet" href="https://lib.baomitu.com/twitter-bootstrap/4.6.1/css/bootstrap.min.css" />
+
+
+
+  <link  rel="stylesheet" href="https://lib.baomitu.com/github-markdown-css/4.0.0/github-markdown.min.css" />
+
+  <link  rel="stylesheet" href="https://lib.baomitu.com/hint.css/2.7.0/hint.min.css" />
+
+  <link  rel="stylesheet" href="https://lib.baomitu.com/fancybox/3.5.7/jquery.fancybox.min.css" />
+
+
+
+<!-- 主题依赖的图标库，不要自行修改 -->
+<!-- Do not modify the link that theme dependent icons -->
+
+<link rel="stylesheet" href="//at.alicdn.com/t/font_1749284_hj8rtnfg7um.css">
+
+
+
+<link rel="stylesheet" href="//at.alicdn.com/t/font_1736178_lbnruvf0jn.css">
+
+
+<link  rel="stylesheet" href="/css/main.css" />
+
+
+  <link id="highlight-css" rel="stylesheet" href="/css/highlight.css" />
+  
+    <link id="highlight-css-dark" rel="stylesheet" href="/css/highlight-dark.css" />
+  
+
+
+
+
+  <script id="fluid-configs">
+    var Fluid = window.Fluid || {};
+    Fluid.ctx = Object.assign({}, Fluid.ctx)
+    var CONFIG = {"hostname":"zjfans.github.io","root":"/","version":"1.9.7","typing":{"enable":true,"typeSpeed":70,"cursorChar":"_","loop":false,"scope":[]},"anchorjs":{"enable":true,"element":"h1,h2,h3,h4,h5,h6","placement":"left","visible":"hover","icon":""},"progressbar":{"enable":true,"height_px":3,"color":"#29d","options":{"showSpinner":false,"trickleSpeed":100}},"code_language":{"enable":true,"default":"TEXT"},"copy_btn":true,"image_caption":{"enable":true},"image_zoom":{"enable":true,"img_url_replace":["",""]},"toc":{"enable":true,"placement":"right","headingSelector":"h1,h2,h3,h4,h5,h6","collapseDepth":0},"lazyload":{"enable":true,"loading_img":"/img/loading.gif","onlypost":false,"offset_factor":2},"web_analytics":{"enable":true,"follow_dnt":true,"baidu":null,"google":{"measurement_id":null},"tencent":{"sid":null,"cid":null},"woyaola":null,"cnzz":null,"leancloud":{"app_id":null,"app_key":null,"server_url":null,"path":"window.location.pathname","ignore_local":false}},"search_path":"/local-search.xml","include_content_in_search":true};
+
+    if (CONFIG.web_analytics.follow_dnt) {
+      var dntVal = navigator.doNotTrack || window.doNotTrack || navigator.msDoNotTrack;
+      Fluid.ctx.dnt = dntVal && (dntVal.startsWith('1') || dntVal.startsWith('yes') || dntVal.startsWith('on'));
+    }
+  </script>
+  <script  src="/js/utils.js" ></script>
+  <script  src="/js/color-schema.js" ></script>
+  
+
+  
+
+  
+    <!-- Google tag (gtag.js) -->
+    <script async>
+      if (!Fluid.ctx.dnt) {
+        Fluid.utils.createScript("https://www.googletagmanager.com/gtag/js?id=", function() {
+          window.dataLayer = window.dataLayer || [];
+          function gtag() {
+            dataLayer.push(arguments);
+          }
+          gtag('js', new Date());
+          gtag('config', '');
+        });
+      }
+    </script>
+  
+
+  
+
+  
+
+  
+
+  
+
+
+
+  
+<meta name="generator" content="Hexo 6.3.0"></head>
+
+
+<body>
+  
+
+  <header>
+    
+
+<div class="header-inner" style="height: 70vh;">
+  <nav id="navbar" class="navbar fixed-top  navbar-expand-lg navbar-dark scrolling-navbar">
+  <div class="container">
+    <a class="navbar-brand" href="/">
+      <strong>ZJfans Blog</strong>
+    </a>
+
+    <button id="navbar-toggler-btn" class="navbar-toggler" type="button" data-toggle="collapse"
+            data-target="#navbarSupportedContent"
+            aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+      <div class="animated-icon"><span></span><span></span><span></span></div>
+    </button>
+
+    <!-- Collapsible content -->
+    <div class="collapse navbar-collapse" id="navbarSupportedContent">
+      <ul class="navbar-nav ml-auto text-center">
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/" target="_self">
+                <i class="iconfont icon-home-fill"></i>
+                <span>首页</span>
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/archives/" target="_self">
+                <i class="iconfont icon-archive-fill"></i>
+                <span>归档</span>
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/categories/" target="_self">
+                <i class="iconfont icon-category-fill"></i>
+                <span>分类</span>
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/tags/" target="_self">
+                <i class="iconfont icon-tags-fill"></i>
+                <span>标签</span>
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/about/" target="_self">
+                <i class="iconfont icon-user-fill"></i>
+                <span>关于</span>
+              </a>
+            </li>
+          
+        
+        
+          <li class="nav-item" id="search-btn">
+            <a class="nav-link" target="_self" href="javascript:;" data-toggle="modal" data-target="#modalSearch" aria-label="Search">
+              <i class="iconfont icon-search"></i>
+            </a>
+          </li>
+          
+        
+        
+          <li class="nav-item" id="color-toggle-btn">
+            <a class="nav-link" target="_self" href="javascript:;" aria-label="Color Toggle">
+              <i class="iconfont icon-dark" id="color-toggle-icon"></i>
+            </a>
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+</nav>
+
+  
+
+<div id="banner" class="banner" parallax=true
+     style="background: url('/img/theodor-lundqvist-WHhbYArwFt8-unsplash.jpg') no-repeat center center; background-size: cover;">
+  <div class="full-bg-img">
+    <div class="mask flex-center" style="background-color: rgba(0, 0, 0, 0.3)">
+      <div class="banner-text text-center fade-in-up">
+        <div class="h2">
+          
+            <span id="subtitle" data-typed-text="服务自动发现"></span>
+          
+        </div>
+
+        
+          
+  <div class="mt-3">
+    
+    
+      <span class="post-meta">
+        <i class="iconfont icon-date-fill" aria-hidden="true"></i>
+        <time datetime="2025-04-19 18:30" pubdate>
+          2025年4月19日 晚上
+        </time>
+      </span>
+    
+  </div>
+
+  <div class="mt-1">
+    
+      <span class="post-meta mr-2">
+        <i class="iconfont icon-chart"></i>
+        
+          4.4k 字
+        
+      </span>
+    
+
+    
+      <span class="post-meta mr-2">
+        <i class="iconfont icon-clock-fill"></i>
+        
+        
+        
+          37 分钟
+        
+      </span>
+    
+
+    
+    
+  </div>
+
+
+        
+      </div>
+
+      
+    </div>
+  </div>
+</div>
+
+</div>
+
+  </header>
+
+  <main>
+    
+      
+
+<div class="container-fluid nopadding-x">
+  <div class="row nomargin-x">
+    <div class="side-col d-none d-lg-block col-lg-2">
+      
+
+    </div>
+
+    <div class="col-lg-8 nopadding-x-md">
+      <div class="container nopadding-x-md" id="board-ctn">
+        <div id="board">
+          <article class="post-content mx-auto">
+            <h1 id="seo-header">服务自动发现</h1>
+            
+            
+              <div class="markdown-body">
+                
+                <p>Nginx 采用 master–worker 多进程模型，其中 master 进程负责管理和信号交互，worker 进程执行网络 I&#x2F;O、定时器和延迟队列事件循环 。</p>
+<h2 id="1、nginx的原理"><a href="#1、nginx的原理" class="headerlink" title="1、nginx的原理"></a>1、nginx的原理</h2><h3 id="1-1、配置解析与端口初始化"><a href="#1-1、配置解析与端口初始化" class="headerlink" title="1.1、配置解析与端口初始化"></a>1.1、配置解析与端口初始化</h3><p>1 Master 进程：解析配置与打开监听端口</p>
+<ul>
+<li><strong>配置解析</strong>：在 <code>main()</code> 中，master 进程首先调用 <code>ngx_init_cycle()</code>，该函数基于 <code>ngx_conf_parse()</code> 逐行读取并解析 <code>nginx.conf</code>，生成模块级的配置上下文（<code>cycle-&gt;conf_ctx</code>）</li>
+<li><strong>构建 listening 数组</strong>：解析阶段，core 模块会为每个 <code>listen</code> 指令创建一个 <code>ngx_listening_t</code> 结构，并将其添加到 <code>cycle-&gt;listening</code> 数组中</li>
+<li><strong>打开套接字</strong>：随后，master 调用 <code>ngx_open_listening_sockets()</code>，遍历 <code>cycle-&gt;listening</code>：为每个条目创建 socket（<code>socket()</code>）、绑定地址（<code>bind()</code>）并监听（<code>listen()</code>），同时设置常用选项（如 <code>reuseport</code>、<code>backlog</code>）</li>
+<li><strong>继承老进程 socket</strong>：若为平滑重启，通过 <code>ngx_add_inherited_sockets()</code> 从环境变量获取老进程的 socket 描述符，避免中断服务 。</li>
+</ul>
+<p>2 Worker 进程：继承与初始化</p>
+<ul>
+<li><strong>Fork 产生</strong>：master 通过 <code>ngx_start_worker_processes()</code> 调用 <code>ngx_spawn_process()</code> fork 出多个 worker，继承 master 打开的所有监听 socket 。</li>
+<li><strong>初始化调用</strong>：每个 worker 在 <code>ngx_worker_process_cycle()</code> 开始时调用 <code>ngx_worker_process_init()</code> 完成：设置进程类型标识、进程标题、初始化日志、事件模块、定时器与延迟队列，并为业务端口注册可读&#x2F;可写事件回调。</li>
+<li><strong>不再 bind&#x2F;listen</strong>：worker 直接使用继承自 master 的 socket，无需再次调用 <code>bind()</code> 或 <code>listen()</code>，确保端口监听唯一由 master 或平滑重启过程中创建一次 。</li>
+</ul>
+<h3 id="1-2、for循环工作原理"><a href="#1-2、for循环工作原理" class="headerlink" title="1.2、for循环工作原理"></a>1.2、for循环工作原理</h3><p>work只处理3种事件</p>
+<p>1、网络IO事件（读写、新连接）</p>
+<p>2、定时器</p>
+<p>3、延迟队列</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-type">static</span> <span class="hljs-type">void</span><br><span class="hljs-title function_">ngx_worker_process_cycle</span><span class="hljs-params">(<span class="hljs-type">ngx_cycle_t</span> *cycle, <span class="hljs-type">void</span> *data)</span><br>&#123;<br>    <span class="hljs-type">ngx_int_t</span> worker = (<span class="hljs-type">intptr_t</span>) data;<br><br>    ngx_process = NGX_PROCESS_WORKER;<br>    <span class="hljs-comment">// 记录当前工作进程的编号</span><br>    ngx_worker = worker;<br>    <br>    <span class="hljs-comment">// 初始化工作进程，实际可以修改进程的相关配置</span><br>    ngx_worker_process_init(cycle, worker);<br>    <br>    <span class="hljs-comment">////////////实际这里可以根据进程编号，设置名称</span><br>    ngx_setproctitle(<span class="hljs-string">&quot;worker process&quot;</span>);<br><br>    <span class="hljs-comment">// 进入无限循环，处理工作进程的各种事件</span><br>    <span class="hljs-keyword">for</span> ( ;; ) &#123;<br>        <span class="hljs-keyword">if</span> (ngx_exiting) &#123;<br>            <span class="hljs-keyword">if</span> (ngx_event_no_timers_left() == NGX_OK) &#123;<br>                ngx_log_error(NGX_LOG_NOTICE, cycle-&gt;<span class="hljs-built_in">log</span>, <span class="hljs-number">0</span>, <span class="hljs-string">&quot;exiting&quot;</span>);<br>                ngx_worker_process_exit(cycle);<br>            &#125;<br>        &#125;<br>        ngx_log_debug0(NGX_LOG_DEBUG_EVENT, cycle-&gt;<span class="hljs-built_in">log</span>, <span class="hljs-number">0</span>, <span class="hljs-string">&quot;worker cycle&quot;</span>);<br><br>        <span class="hljs-comment">// 处理事件和定时器</span><br>        ngx_process_events_and_timers(cycle);<br> <span class="hljs-comment">//.................................</span><br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+
+<p>实际的处理：ngx_process_events_and_timers</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br></pre></td><td class="code"><pre><code class="hljs c">ngx_process_events_and_timers(<span class="hljs-type">ngx_cycle_t</span> *cycle)<br>&#123;<br>    <span class="hljs-comment">//.........................</span><br>    <span class="hljs-comment">//判断进程是否启用了accept锁，很关键</span><br>    <span class="hljs-keyword">if</span> (ngx_use_accept_mutex) &#123;<br>        <span class="hljs-keyword">if</span> (ngx_accept_disabled &gt; <span class="hljs-number">0</span>) &#123;<br>            ngx_accept_disabled--;<br><br>        &#125; <span class="hljs-keyword">else</span> &#123;<br>            <span class="hljs-comment">// 尝试获取接受互斥锁</span><br>            <span class="hljs-comment">//!!!这个函数虽然叫这个，实际里面做了accept，如果抢到锁，那就把打开的socket，都放入自己的事件循环里面，一般就是epoll_ctl</span><br>            <span class="hljs-keyword">if</span> (ngx_trylock_accept_mutex(cycle) == NGX_ERROR) &#123;<br>                <span class="hljs-keyword">return</span>;<br>            &#125;<br>            <span class="hljs-comment">//.............................................</span><br>        &#125;<br>    &#125;<br>    <span class="hljs-comment">//.....................................</span><br>    <br>    delta = ngx_current_msec;<br><br>    <span class="hljs-comment">// 调用底层事件处理函数处理事件</span><br>    (<span class="hljs-type">void</span>) ngx_process_events(cycle, timer, flags);<br><br>    <span class="hljs-comment">// 计算事件处理所花费的时间</span><br>    delta = ngx_current_msec - delta;<br><br>    <span class="hljs-comment">// 处理发布的接受事件</span><br>    ngx_event_process_posted(cycle, &amp;ngx_posted_accept_events);<br><br>    <span class="hljs-comment">// 如果持有接受互斥锁，则释放互斥锁</span><br>    <span class="hljs-keyword">if</span> (ngx_accept_mutex_held) &#123;<br>        ngx_shmtx_unlock(&amp;ngx_accept_mutex);<br>    &#125;<br><br>    <span class="hljs-comment">// 过期并处理超时的定时器事件</span><br>    ngx_event_expire_timers();<br><br>    <span class="hljs-comment">// 处理发布的普通事件</span><br>    ngx_event_process_posted(cycle, &amp;ngx_posted_events);<br>&#125;<br></code></pre></td></tr></table></figure>
+
+
+
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><code class="hljs javascript">循环开始<br>   |<br>   |-- <span class="hljs-title function_">ngx_process_events</span>()         &lt;- epoll_wait 等待事件<br>   |       |-- 已有连接的读写事件：直接调用 handler（如 ngx_http_process_request）<br>   |       |-- 新连接事件（accept） -&gt; post 到 ngx_posted_accept_events<br>   |<br>   |-- <span class="hljs-title function_">ngx_event_process_posted</span>(&amp;ngx_posted_accept_events)   &lt;- 执行 accept<br>   |<br>   |-- 释放锁<br>   |<br>   |-- <span class="hljs-title function_">ngx_event_expire_timers</span>()     &lt;- 红黑树定时器<br>   |       |-- 超时事件 -&gt; post 到 ngx_posted_events<br>   |<br>   |-- <span class="hljs-title function_">ngx_event_process_posted</span>(&amp;ngx_posted_events)          &lt;- 执行普通延迟事件<br>循环结束<br></code></pre></td></tr></table></figure>
+
+
+
+<h2 id="2、与zookeeper的交互"><a href="#2、与zookeeper的交互" class="headerlink" title="2、与zookeeper的交互"></a>2、与zookeeper的交互</h2><p>为了支持与 ZooKeeper 的动态配置交互，单 Worker 直连 ZooKeeper进行配置变更，多进程通过共享内存同步配置，但是会阻塞这个work处理其他事件，影响服务可用性与性。</p>
+<h3 id="2-1、-原始模式架构"><a href="#2-1、-原始模式架构" class="headerlink" title="2.1、 原始模式架构"></a>2.1、 原始模式架构</h3><p>早期架构中采用如下方案：</p>
+<p>（1）单 Worker 负责注册 Watcher 与更新配置</p>
+<ul>
+<li>所有 Worker 中仅有一个被选定（编号为0）连接 ZooKeeper；</li>
+<li>该 Worker 注册 Watcher，并监听配置中心的变更事件；</li>
+<li>当监听到变更后，直接将最新配置写入本地文件，并通过共享内存设置一个“配置更新标志位”。</li>
+</ul>
+<p>（2）其他 Worker 通过轮询方式感知并应用配置</p>
+<ul>
+<li>其他 Worker 启动定时器，定期检查共享内存中的“配置更新标志”；</li>
+<li>一旦发现有变更，即读取配置文件，加载新配置并完成本地内存更新；</li>
+<li>更新完成后，清除标志，避免重复加载。</li>
+</ul>
+<p>（3）不足：</p>
+<ul>
+<li>单个 Worker 除了负责网络事件、限流、负载均衡等核心逻辑，还需要连接 ZooKeeper、监听节点变更、处理推送等操作；一旦配置发生变化，该进程还要执行本地配置文件的写入和内存更新；这些操作<strong>会阻塞事件循环</strong>，延迟请求响应，导致实际服务性能下降，尤其在高并发场景下更加明显。</li>
+<li>每个 Worker 都需要包含 ZooKeeper 连接管理、会话重连、Watcher 重订阅、异常恢复等完整流程；这些逻辑与原有的业务处理无关，但会侵入 Worker 的主循环结构，<strong>增加维护成本与出错风险</strong>；</li>
+<li>变更配置后，0号Worker 负责将数据写入本地配置文件，其它 Worker 则轮询共享内存标志后读取该文件，由于竞争关系需要加锁，work串行更新配置；同时读取文件的效率低下</li>
+</ul>
+<h3 id="2-新模式设计：引入-0-号-manage-进程"><a href="#2-新模式设计：引入-0-号-manage-进程" class="headerlink" title="2. 新模式设计：引入 0 号 manage 进程"></a>2. 新模式设计：引入 0 号 manage 进程</h3><h4 id="1、优化点"><a href="#1、优化点" class="headerlink" title="1、优化点"></a>1、优化点</h4><ul>
+<li>将与 ZooKeeper 交互、动态配置管理等耗时操作与网络 I&#x2F;O 分离，减轻 worker 负担，简化逻辑</li>
+<li>避免单个 worker 因配置更新而阻塞服务，有助于提高整体吞吐与可用性。</li>
+<li>配置更新后存入共享内存，work从内存读取数据，而不是读文件，提高更新效率</li>
+<li>使用读写锁，work可以进行并行更新</li>
+</ul>
+<h4 id="2、设计方案"><a href="#2、设计方案" class="headerlink" title="2、设计方案"></a>2、设计方案</h4><p>1、主体目标</p>
+<ul>
+<li>新增一个manage进程，只处理配置更新，包括注册中心的配置更新、热更新、与redis哨兵、rabbitMq的订阅消息，不处理实际的客户端请求</li>
+<li>work专注于业务请求</li>
+</ul>
+<p>2、详细设计</p>
+<p><strong>进程定位与初始化</strong></p>
+<ul>
+<li>如果不是single模式，额外加一个work进程，然后修改进程名称为manage，即解析 <code>&quot;worker_processes&quot;</code> 时，如果为 <code>auto</code> 或数量 &gt;1，则额外创建一个编号为 0 的 manage 进程，实际<code>&quot;worker_processes&quot;</code> 加1就可以</li>
+<li>manage进程不监听业务端口，即不处理客户端的请求-响应，只做配置更新，初始化时需要关闭业务端口，同时也<strong>需要不启用accept锁</strong></li>
+<li>考虑到还有热更新的功能，新增一个”管理端口”，manage只监听这个端口，客户端可以调用这个接口做部分配置更新，同时work不需要监听这个端口，初始化时关闭</li>
+</ul>
+<p><strong>功能层面的设计</strong></p>
+<ul>
+<li><p>manage向 ZooKeeper 注册 watcher，同时创建5s定时器，扫描与zookeeper的数据交互结构体是否变更，如果有变更，说明有zookeeper的配置更新推送，开始获取数据更新到本地内存、共享内存、本地文件。</p>
+</li>
+<li><p>work创建2s定时器，扫描共享内存配置<strong>主版本号</strong>，针对功能的不同，再细化为功能版本号，比如路由版本号、流控版本号、访问控制版本号，这样主版本号发生变化时，获取更细致的功能配置变更，进行增量更新，抛弃原有的全量更新模式</p>
+</li>
+<li><p>在lua层面，由manage进程处理redis哨兵、rabbitMq的推送消息，处理节点变更以及实际的业务数据变更</p>
+</li>
+</ul>
+<p><strong>竞争关系-锁</strong></p>
+<p>很明显会发生一些竞争关系，比如work正在读取共享内存的新配置时，如果manage再次更新，那就会发生异常，需要上锁</p>
+<ul>
+<li><p>创建进程级别的共享锁，manage在更新配置时，禁止work读取，也就是work在更新配置时，需要先获取锁。这样的话，work是串行更新，因为拿到锁的才能更新内存中的配置，最好的场景是，manage更新时，work禁止更新，但是所有的work可以同时更新</p>
+</li>
+<li><p>实际可以使用读写锁ngx_rwlock_rlock，写时不可读，读时不可写，但是可以一起读，这样work可以并行更新配置</p>
+</li>
+<li><p>manage还处理热更新，这其实是调用式触发，主动模式，原理一致，即接收客户端的数据，更新本地内存、共享内存、本地文件，然后修改共享内存的标识</p>
+</li>
+</ul>
+<p><strong>异常场景</strong></p>
+<ul>
+<li>watcher连续推送，manage进程更新完配置后，会将标志位恢复，然后重新创建定时器进行扫描标志位，如果manage进程正在更新配置（更新部分），此时又有watcher消息推送，manage接着更新完配置恢复了标志位，就会丢失这期间所有的变更推送。加锁解决不了这种竞争关系，新增updating标志位，标识更新期间再次发生更新，配置更新完毕后，不恢复更新标志位，等待下一个定时器再次触发</li>
+</ul>
+<h4 id="3、方案实现"><a href="#3、方案实现" class="headerlink" title="3、方案实现"></a>3、方案实现</h4><p>所有配置统一在 master 解析完成后共享，子进程（worker&#x2F;manage）在 init 阶段根据端口属性决定是否关闭 socket，并根据是否为 manage 调整是否参与 accept 竞争</p>
+<ol>
+<li><strong>进程结构调整</strong></li>
+</ol>
+<ul>
+<li>如果不是 <code>single</code> 模式，且 <code>&quot;worker_processes&quot;</code> 为 <code>auto</code> 或 &gt; 1：<ul>
+<li>实际创建 <code>N + 1</code> 个进程：<code>manage</code> + <code>N</code> 个 <code>worker</code></li>
+<li><code>manage</code> 进程编号固定为 <code>0</code>，进程名修改为 <code>&quot;manage process&quot;</code></li>
+</ul>
+</li>
+</ul>
+<ol start="2">
+<li><strong>端口绑定策略</strong></li>
+</ol>
+<ul>
+<li>所有进程都共享 <code>master</code> 解析好的配置，监听 socket 初始化在 master 完成</li>
+<li>每个进程初始化时，<strong>根据端口的 <code>server_name.manage_server</code> 字段来判断要不要关闭该 fd</strong></li>
+<li>每个进程都只会将应该处理的端口，加入自己的事件循环，（抢到锁的work）并执行 <code>accept()</code></li>
+</ul>
+<table>
+<thead>
+<tr>
+<th>端口</th>
+<th>manage 进程</th>
+<th>worker 进程</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>manage_server=1</code>（管理端口）</td>
+<td>保留</td>
+<td>关闭</td>
+</tr>
+<tr>
+<td><code>manage_server=0</code>（业务端口）</td>
+<td>关闭</td>
+<td>保留</td>
+</tr>
+</tbody></table>
+<ol start="3">
+<li><strong>accept_mutex 设置</strong></li>
+</ol>
+<ul>
+<li>初始化阶段，若当前是 <code>manage</code> 进程：<ul>
+<li>设置 <code>ngx_use_accept_mutex = 0</code>，不参与锁竞争（manage进程监听自己的端口，没有竞争关系）</li>
+</ul>
+</li>
+</ul>
+<ol start="4">
+<li><strong>配置解析阶段</strong></li>
+</ol>
+<ul>
+<li><code>server</code> 块中增加一个布尔字段 <code>manage_server</code></li>
+<li><code>ngx_http_core_srv_conf_t</code> 等结构体中加入该字段</li>
+<li>master 解析配置时不做分支判断，所有进程继承同一份配置</li>
+</ul>
+<h4 id="4-分布式锁机制"><a href="#4-分布式锁机制" class="headerlink" title="4. 分布式锁机制"></a>4. 分布式锁机制</h4><p>4.1 锁的必要性</p>
+<ul>
+<li>manage 与 worker 分别会读写配置文件，需互斥防止并发导致更新的数据不一致。</li>
+<li>ZooKeeper 模块触发更新时，需等待上一次更新完成：采用 <code>updating</code> 标志避免连续变更冲突。</li>
+</ul>
+<h4 id="5-问题"><a href="#5-问题" class="headerlink" title="5. 问题"></a>5. 问题</h4><p>整个配置更新期间，结合work的for循环工作模式，其实会有一些问题</p>
+<p>1、特点</p>
+<ul>
+<li>当某个 worker 进程执行配置更新，其 for 循环在定时器阶段进行，不会抢到 accept 锁，新连接自动落到其他空闲 worker 上，保证无中断接入。</li>
+<li>不同 worker 因版本更新不一致，可能出现：<ol>
+<li>已更新的 worker 请求正常；</li>
+<li>正在更新的 worker 请求略有延迟；</li>
+<li>未更新的 worker 因服务节点变更导致请求异常。</li>
+</ol>
+</li>
+</ul>
+<p>2、work在更新配置时，这个进程无法处理业务</p>
+<p>按照work的工作模式，依次处理网络IO（如果拿到锁还会处理新连接）、定时器、延迟队列，此时处于处理定时器阶段，如果要更新2s，那2s内其实处理不了其他的事件。</p>
+<p>3、如果是多个进程，那么nginx还能正常处理业务吗？</p>
+<p>需要看每个work处在for循环的哪个阶段，只要work触发定时器的配置更新后，就无法处理其他事件，但是不同的work，处的阶段可能不一样。</p>
+<p>同一时间，有work抢到了accept锁，处理新连接，有的work处理自身的读写事件，有的work触发了定时器的事件，有的work处理延迟队列的新连接数据。</p>
+<p>4、连续推送问题的解决—-updating</p>
+<p>本质上watcher可以连续推送消息，再加上这和manage相当于是多线程的关系，也就是manage在更新配置的时候，watcher是可以并发推送的。</p>
+<p>如果是单进程，这是不可能发生的，因为一个进程在执行定时器时，网络io事件需要下一次for循环，但是zookeeper的c语言sdk会创建一个线程，导致manage进程和这个线程存在竞争关系，会有什么问题？</p>
+<ol>
+<li>manage定时器检测标志位变华，开始处理本次变更，获取zookeeper的数据，更新配置（假设是配置的第100个版本，这里更新了路由）</li>
+<li>watcher又推送了变更，更改了标志位（这里有可能发生多次的推送）</li>
+<li>manage多次获取zookeeper数据，更新配置（有可能是101版本，或者更大，这里更新了流控）</li>
+<li>manage处理完毕本次变更，恢复标志位，然后创建定时器</li>
+<li>定时器继续扫描标志位，发现没有变化，等待下一次定时器</li>
+</ol>
+<p>首先zookeeper的数据是快照数据，1，3获取的数据很可能是不同版本，因为一直在变更。第四步处理完毕后，虽然配置变更了很多次，但是manage只更新了一次，路由的配置是旧的，但是流控的是新的！事实上需要再次更新到最新的</p>
+<p>一般这种竞争关系，第一反应是加锁，但是这怎么加锁？manage更新的时候，watcher别更新？zookeeper貌似没有这种机制，那只能是标志位了</p>
+<p>多加一个updating标志位，具体逻辑为：</p>
+<ol>
+<li>manage定时器检测标志位变华，开始处理本次变更，<strong>首先将updating设置为1，标识正在更新</strong>，（假设是配置的第100个版本，这里更新了路由）</li>
+<li>watcher又推送了变更，更改了标志位（这里有可能发生多次的推送），<strong>同时将updating设置为0</strong></li>
+<li>manage多次获取zookeeper数据，更新配置（有可能是101版本，或者更大，这里更新了流控）</li>
+<li>manage处理完毕本次变更，<strong>如果updating为1，就直接恢复标志位</strong>，<strong>否则，不恢复标志位</strong>，<strong>为0就说明此时发生了多次推送</strong>，然后创建定时器</li>
+<li>定时器继续扫描标志位，发现标志位<strong>依旧需要更新</strong>，开始更新</li>
+</ol>
+<h2 id="3、nginx关于accept锁"><a href="#3、nginx关于accept锁" class="headerlink" title="3、nginx关于accept锁"></a>3、nginx关于accept锁</h2><h3 id="3-1、空白期？"><a href="#3-1、空白期？" class="headerlink" title="3.1、空白期？"></a>3.1、空白期？</h3><p>如果说只有抢到锁的进程，才能将监听socket放到自己的epoll，从而处理新连接，那么当前work释放锁之后，从epoll删除这个socket，在下一次多个work抢锁，并添加到epoll的时间差中，<strong>是否存在空白期，即没有一个work将这个socket放到epoll里面</strong>？</p>
+<p>事实上不会，work释放锁之后，不会立即从epoll删除这个socket，所以不会空白期</p>
+<h3 id="3-2、冲突？"><a href="#3-2、冲突？" class="headerlink" title="3.2、冲突？"></a>3.2、冲突？</h3><p>如果不删除，下一次别的进程抢到锁，并将socket加到epoll，处理accept，但是此时上一个work还没删除这个socket的监听怎么办，2个进程都epoll_wait，惊群效应没解决？</p>
+<p>事实上也不会有冲突，<strong>因为只有拿到锁的work才会epoll_wait，拿不到锁的work，虽然epoll里面有这个监听socket，但是不会立马epoll_wait</strong>。这个老的work，没拿到锁，会进行删除操作，把socket从epoll删除，然后再epoll_wait，那么就不会有问题了！！！</p>
+<h3 id="3-3、举个例子"><a href="#3-3、举个例子" class="headerlink" title="3.3、举个例子"></a>3.3、举个例子</h3><p>🕒 第 1 轮事件循环</p>
+<ul>
+<li><strong>Worker 1：</strong><ol>
+<li>尝试获取 <code>accept_mutex</code>，成功。</li>
+<li>调用 <code>ngx_enable_accept_events()</code>，将监听 socket 添加到自己的 epoll interest list 中。</li>
+<li>设置 <code>ngx_accept_mutex_held = 1</code>。</li>
+<li>调用 <code>epoll_wait()</code>，等待事件。</li>
+<li>接收到新连接事件，处理 <code>accept()</code>，建立连接。</li>
+<li>处理完事件后，调用 <code>ngx_shmtx_unlock(&amp;ngx_accept_mutex)</code>，释放锁。</li>
+<li>**注意：此时并未调用 <code>epoll_ctl(DEL)</code>，监听 socket 仍在 epoll interest list 中。</li>
+</ol>
+</li>
+<li><strong>Worker 2：</strong><ol>
+<li>尝试获取 <code>accept_mutex</code>，失败。</li>
+<li>由于 <code>ngx_accept_mutex_held == 0</code>，未持有锁，因此不会将监听 socket 添加到 epoll interest list 中。</li>
+<li>调用 <code>epoll_wait()</code>，等待事件。</li>
+<li>未接收到新连接事件，继续等待。</li>
+</ol>
+</li>
+</ul>
+<p>🕒 第 2 轮事件循环</p>
+<ul>
+<li><strong>Worker 2：</strong><ol>
+<li>尝试获取 <code>accept_mutex</code>，成功。</li>
+<li>调用 <code>ngx_enable_accept_events()</code>，将监听 socket 添加到自己的 epoll interest list 中。</li>
+<li>设置 <code>ngx_accept_mutex_held = 1</code>。</li>
+<li>调用 <code>epoll_wait()</code>，等待事件。</li>
+<li>接收到新连接事件，处理 <code>accept()</code>，建立连接。</li>
+<li>处理完事件后，调用 <code>ngx_shmtx_unlock(&amp;ngx_accept_mutex)</code>，释放锁。</li>
+<li><strong>注意：此时并未调用 <code>epoll_ctl(DEL)</code>，监听 socket 仍在 epoll interest list 中。</strong></li>
+</ol>
+</li>
+<li><strong>Worker 1：</strong><ol>
+<li>尝试获取 <code>accept_mutex</code>，失败。</li>
+<li>检测到 <code>ngx_accept_mutex_held == 1</code>，说明上一轮持有过锁。</li>
+<li>调用 <code>ngx_disable_accept_events()</code>，将监听 socket 从 epoll interest list 中删除。</li>
+<li>设置 <code>ngx_accept_mutex_held = 0</code>。</li>
+<li>调用 <code>epoll_wait()</code>，等待事件。</li>
+<li>未接收到新连接事件，继续等待。</li>
+</ol>
+</li>
+</ul>
+<hr>
+<p>✅ 总结</p>
+<ul>
+<li>在每轮事件循环中，只有成功获取 <code>accept_mutex</code> 的 worker 进程会将监听 socket 添加到其 epoll interest list 中，并处理新连接。</li>
+<li>释放锁后，监听 socket 并不会立即从 epoll interest list 中删除，而是在下一轮事件循环开始时，检测到未获取锁且上一轮持有过锁的情况下，才调用 <code>ngx_disable_accept_events()</code> 删除监听 socket。</li>
+</ul>
+<h3 id="3-4、源码分析"><a href="#3-4、源码分析" class="headerlink" title="3.4、源码分析"></a>3.4、源码分析</h3><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-type">ngx_int_t</span><br><span class="hljs-title function_">ngx_trylock_accept_mutex</span><span class="hljs-params">(<span class="hljs-type">ngx_cycle_t</span> *cycle)</span><br>&#123;<br>    <span class="hljs-comment">// 尝试获取接受互斥锁</span><br>    <span class="hljs-keyword">if</span> (ngx_shmtx_trylock(&amp;ngx_accept_mutex)) &#123;<br><br>        <span class="hljs-comment">// 尝试启用接受事件，-----------  1、拿到锁的进程，在epoll添加socket</span><br>        <span class="hljs-keyword">if</span> (ngx_enable_accept_events(cycle) == NGX_ERROR) &#123;<br>            <span class="hljs-comment">// 如果启用失败，释放互斥锁</span><br>            ngx_shmtx_unlock(&amp;ngx_accept_mutex);<br>            <span class="hljs-keyword">return</span> NGX_ERROR;<br>        &#125;<br><br>        <span class="hljs-comment">// 重置接受事件计数</span><br>        ngx_accept_events = <span class="hljs-number">0</span>;<br>        <span class="hljs-comment">// 标记已经持有互斥锁</span><br>        ngx_accept_mutex_held = <span class="hljs-number">1</span>;<br>        <span class="hljs-keyword">return</span> NGX_OK;<br>    &#125;<br><br>    <span class="hljs-comment">// 如果之前已经持有互斥锁</span><br>    <span class="hljs-keyword">if</span> (ngx_accept_mutex_held) &#123;<br>        <span class="hljs-comment">// 尝试禁用接受事件,-------  2、拿不到锁的进程，在epoll删除socket</span><br>        <span class="hljs-keyword">if</span> (ngx_disable_accept_events(cycle, <span class="hljs-number">0</span>) == NGX_ERROR) &#123;<br>            <span class="hljs-keyword">return</span> NGX_ERROR;<br>        &#125;<br>        <span class="hljs-comment">// 标记不再持有互斥锁</span><br>        ngx_accept_mutex_held = <span class="hljs-number">0</span>;<br>    &#125;<br><br>    <span class="hljs-keyword">return</span> NGX_OK;<br>&#125;<br></code></pre></td></tr></table></figure>
+
+<p>上面的代码执行完毕，每个进程才会执行epoll_wait，那自然不会有问题了</p>
+
+                
+              </div>
+            
+            <hr/>
+            <div>
+              <div class="post-metas my-3">
+  
+  
+    <div class="post-meta">
+      <i class="iconfont icon-tags"></i>
+      
+        <a href="/tags/nginx%EF%BC%8Cwork/" class="print-no-link">#nginx，work</a>
+      
+        <a href="/tags/zookeeper/" class="print-no-link">#zookeeper</a>
+      
+    </div>
+  
+</div>
+
+
+              
+  
+
+  <div class="license-box my-3">
+    <div class="license-title">
+      <div>服务自动发现</div>
+      <div>https://zjfans.github.io/2025/04/19/服务自动发现/</div>
+    </div>
+    <div class="license-meta">
+      
+        <div class="license-meta-item">
+          <div>作者</div>
+          <div>张三疯</div>
+        </div>
+      
+      
+        <div class="license-meta-item license-meta-date">
+          <div>发布于</div>
+          <div>2025年4月19日</div>
+        </div>
+      
+      
+      
+        <div class="license-meta-item">
+          <div>许可协议</div>
+          <div>
+            
+              
+              
+                <a class="print-no-link" target="_blank" href="https://creativecommons.org/licenses/by/4.0/">
+                  <span class="hint--top hint--rounded" aria-label="BY - 署名">
+                    <i class="iconfont icon-by"></i>
+                  </span>
+                </a>
+              
+            
+          </div>
+        </div>
+      
+    </div>
+    <div class="license-icon iconfont"></div>
+  </div>
+
+
+
+              
+                <div class="post-prevnext my-3">
+                  <article class="post-prev col-6">
+                    
+                    
+                  </article>
+                  <article class="post-next col-6">
+                    
+                    
+                      <a href="/2025/02/26/chrome-netERR_CONTENT_LENGTH_MISMATCH/" title="Chrome 133 引发 net::ERR_CONTENT_LENGTH_MISMATCH 问题的分析与解决">
+                        <span class="hidden-mobile">Chrome 133 引发 net::ERR_CONTENT_LENGTH_MISMATCH 问题的分析与解决</span>
+                        <span class="visible-mobile">下一篇</span>
+                        <i class="iconfont icon-arrowright"></i>
+                      </a>
+                    
+                  </article>
+                </div>
+              
+            </div>
+
+            
+  
+  
+    <article id="comments" lazyload>
+      
+    <div id="giscus" class="giscus"></div>
+    <script type="text/javascript">
+      Fluid.utils.loadComments('#giscus', function() {
+        var options = {"repo":"ZJfans/ZJfans.github.io","repo-id":"R_kgDOLYg-XA","category":"Announcements","category-id":"DIC_kwDOLYg-XM4Ceo1C","theme-light":"light","theme-dark":"dark","mapping":"pathname","reactions-enabled":1,"emit-metadata":0,"input-position":"bottom","lang":"zh-CN"};
+        var attributes = {};
+        for (let option in options) {
+          if (!option.startsWith('theme-')) {
+            var key = option.startsWith('data-') ? option : 'data-' + option;
+            attributes[key] = options[option];
+          }
+        }
+        var light = 'light';
+        var dark = 'dark';
+        window.GiscusThemeLight = light;
+        window.GiscusThemeDark = dark;
+        attributes['data-theme'] = document.documentElement.getAttribute('data-user-color-scheme') === 'dark' ? dark : light;
+        for (let attribute in attributes) {
+          var value = attributes[attribute];
+          if (value === undefined || value === null || value === '') {
+            delete attributes[attribute];
+          }
+        }
+        var s = document.createElement('script');
+        s.setAttribute('src', 'https://giscus.app/client.js');
+        s.setAttribute('crossorigin', 'anonymous');
+        for (let attribute in attributes) {
+          s.setAttribute(attribute, attributes[attribute]);
+        }
+        var ss = document.getElementsByTagName('script');
+        var e = ss.length > 0 ? ss[ss.length - 1] : document.head || document.documentElement;
+        e.parentNode.insertBefore(s, e.nextSibling);
+      });
+    </script>
+    <noscript>Please enable JavaScript to view the comments</noscript>
+
+
+    </article>
+  
+
+
+          </article>
+        </div>
+      </div>
+    </div>
+
+    <div class="side-col d-none d-lg-block col-lg-2">
+      
+  <aside class="sidebar" style="margin-left: -1rem">
+    <div id="toc">
+  <p class="toc-header">
+    <i class="iconfont icon-list"></i>
+    <span>目录</span>
+  </p>
+  <div class="toc-body" id="toc-body"></div>
+</div>
+
+
+
+  </aside>
+
+
+    </div>
+  </div>
+</div>
+
+
+
+
+
+  
+
+
+
+  
+
+
+
+  
+
+
+
+  
+
+
+
+  
+
+
+
+
+
+
+
+    
+
+    
+      <a id="scroll-top-button" aria-label="TOP" href="#" role="button">
+        <i class="iconfont icon-arrowup" aria-hidden="true"></i>
+      </a>
+    
+
+    
+      <div class="modal fade" id="modalSearch" tabindex="-1" role="dialog" aria-labelledby="ModalLabel"
+     aria-hidden="true">
+  <div class="modal-dialog modal-dialog-scrollable modal-lg" role="document">
+    <div class="modal-content">
+      <div class="modal-header text-center">
+        <h4 class="modal-title w-100 font-weight-bold">搜索</h4>
+        <button type="button" id="local-search-close" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body mx-3">
+        <div class="md-form mb-5">
+          <input type="text" id="local-search-input" class="form-control validate">
+          <label data-error="x" data-success="v" for="local-search-input">关键词</label>
+        </div>
+        <div class="list-group" id="local-search-result"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+    
+
+    
+  </main>
+
+  <footer>
+    <div class="footer-inner">
+  
+    <div class="footer-content">
+       <a href="https://hexo.io" target="_blank" rel="nofollow noopener"><span>Hexo</span></a> <i class="iconfont icon-love"></i> <a href="https://github.com/fluid-dev/hexo-theme-fluid" target="_blank" rel="nofollow noopener"><span>Fluid</span></a> 
+    </div>
+  
+  
+    <div class="statistics">
+  
+  
+
+  
+    
+      <span id="busuanzi_container_site_pv" style="display: none">
+        总访问量 
+        <span id="busuanzi_value_site_pv"></span>
+         次
+      </span>
+    
+    
+      <span id="busuanzi_container_site_uv" style="display: none">
+        总访客数 
+        <span id="busuanzi_value_site_uv"></span>
+         人
+      </span>
+    
+    
+  
+</div>
+
+  
+  
+  
+</div>
+
+  </footer>
+
+  <!-- Scripts -->
+  
+  <script  src="https://lib.baomitu.com/nprogress/0.2.0/nprogress.min.js" ></script>
+  <link  rel="stylesheet" href="https://lib.baomitu.com/nprogress/0.2.0/nprogress.min.css" />
+
+  <script>
+    NProgress.configure({"showSpinner":false,"trickleSpeed":100})
+    NProgress.start()
+    window.addEventListener('load', function() {
+      NProgress.done();
+    })
+  </script>
+
+
+<script  src="https://lib.baomitu.com/jquery/3.6.4/jquery.min.js" ></script>
+<script  src="https://lib.baomitu.com/twitter-bootstrap/4.6.1/js/bootstrap.min.js" ></script>
+<script  src="/js/events.js" ></script>
+<script  src="/js/plugins.js" ></script>
+
+
+  <script  src="https://lib.baomitu.com/typed.js/2.0.12/typed.min.js" ></script>
+  <script>
+    (function (window, document) {
+      var typing = Fluid.plugins.typing;
+      var subtitle = document.getElementById('subtitle');
+      if (!subtitle || !typing) {
+        return;
+      }
+      var text = subtitle.getAttribute('data-typed-text');
+      
+        typing(text);
+      
+    })(window, document);
+  </script>
+
+
+
+
+  
+    <script  src="/js/img-lazyload.js" ></script>
+  
+
+
+
+
+  
+<script>
+  Fluid.utils.createScript('https://lib.baomitu.com/tocbot/4.20.1/tocbot.min.js', function() {
+    var toc = jQuery('#toc');
+    if (toc.length === 0 || !window.tocbot) { return; }
+    var boardCtn = jQuery('#board-ctn');
+    var boardTop = boardCtn.offset().top;
+
+    window.tocbot.init(Object.assign({
+      tocSelector     : '#toc-body',
+      contentSelector : '.markdown-body',
+      linkClass       : 'tocbot-link',
+      activeLinkClass : 'tocbot-active-link',
+      listClass       : 'tocbot-list',
+      isCollapsedClass: 'tocbot-is-collapsed',
+      collapsibleClass: 'tocbot-is-collapsible',
+      scrollSmooth    : true,
+      includeTitleTags: true,
+      headingsOffset  : -boardTop,
+    }, CONFIG.toc));
+    if (toc.find('.toc-list-item').length > 0) {
+      toc.css('visibility', 'visible');
+    }
+
+    Fluid.events.registerRefreshCallback(function() {
+      if ('tocbot' in window) {
+        tocbot.refresh();
+        var toc = jQuery('#toc');
+        if (toc.length === 0 || !tocbot) {
+          return;
+        }
+        if (toc.find('.toc-list-item').length > 0) {
+          toc.css('visibility', 'visible');
+        }
+      }
+    });
+  });
+</script>
+
+
+  <script src=https://lib.baomitu.com/clipboard.js/2.0.11/clipboard.min.js></script>
+
+  <script>Fluid.plugins.codeWidget();</script>
+
+
+  
+<script>
+  Fluid.utils.createScript('https://lib.baomitu.com/anchor-js/4.3.1/anchor.min.js', function() {
+    window.anchors.options = {
+      placement: CONFIG.anchorjs.placement,
+      visible  : CONFIG.anchorjs.visible
+    };
+    if (CONFIG.anchorjs.icon) {
+      window.anchors.options.icon = CONFIG.anchorjs.icon;
+    }
+    var el = (CONFIG.anchorjs.element || 'h1,h2,h3,h4,h5,h6').split(',');
+    var res = [];
+    for (var item of el) {
+      res.push('.markdown-body > ' + item.trim());
+    }
+    if (CONFIG.anchorjs.placement === 'left') {
+      window.anchors.options.class = 'anchorjs-link-left';
+    }
+    window.anchors.add(res.join(', '));
+
+    Fluid.events.registerRefreshCallback(function() {
+      if ('anchors' in window) {
+        anchors.removeAll();
+        var el = (CONFIG.anchorjs.element || 'h1,h2,h3,h4,h5,h6').split(',');
+        var res = [];
+        for (var item of el) {
+          res.push('.markdown-body > ' + item.trim());
+        }
+        if (CONFIG.anchorjs.placement === 'left') {
+          anchors.options.class = 'anchorjs-link-left';
+        }
+        anchors.add(res.join(', '));
+      }
+    });
+  });
+</script>
+
+
+  
+<script>
+  Fluid.utils.createScript('https://lib.baomitu.com/fancybox/3.5.7/jquery.fancybox.min.js', function() {
+    Fluid.plugins.fancyBox();
+  });
+</script>
+
+
+  <script>Fluid.plugins.imageCaption();</script>
+
+  <script  src="/js/local-search.js" ></script>
+
+  <script defer src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js" ></script>
+
+
+
+
+
+<!-- 主题的启动项，将它保持在最底部 -->
+<!-- the boot of the theme, keep it at the bottom -->
+<script  src="/js/boot.js" ></script>
+
+
+  
+
+  <noscript>
+    <div class="noscript-warning">博客在允许 JavaScript 运行的环境下浏览效果更佳</div>
+  </noscript>
+</body>
+</html>
