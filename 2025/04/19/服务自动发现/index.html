@@ -24,7 +24,7 @@
 <meta property="og:description" content="Nginx 采用 master–worker 多进程模型，其中 master 进程负责管理和信号交互，worker 进程执行网络 I&#x2F;O、定时器和延迟队列事件循环 。 1、nginx的原理1.1、配置解析与端口初始化1 Master 进程：解析配置与打开监听端口  配置解析：在 main() 中，master 进程首先调用 ngx_init_cycle()，该函数基于 ngx_conf_">
 <meta property="og:locale" content="zh_CN">
 <meta property="article:published_time" content="2025-04-19T10:30:48.854Z">
-<meta property="article:modified_time" content="2025-04-19T10:31:03.739Z">
+<meta property="article:modified_time" content="2025-04-19T10:38:13.346Z">
 <meta property="article:author" content="张三疯">
 <meta property="article:tag" content="nginx，work">
 <meta property="article:tag" content="zookeeper">
@@ -338,13 +338,13 @@
 <ul>
 <li>所有 Worker 中仅有一个被选定（编号为0）连接 ZooKeeper；</li>
 <li>该 Worker 注册 Watcher，并监听配置中心的变更事件；</li>
-<li>当监听到变更后，直接将最新配置写入本地文件，并通过共享内存设置一个“配置更新标志位”。</li>
+<li>当监听到变更后，直接将最新配置写入本地文件，并通过共享内存设置一个“配置更新标志位”，实际为版本号。</li>
 </ul>
 <p>（2）其他 Worker 通过轮询方式感知并应用配置</p>
 <ul>
-<li>其他 Worker 启动定时器，定期检查共享内存中的“配置更新标志”；</li>
-<li>一旦发现有变更，即读取配置文件，加载新配置并完成本地内存更新；</li>
-<li>更新完成后，清除标志，避免重复加载。</li>
+<li>其他 Worker 启动定时器，定期比对本地进程内存和共享内存中的版本号是否一致；</li>
+<li>一旦发现不一致，抢锁，然后读取配置文件，加载新配置并完成本地内存更新；</li>
+<li>更新完成后，版本号修改为一致，释放锁。</li>
 </ul>
 <p>（3）不足：</p>
 <ul>
