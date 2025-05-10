@@ -1,0 +1,892 @@
+
+
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-color-scheme=auto>
+
+
+
+<head>
+  <meta charset="UTF-8">
+  <link rel="apple-touch-icon" sizes="76x76" href="/img/fluid.png">
+  <link rel="icon" href="/img/fluid.png">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, shrink-to-fit=no">
+  <meta http-equiv="x-ua-compatible" content="ie=edge">
+  
+  <meta name="theme-color" content="#2f4154">
+  <meta name="author" content="张三疯">
+  <meta name="keywords" content="nginx,openresty,网关,HTTP/HTTPS,Websocket">
+  
+    <meta name="description" content="Nginx 主要用于实现路由与反向代理功能。在实际业务中，客户端与后端服务之间往往使用不同的协议，例如客户端采用 HTTP&#x2F;2，而后端仍使用 HTTP&#x2F;1.1。此时，Nginx 在作为 L7（应用层）代理时，会分别与上下游建立连接，并在两端之间转发请求和响应。由于协议不一致，Nginx 必须对请求进行解析与重新封装，实现上下游之间的“协议转换”。 1、HTTP请求的生命流程对于">
+<meta property="og:type" content="article">
+<meta property="og:title" content="nginx之上下游不同协议的转换">
+<meta property="og:url" content="https://zjfans.github.io/2025/05/10/nginx%E4%B9%8B%E4%B8%8A%E4%B8%8B%E6%B8%B8%E4%B8%8D%E5%90%8C%E5%8D%8F%E8%AE%AE%E7%9A%84%E8%BD%AC%E6%8D%A2/index.html">
+<meta property="og:site_name" content="ZJfans Blog">
+<meta property="og:description" content="Nginx 主要用于实现路由与反向代理功能。在实际业务中，客户端与后端服务之间往往使用不同的协议，例如客户端采用 HTTP&#x2F;2，而后端仍使用 HTTP&#x2F;1.1。此时，Nginx 在作为 L7（应用层）代理时，会分别与上下游建立连接，并在两端之间转发请求和响应。由于协议不一致，Nginx 必须对请求进行解析与重新封装，实现上下游之间的“协议转换”。 1、HTTP请求的生命流程对于">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2025-05-10T11:03:25.424Z">
+<meta property="article:modified_time" content="2025-05-10T11:03:49.944Z">
+<meta property="article:author" content="张三疯">
+<meta property="article:tag" content="nginx，HTTP">
+<meta name="twitter:card" content="summary_large_image">
+  
+  
+    <meta name="referrer" content="no-referrer-when-downgrade">
+  
+  
+  <title>nginx之上下游不同协议的转换 - ZJfans Blog</title>
+
+  <link  rel="stylesheet" href="https://lib.baomitu.com/twitter-bootstrap/4.6.1/css/bootstrap.min.css" />
+
+
+
+  <link  rel="stylesheet" href="https://lib.baomitu.com/github-markdown-css/4.0.0/github-markdown.min.css" />
+
+  <link  rel="stylesheet" href="https://lib.baomitu.com/hint.css/2.7.0/hint.min.css" />
+
+  <link  rel="stylesheet" href="https://lib.baomitu.com/fancybox/3.5.7/jquery.fancybox.min.css" />
+
+
+
+<!-- 主题依赖的图标库，不要自行修改 -->
+<!-- Do not modify the link that theme dependent icons -->
+
+<link rel="stylesheet" href="//at.alicdn.com/t/font_1749284_hj8rtnfg7um.css">
+
+
+
+<link rel="stylesheet" href="//at.alicdn.com/t/font_1736178_lbnruvf0jn.css">
+
+
+<link  rel="stylesheet" href="/css/main.css" />
+
+
+  <link id="highlight-css" rel="stylesheet" href="/css/highlight.css" />
+  
+    <link id="highlight-css-dark" rel="stylesheet" href="/css/highlight-dark.css" />
+  
+
+
+
+
+  <script id="fluid-configs">
+    var Fluid = window.Fluid || {};
+    Fluid.ctx = Object.assign({}, Fluid.ctx)
+    var CONFIG = {"hostname":"zjfans.github.io","root":"/","version":"1.9.7","typing":{"enable":true,"typeSpeed":70,"cursorChar":"_","loop":false,"scope":[]},"anchorjs":{"enable":true,"element":"h1,h2,h3,h4,h5,h6","placement":"left","visible":"hover","icon":""},"progressbar":{"enable":true,"height_px":3,"color":"#29d","options":{"showSpinner":false,"trickleSpeed":100}},"code_language":{"enable":true,"default":"TEXT"},"copy_btn":true,"image_caption":{"enable":true},"image_zoom":{"enable":true,"img_url_replace":["",""]},"toc":{"enable":true,"placement":"right","headingSelector":"h1,h2,h3,h4,h5,h6","collapseDepth":0},"lazyload":{"enable":true,"loading_img":"/img/loading.gif","onlypost":false,"offset_factor":2},"web_analytics":{"enable":true,"follow_dnt":true,"baidu":null,"google":{"measurement_id":null},"tencent":{"sid":null,"cid":null},"woyaola":null,"cnzz":null,"leancloud":{"app_id":null,"app_key":null,"server_url":null,"path":"window.location.pathname","ignore_local":false}},"search_path":"/local-search.xml","include_content_in_search":true};
+
+    if (CONFIG.web_analytics.follow_dnt) {
+      var dntVal = navigator.doNotTrack || window.doNotTrack || navigator.msDoNotTrack;
+      Fluid.ctx.dnt = dntVal && (dntVal.startsWith('1') || dntVal.startsWith('yes') || dntVal.startsWith('on'));
+    }
+  </script>
+  <script  src="/js/utils.js" ></script>
+  <script  src="/js/color-schema.js" ></script>
+  
+
+  
+
+  
+    <!-- Google tag (gtag.js) -->
+    <script async>
+      if (!Fluid.ctx.dnt) {
+        Fluid.utils.createScript("https://www.googletagmanager.com/gtag/js?id=", function() {
+          window.dataLayer = window.dataLayer || [];
+          function gtag() {
+            dataLayer.push(arguments);
+          }
+          gtag('js', new Date());
+          gtag('config', '');
+        });
+      }
+    </script>
+  
+
+  
+
+  
+
+  
+
+  
+
+
+
+  
+<meta name="generator" content="Hexo 6.3.0"></head>
+
+
+<body>
+  
+
+  <header>
+    
+
+<div class="header-inner" style="height: 70vh;">
+  <nav id="navbar" class="navbar fixed-top  navbar-expand-lg navbar-dark scrolling-navbar">
+  <div class="container">
+    <a class="navbar-brand" href="/">
+      <strong>ZJfans Blog</strong>
+    </a>
+
+    <button id="navbar-toggler-btn" class="navbar-toggler" type="button" data-toggle="collapse"
+            data-target="#navbarSupportedContent"
+            aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+      <div class="animated-icon"><span></span><span></span><span></span></div>
+    </button>
+
+    <!-- Collapsible content -->
+    <div class="collapse navbar-collapse" id="navbarSupportedContent">
+      <ul class="navbar-nav ml-auto text-center">
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/" target="_self">
+                <i class="iconfont icon-home-fill"></i>
+                <span>首页</span>
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/archives/" target="_self">
+                <i class="iconfont icon-archive-fill"></i>
+                <span>归档</span>
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/categories/" target="_self">
+                <i class="iconfont icon-category-fill"></i>
+                <span>分类</span>
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/tags/" target="_self">
+                <i class="iconfont icon-tags-fill"></i>
+                <span>标签</span>
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/about/" target="_self">
+                <i class="iconfont icon-user-fill"></i>
+                <span>关于</span>
+              </a>
+            </li>
+          
+        
+        
+          <li class="nav-item" id="search-btn">
+            <a class="nav-link" target="_self" href="javascript:;" data-toggle="modal" data-target="#modalSearch" aria-label="Search">
+              <i class="iconfont icon-search"></i>
+            </a>
+          </li>
+          
+        
+        
+          <li class="nav-item" id="color-toggle-btn">
+            <a class="nav-link" target="_self" href="javascript:;" aria-label="Color Toggle">
+              <i class="iconfont icon-dark" id="color-toggle-icon"></i>
+            </a>
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+</nav>
+
+  
+
+<div id="banner" class="banner" parallax=true
+     style="background: url('/img/theodor-lundqvist-WHhbYArwFt8-unsplash.jpg') no-repeat center center; background-size: cover;">
+  <div class="full-bg-img">
+    <div class="mask flex-center" style="background-color: rgba(0, 0, 0, 0.3)">
+      <div class="banner-text text-center fade-in-up">
+        <div class="h2">
+          
+            <span id="subtitle" data-typed-text="nginx之上下游不同协议的转换"></span>
+          
+        </div>
+
+        
+          
+  <div class="mt-3">
+    
+    
+      <span class="post-meta">
+        <i class="iconfont icon-date-fill" aria-hidden="true"></i>
+        <time datetime="2025-05-10 19:03" pubdate>
+          2025年5月10日 晚上
+        </time>
+      </span>
+    
+  </div>
+
+  <div class="mt-1">
+    
+      <span class="post-meta mr-2">
+        <i class="iconfont icon-chart"></i>
+        
+          2.9k 字
+        
+      </span>
+    
+
+    
+      <span class="post-meta mr-2">
+        <i class="iconfont icon-clock-fill"></i>
+        
+        
+        
+          24 分钟
+        
+      </span>
+    
+
+    
+    
+  </div>
+
+
+        
+      </div>
+
+      
+    </div>
+  </div>
+</div>
+
+</div>
+
+  </header>
+
+  <main>
+    
+      
+
+<div class="container-fluid nopadding-x">
+  <div class="row nomargin-x">
+    <div class="side-col d-none d-lg-block col-lg-2">
+      
+
+    </div>
+
+    <div class="col-lg-8 nopadding-x-md">
+      <div class="container nopadding-x-md" id="board-ctn">
+        <div id="board">
+          <article class="post-content mx-auto">
+            <h1 id="seo-header">nginx之上下游不同协议的转换</h1>
+            
+            
+              <div class="markdown-body">
+                
+                <p>Nginx 主要用于实现路由与反向代理功能。在实际业务中，客户端与后端服务之间往往使用不同的协议，例如客户端采用 HTTP&#x2F;2，而后端仍使用 HTTP&#x2F;1.1。此时，Nginx 在作为 L7（应用层）代理时，会分别与上下游建立连接，并在两端之间转发请求和响应。由于协议不一致，Nginx 必须对请求进行解析与重新封装，实现上下游之间的“协议转换”。</p>
+<h2 id="1、HTTP请求的生命流程"><a href="#1、HTTP请求的生命流程" class="headerlink" title="1、HTTP请求的生命流程"></a>1、HTTP请求的生命流程</h2><p>对于一个http请求，work的处理流程如下</p>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br></pre></td><td class="code"><pre><code class="hljs javascript">┌────────────────────────────┐<br>│      <span class="hljs-title class_">Worker</span> <span class="hljs-title class_">Process</span> <span class="hljs-title class_">Loop</span>   │<br>│  ngx_worker_process_cycle  │<br>└────────────┬───────────────┘<br>             ↓<br>    <span class="hljs-title function_">ngx_process_events_and_timers</span>()<br>             ↓<br>      <span class="hljs-title function_">ngx_event_process_events</span>()<br>             ↓<br>        🔔 <span class="hljs-title function_">epoll_wait</span>()<br>             ↓<br>     🔌 socket 可读 (新连接)<br>             ↓<br>       <span class="hljs-title function_">ngx_event_accept</span>()<br>             ↓                 <span class="hljs-comment">//此处tcp连接建立成功</span><br>  ✅ <span class="hljs-title function_">ngx_http_init_connection</span>()<br>             ↓<br>  设置连接回调为 ngx_http_wait_request_handler<br>             ↓<br>  🔁 等待并读取请求行（<span class="hljs-variable constant_">GET</span> /...）<br>             ↓<br>  <span class="hljs-title function_">ngx_http_process_request_line</span>()<br>             ↓<br>  读取并解析请求头<br>             ↓<br>  <span class="hljs-title function_">ngx_http_process_request_headers</span>()<br>             ↓<br>  创建 ngx_http_request_t 完整结构<br>             ↓                 <span class="hljs-comment">//初步解析HTTP行与头部，创建核心结构体r</span><br>  进入阶段引擎 <span class="hljs-title function_">ngx_http_core_run_phases</span>()<br>             ↓<br>  🔍 <span class="hljs-variable constant_">NGX_HTTP_FIND_CONFIG_PHASE</span><br>  → 匹配 location，找到 proxy_pass<br>  → 设置 r-&gt;content_handler = ngx_http_proxy_handler<br>             ↓<br>  ▶ <span class="hljs-variable constant_">NGX_HTTP_REWRITE_PHASE</span> 等（可选）<br>  → 执行重写指令，如 rewrite/set/<span class="hljs-keyword">return</span> 等<br>             ↓                 <span class="hljs-comment">//rewrite阶段，处理请求的相关逻辑</span><br>  ▶ <span class="hljs-variable constant_">NGX_HTTP_CONTENT_PHASE</span><br>  → 调用 <span class="hljs-title function_">ngx_http_proxy_handler</span>(r)<br>             ↓                 <span class="hljs-comment">//确认 upstream，初始化结构体，并建立连接</span><br>  <span class="hljs-title function_">ngx_http_proxy_handler</span>()<br>             ↓<br>  <span class="hljs-title function_">ngx_http_upstream_init</span>(r)<br>    → <span class="hljs-title function_">ngx_http_upstream_connect</span>(r, u)<br>      → <span class="hljs-title function_">ngx_event_connect_peer</span>()              <span class="hljs-comment">//发起与后端的连接</span><br>      → 设置 u-&gt;write_event_handler = ngx_http_upstream_send_request_handler<br>             ↓<br>  <span class="hljs-comment">//构造并发送请求到后端（构造 Host、URI）</span><br>    → <span class="hljs-title function_">ngx_http_upstream_send_request</span>()<br>             ↓<br>  <span class="hljs-comment">//异步读取后端响应（头 + body）</span><br>    → <span class="hljs-title function_">ngx_http_upstream_process_header</span>()<br>     		 ↓<br>    → <span class="hljs-title function_">ngx_http_upstream_send_response</span>()       <span class="hljs-comment">//开始转发响应体</span><br>             ↓<br>  <span class="hljs-comment">//通过 output filter 输出给客户端</span><br>    → <span class="hljs-title function_">ngx_http_output_filter</span>(r, out)<br>             ↓<br>  <span class="hljs-title function_">ngx_http_finalize_request</span>()<br>             ↓<br>  <span class="hljs-comment">//可保持 keepalive 或关闭连接</span><br></code></pre></td></tr></table></figure>
+
+<h2 id="2、实际的例子"><a href="#2、实际的例子" class="headerlink" title="2、实际的例子"></a>2、实际的例子</h2><p>一个实际的例子，链路如下：</p>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><code class="hljs javascript">[<span class="hljs-title class_">Client</span>] —-&gt; <span class="hljs-variable constant_">HTTP</span>/<span class="hljs-number">2</span> ---&gt; [<span class="hljs-title class_">Nginx</span>] —-&gt; <span class="hljs-variable constant_">HTTP</span>/<span class="hljs-number">1</span> ---&gt; [<span class="hljs-title class_">App</span>]<br></code></pre></td></tr></table></figure>
+
+<p>nginx的配置：</p>
+<figure class="highlight nginx"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><code class="hljs nginx"><span class="hljs-section">server</span> &#123;<br>    <span class="hljs-comment"># HTTP2</span><br>    <span class="hljs-attribute">listen</span> <span class="hljs-number">443</span> ssl http2;<br>    <span class="hljs-attribute">server_name</span> ZJfans.com;<br><br>    <span class="hljs-attribute">ssl_certificate</span>     /path/to/fullchain.pem;<br>    <span class="hljs-attribute">ssl_certificate_key</span> /path/to/privkey.pem;<br><br>    <span class="hljs-attribute">ssl_protocols</span>       TLSv1.<span class="hljs-number">2</span> TLSv1.<span class="hljs-number">3</span>;<br>    <span class="hljs-attribute">ssl_ciphers</span>         HIGH:!aNULL:!MD5;<br><br>    <span class="hljs-section">location</span> / &#123;<br>        <span class="hljs-attribute">proxy_pass</span> http://backend_app;<br><br>        <span class="hljs-comment"># HTTP1.1</span><br>        <span class="hljs-attribute">proxy_http_version</span> <span class="hljs-number">1</span>.<span class="hljs-number">1</span>;<br>        <span class="hljs-attribute">proxy_set_header</span> Connection <span class="hljs-string">&quot;&quot;</span>;<br>    &#125;<br>&#125;<br><br></code></pre></td></tr></table></figure>
+
+
+
+<p>对于客户端，根据第1节的处理流程来看，nginx在ngx_http_wait_request_handler函数中，会根据HTTP协议版本的不同，进行不同处理</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-meta">#<span class="hljs-keyword">if</span> (NGX_HTTP_V2)</span><br><br>    h2scf = ngx_http_get_module_srv_conf(hc-&gt;conf_ctx, ngx_http_v2_module);<br><br>    <span class="hljs-keyword">if</span> (!hc-&gt;ssl &amp;&amp; (h2scf-&gt;enable || hc-&gt;addr_conf-&gt;http2)) &#123;     <span class="hljs-comment">//h2scf-&gt;enable端口开启HTTP2的标识 </span><br><br>        size = ngx_min(<span class="hljs-keyword">sizeof</span>(NGX_HTTP_V2_PREFACE) - <span class="hljs-number">1</span>,<br>                       (<span class="hljs-type">size_t</span>) (b-&gt;last - b-&gt;pos));<br><br>        <span class="hljs-keyword">if</span> (ngx_memcmp(b-&gt;pos, NGX_HTTP_V2_PREFACE, size) == <span class="hljs-number">0</span>) &#123;<br><br>            <span class="hljs-keyword">if</span> (size == <span class="hljs-keyword">sizeof</span>(NGX_HTTP_V2_PREFACE) - <span class="hljs-number">1</span>) &#123;<br>                ngx_http_v2_init(rev);<br>                <span class="hljs-keyword">return</span>;<br>            &#125;<br><br>            ngx_post_event(rev, &amp;ngx_posted_events);<br>            <span class="hljs-keyword">return</span>;<br>        &#125;<br>    &#125;<br><br><span class="hljs-meta">#<span class="hljs-keyword">endif</span></span><br></code></pre></td></tr></table></figure>
+
+<p>这其实是处理HTTP的入口，之后会根据协议的不同，设置一系列的回调。</p>
+<p>对于upstream，在NGX_HTTP_CONTENT_PHASE确定相关协议，其实proxy_pass这个指令只是做HTTP1.0&#x2F;1.1的转发，使用proxy_http_version可以指定具体版本</p>
+<table>
+<thead>
+<tr>
+<th>协议</th>
+<th>指令</th>
+<th>处理函数</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>HTTP1.0&#x2F;1.1</td>
+<td>proxy_pass</td>
+<td>ngx_http_proxy_handler</td>
+</tr>
+<tr>
+<td>HTTP2</td>
+<td>grpc_pass</td>
+<td>ngx_http_grpc_pass</td>
+</tr>
+<tr>
+<td>websocket</td>
+<td>proxy_pass<br>(proxy_set_header Upgrade $http_upgrade;<br>proxy_set_header Connection “Upgrade”;)</td>
+<td>ngx_http_upstream_upgrade</td>
+</tr>
+</tbody></table>
+<p>所以客户端和upstream是隔离的，但是都可以在r中取到相关的数据，r包含了一个请求生命周期的所有数据，对于写代码很友好。当然上下游数据格式是不一样的，nginx会将读取到的二进制数据封装为对应协议的格式，然后进行转发。</p>
+<p>但是实际websocket又会不一样，类似TCP层面的转发，按照websocket的协议规范，客户端发送的数据必须使用掩码（masking），所以如果代理节点进行解码貌似也是一个破坏性的行为。</p>
+<h2 id="3、实现HTTP私有协议的路由转换"><a href="#3、实现HTTP私有协议的路由转换" class="headerlink" title="3、实现HTTP&lt;-&gt;私有协议的路由转换"></a>3、实现HTTP&lt;-&gt;私有协议的路由转换</h2><p>在微服务架构中，HTTP 是广泛采用的通用协议，但为了满足特定业务需求或提升性能，会采用自定义的私有协议。对于我们的早期业务而言，只存在2种私有协议，随着微服务体系的接入，需要支持HTTP协议。</p>
+<p>Nginx 原生支持同协议之间的代理（如 HTTP 到 HTTP、TCP 到 TCP），但如果需要实现 <strong>HTTP 到私有协议</strong> 的转换，便需引入一些定制逻辑。</p>
+<p>事实上，实现此目标的主要流程可分为以下四步：</p>
+<ol>
+<li>根据http请求的uri&#x2F;参数&#x2F;头部确认是哪个upstream</li>
+<li>将http的uri、参数、头部、body转换为私有协议规范</li>
+<li>初始化upstream，接入到私有协议模块处理，进行交互</li>
+<li>判断客户端协议，然后交由http框架处理与客户端的交互</li>
+</ol>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><code class="hljs c">HTTP 请求 -&gt; [ 路由规则 -&gt; upstream 确定 -&gt; 请求数据转私有协议 -&gt; upstream 通信 -&gt; 响应转 HTTP ] -&gt; 返回客户端<br></code></pre></td></tr></table></figure>
+
+<h3 id="3-1、根据-HTTP-请求确认目标-upstream"><a href="#3-1、根据-HTTP-请求确认目标-upstream" class="headerlink" title="3.1、根据 HTTP 请求确认目标 upstream"></a>3.1、根据 HTTP 请求确认目标 upstream</h3><p>当一个 HTTP 请求进入 Nginx，我们需要依据请求内容（如 URI、参数、Header 等）确定应该路由到哪个 upstream。这一步实际上是一个“请求路由判定”过程。</p>
+<p><strong>基本思路：</strong></p>
+<ul>
+<li>定义一个内部变量 <code>$upstream_name</code>，其值由请求参数经过一定规则匹配后动态生成；</li>
+<li>在 <code>proxy_pass</code> 中使用该变量完成请求转发：</li>
+</ul>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><code class="hljs c">proxy_pass $upstream_name;<br></code></pre></td></tr></table></figure>
+
+<p><strong>执行时机：</strong></p>
+<p>在 Nginx 中，<code>proxy_pass</code> 的执行发生在 <strong>content phase</strong> 阶段，因此 <code>$upstream_name</code> 变量也会在此阶段被求值。Nginx 在处理 HTTP 请求时，会依次执行注册到 <code>NGX_HTTP_CONTENT_PHASE</code> 阶段的模块，<code>ngx_http_proxy_handler</code> 是其中之一：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-type">static</span> <span class="hljs-type">ngx_int_t</span> <span class="hljs-title function_">ngx_http_proxy_handler</span><span class="hljs-params">(<span class="hljs-type">ngx_http_request_t</span> *r)</span>;<br></code></pre></td></tr></table></figure>
+
+<p>该函数又调用了：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-type">static</span> <span class="hljs-type">ngx_int_t</span> <span class="hljs-title function_">ngx_http_proxy_eval</span><span class="hljs-params">(<span class="hljs-type">ngx_http_request_t</span> *r,</span><br><span class="hljs-params">                                     <span class="hljs-type">ngx_http_proxy_ctx_t</span> *ctx,</span><br><span class="hljs-params">                                     <span class="hljs-type">ngx_http_proxy_loc_conf_t</span> *plcf)</span>;<br></code></pre></td></tr></table></figure>
+
+<p>核心逻辑是：<strong>在这里解析 <code>$upstream_name</code> 的值</strong>，也就是实际为当前请求分配 upstream 地址的地方。</p>
+<p><strong>自定义逻辑：</strong></p>
+<p>可以在 <code>$upstream_name</code> 的计算逻辑中嵌入业务自定义的路由规则，根据 URI、参数等信息选择合适的 upstream。</p>
+<p>举个例子：</p>
+<figure class="highlight nginx"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><code class="hljs nginx">http接入 - uri：<br>a/<span class="hljs-attribute">xxx</span>   -&gt;    http_xxx_001<br>b/xxx   -&gt;    protocol_1_xxx_001<br>b/xxx   -&gt;    protocol_2_xxx_001<br><br>upstream http_xxx_001 &#123;<br>    <span class="hljs-attribute">server</span> <span class="hljs-number">10.0.0.1:7000</span>;<br>    <span class="hljs-attribute">server</span> <span class="hljs-number">10.0.0.2:7000</span>;<br>&#125;<br><br><span class="hljs-section">upstream</span> protocol_1_xxx_001 &#123;<br>    protocol_1;<br>    <span class="hljs-attribute">server</span> <span class="hljs-number">10.0.1.1:8000</span>;<br>    <span class="hljs-attribute">server</span> <span class="hljs-number">10.0.1.2:8000</span>;<br>&#125;<br><br><span class="hljs-section">upstream</span> protocol_2_xxx_001 &#123;<br>    protocol_2;<br>    <span class="hljs-attribute">server</span> <span class="hljs-number">10.0.1.1:9000</span>;<br>    <span class="hljs-attribute">server</span> <span class="hljs-number">10.0.1.2:9000</span>;<br>&#125;<br></code></pre></td></tr></table></figure>
+
+<p>实际上只要确认upstream，就可以确认是什么协议。                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       </p>
+<h3 id="3-2、HTTP-到私有协议的转换"><a href="#3-2、HTTP-到私有协议的转换" class="headerlink" title="3.2、HTTP 到私有协议的转换"></a>3.2、HTTP 到私有协议的转换</h3><p>确定了 upstream + 协议后，Nginx 需要将标准的 HTTP 请求数据转换为私有协议格式，这一步称为<strong>协议转换</strong>。</p>
+<p><strong>内容包括：</strong></p>
+<ul>
+<li>将 URI、Query 参数、Headers、Body 数据按协议格式封装；</li>
+<li>可能涉及字段编码、数据压缩等；</li>
+<li>考虑不同类型请求（GET、POST 等）如何转换；</li>
+<li>保证转换结果符合目标私有协议规范。</li>
+</ul>
+<p><strong>实现：</strong></p>
+<ul>
+<li>自定义一个模块挂在 content phase，作为 proxy 前置处理器；</li>
+<li>使用模块内部逻辑，将 <code>r-&gt;headers_in</code> 和 <code>r-&gt;request_body</code> 构造成特定的 buffer；</li>
+<li>传入私有协议模块处理。</li>
+</ul>
+<p>从实际来看，设计一个高可用、高可靠的协议难度很大，又要满足各种场景，又要可靠，还要性能更好一些（很遗憾，我们的协议并没有HTTP2的性能好，场景也缺失一些）。</p>
+<p>协议归根结底是一种信息交换的规则，对话双方遵守同一种规则，就可以交换信息，类似于英语和汉语等等，也类似于编程语言？本质上就是人与机器做交互。从实际的实现看，设计的难度远远大于实现。</p>
+<h3 id="3-3、与upstream交互"><a href="#3-3、与upstream交互" class="headerlink" title="3.3、与upstream交互"></a>3.3、与upstream交互</h3><ol>
+<li><p>数据封装完毕，下一步是将构造好的私有协议请求通过 Nginx upstream 机制发送到后端服务，并接收响应。</p>
+<p>核心流程如下：</p>
+<ol>
+<li><strong>选择合适的 server 节点</strong><br>通常upstream代表一个集群，其中会有大于等于1个节点，因此还需要根据负载算法，找到具体的server节点，支持轮询、hash、最小连接数等多种负载均衡算法</li>
+<li><strong>发送封装后的请求数据</strong><br> 按协议定义的格式准确填充 buffer。</li>
+<li><strong>异步接收 upstream 的响应数据</strong><br> 与 HTTP upstream 模块类似，需注册读事件处理响应内容</li>
+</ol>
+<p>事实上这一部分只借用已有模块即可</p>
+</li>
+</ol>
+<h3 id="3-4、返回响应到客户端"><a href="#3-4、返回响应到客户端" class="headerlink" title="3.4、返回响应到客户端"></a>3.4、返回响应到客户端</h3><p>正常HTTP协议的upstream事件处理函数是读取响应头、响应body，然后再发送到客户端，依次注册回调函数。这里也类似，与upstream 通信完成后，Nginx 需要将私有协议格式的响应内容转换为 HTTP 响应返回给客户端。</p>
+<p>常见处理逻辑：</p>
+<ul>
+<li>设置 HTTP 状态码、响应头部（如 <code>Content-Type</code>、<code>Content-Length</code>）；</li>
+<li>将私有协议响应体解码、转码成 JSON、HTML、纯文本等 HTTP 能识别的格式；</li>
+<li>调用 <code>ngx_http_send_header</code>、<code>ngx_http_output_filter</code> 等函数将内容写回客户端。</li>
+</ul>
+<p>只需要读取响应后，做对应协议的格式转换，剩下的交由http的框架处理即可。</p>
+<p>到此，这就是一个完整的由http接入的请求，经过nginx转发到私有协议的处理过程。</p>
+<h2 id="4、nginx的内部变量原理"><a href="#4、nginx的内部变量原理" class="headerlink" title="4、nginx的内部变量原理"></a>4、nginx的内部变量原理</h2><p>在 Nginx 中，<strong>内部变量</strong>（如 <code>$host</code>、<code>$uri</code>、<code>$args</code>、自定义变量等）是模块之间进行数据传递和动态配置的重要机制。理解其原理，有助于灵活实现如动态 <code>proxy_pass</code>、请求路由、协议转换等高级功能。</p>
+<hr>
+<h3 id="4-1、内部变量的作用"><a href="#4-1、内部变量的作用" class="headerlink" title="4.1、内部变量的作用"></a>4.1、内部变量的作用</h3><p>内部变量是 Nginx 配置文件中通过 <code>$</code> 前缀引用的动态值。这些变量：</p>
+<ul>
+<li>可在配置中被引用（如 <code>proxy_pass $upstream_name</code>）；</li>
+<li>可在模块中被赋值或获取；</li>
+<li>可被多个模块共享、传递；</li>
+<li>支持动态求值（如基于请求上下文的信息实时生成值）。</li>
+</ul>
+<hr>
+<h3 id="4-2、变量的定义与注册"><a href="#4-2、变量的定义与注册" class="headerlink" title="4.2、变量的定义与注册"></a>4.2、变量的定义与注册</h3><p>Nginx 的变量机制由 <code>ngx_http_variables_module</code> 提供支持。每一个变量都通过一个 <code>ngx_http_variable_t</code> 结构体注册，其结构定义如下：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-keyword">typedef</span> <span class="hljs-class"><span class="hljs-keyword">struct</span> &#123;</span><br>    <span class="hljs-type">ngx_str_t</span> name;<br>    ngx_http_set_variable_pt set_handler;<br>    ngx_http_get_variable_pt get_handler;<br>    <span class="hljs-type">uintptr_t</span> data;<br>    <span class="hljs-type">ngx_uint_t</span> flags;<br>&#125; <span class="hljs-type">ngx_http_variable_t</span>;<br></code></pre></td></tr></table></figure>
+
+<ul>
+<li><code>name</code>: 变量名，例如 <code>upstream_name</code>；</li>
+<li><code>get_handler</code>: 获取变量值时调用的函数；</li>
+<li><code>set_handler</code>: 设置变量值时调用的函数；</li>
+<li><code>data</code>: 附加数据，通常为索引或上下文参数；</li>
+<li><code>flags</code>: 控制是否缓存、是否可设置等属性。</li>
+</ul>
+<p>注册变量的方式：</p>
+<p>在模块的 <code>postconfiguration</code> 回调中，调用如下方法注册变量：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-type">ngx_http_variable_t</span> *var = ngx_http_add_variable(cf, &amp;name, NGX_HTTP_VAR_CHANGEABLE);<br>var-&gt;get_handler = my_get_variable;<br></code></pre></td></tr></table></figure>
+
+<hr>
+<h3 id="4-3、变量值的获取时机"><a href="#4-3、变量值的获取时机" class="headerlink" title="4.3、变量值的获取时机"></a>4.3、变量值的获取时机</h3><p>Nginx 在处理请求时，会根据执行阶段和上下文动态求值变量：</p>
+<ul>
+<li>在某些阶段（如 rewrite、access、content），变量会被第一次引用时动态求值；</li>
+<li>如果设置了缓存标志，变量的值会被计算一次后缓存；</li>
+<li>某些变量可能依赖于请求内容（如 body），需要确保值可用时再引用。</li>
+</ul>
+<p>比如在 <code>proxy_pass $upstream_name;</code> 中，变量 <code>$upstream_name</code> 会在 content phase 阶段由 <code>ngx_http_proxy_eval</code> 调用变量系统求值。</p>
+<hr>
+<h3 id="4-4、自定义变量"><a href="#4-4、自定义变量" class="headerlink" title="4.4、自定义变量"></a>4.4、自定义变量</h3><p>在 Nginx 中通过 C 模块定义和使用内部变量：</p>
+<p>一、自定义变量的注册</p>
+<p>在模块的 <code>postconfiguration</code> 函数中注册变量，使用 <code>ngx_http_add_variable</code>：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-type">static</span> <span class="hljs-type">ngx_int_t</span><br><span class="hljs-title function_">ngx_http_xxx_module_postconfiguration</span><span class="hljs-params">(<span class="hljs-type">ngx_conf_t</span> *cf)</span> &#123;<br>    <span class="hljs-type">ngx_str_t</span> name = ngx_string(<span class="hljs-string">&quot;upstream_name&quot;</span>);<br>    <span class="hljs-type">ngx_http_variable_t</span> *var = ngx_http_add_variable(cf, &amp;name, NGX_HTTP_VAR_CHANGEABLE);<br>    <span class="hljs-keyword">if</span> (var == <span class="hljs-literal">NULL</span>) &#123;<br>        <span class="hljs-keyword">return</span> NGX_ERROR;<br>    &#125;<br>    var-&gt;get_handler = ngx_http_my_variable_get;<br>    var-&gt;data = <span class="hljs-number">0</span>;<br>    <span class="hljs-keyword">return</span> NGX_OK;<br>&#125;<br></code></pre></td></tr></table></figure>
+
+<ul>
+<li><code>NGX_HTTP_VAR_CHANGEABLE</code>：表示变量值可被动态设置；</li>
+<li><code>get_handler</code>：指定变量的获取逻辑函数；</li>
+<li><code>data</code>：传递给 handler 的附加信息。</li>
+</ul>
+<hr>
+<p>二、自定义变量的取值函数（get_handler）</p>
+<p>变量的值由 <code>get_handler</code> 实现，它会在变量首次被引用时调用，并返回一个 <code>ngx_http_variable_value_t</code> 结构体：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><code class="hljs c">ngx_http_proxy_handler<br>    -&gt;ngx_http_proxy_eval<br>    	-&gt;ngx_http_script_run<br>    		-&gt; ngx_http_script_copy_var_len_code (code((<span class="hljs-type">ngx_http_script_engine_t</span> *) &amp;e);)<br>    			-&gt; ngx_http_get_indexed_variable<br>    				-&gt;ngx_http_my_variable_get<br></code></pre></td></tr></table></figure>
+
+<p>自定义的变量赋值函数实现</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-type">static</span> <span class="hljs-type">ngx_int_t</span><br><span class="hljs-title function_">ngx_http_my_variable_get</span><span class="hljs-params">(<span class="hljs-type">ngx_http_request_t</span> *r,</span><br><span class="hljs-params">                         <span class="hljs-type">ngx_http_variable_value_t</span> *v,</span><br><span class="hljs-params">                         <span class="hljs-type">uintptr_t</span> data)</span><br>&#123;<br>    <span class="hljs-type">ngx_str_t</span> upstream = ngx_string(<span class="hljs-string">&quot;http://backend_default&quot;</span>);<br><br>    <span class="hljs-keyword">if</span> (ngx_strncmp(r-&gt;uri.data, <span class="hljs-string">&quot;/api&quot;</span>, <span class="hljs-number">4</span>) == <span class="hljs-number">0</span>) &#123;<br>        upstream = ngx_string(<span class="hljs-string">&quot;http://backend_api&quot;</span>);<br>    &#125;<br><br>    v-&gt;len = upstream.len;<br>    v-&gt;valid = <span class="hljs-number">1</span>;<br>    v-&gt;no_cacheable = <span class="hljs-number">0</span>;<br>    v-&gt;not_found = <span class="hljs-number">0</span>;<br>    v-&gt;data = upstream.data;<br><br>    <span class="hljs-keyword">return</span> NGX_OK;<br>&#125;<br></code></pre></td></tr></table></figure>
+
+<p>说明：</p>
+<ul>
+<li><code>r-&gt;uri.data</code> 是当前请求的 URI；</li>
+<li>根据 URI 判断要转发到哪个 upstream；</li>
+<li>返回的 <code>v-&gt;data</code> 即 <code>$upstream_name</code> 的值。</li>
+</ul>
+<hr>
+<p>三、在配置中使用自定义变量</p>
+<p>一旦注册成功，就可以在 <code>nginx.conf</code> 中通过 <code>$upstream_name</code> 使用：</p>
+<figure class="highlight nginx"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><code class="hljs nginx"><span class="hljs-section">location</span> / &#123;<br>    <span class="hljs-attribute">proxy_pass</span> <span class="hljs-variable">$upstream_name</span>;<br>&#125;<br></code></pre></td></tr></table></figure>
+
+<p>Nginx 在执行 <code>proxy_pass</code> 时，会自动调用自定义的 <code>get_handler</code> 获取实际的 upstream 地址，从而完成 <strong>基于请求内容的动态转发</strong>。</p>
+
+                
+              </div>
+            
+            <hr/>
+            <div>
+              <div class="post-metas my-3">
+  
+  
+    <div class="post-meta">
+      <i class="iconfont icon-tags"></i>
+      
+        <a href="/tags/nginx%EF%BC%8CHTTP/" class="print-no-link">#nginx，HTTP</a>
+      
+    </div>
+  
+</div>
+
+
+              
+  
+
+  <div class="license-box my-3">
+    <div class="license-title">
+      <div>nginx之上下游不同协议的转换</div>
+      <div>https://zjfans.github.io/2025/05/10/nginx之上下游不同协议的转换/</div>
+    </div>
+    <div class="license-meta">
+      
+        <div class="license-meta-item">
+          <div>作者</div>
+          <div>张三疯</div>
+        </div>
+      
+      
+        <div class="license-meta-item license-meta-date">
+          <div>发布于</div>
+          <div>2025年5月10日</div>
+        </div>
+      
+      
+      
+        <div class="license-meta-item">
+          <div>许可协议</div>
+          <div>
+            
+              
+              
+                <a class="print-no-link" target="_blank" href="https://creativecommons.org/licenses/by/4.0/">
+                  <span class="hint--top hint--rounded" aria-label="BY - 署名">
+                    <i class="iconfont icon-by"></i>
+                  </span>
+                </a>
+              
+            
+          </div>
+        </div>
+      
+    </div>
+    <div class="license-icon iconfont"></div>
+  </div>
+
+
+
+              
+                <div class="post-prevnext my-3">
+                  <article class="post-prev col-6">
+                    
+                    
+                  </article>
+                  <article class="post-next col-6">
+                    
+                    
+                      <a href="/2025/04/19/%E6%9C%8D%E5%8A%A1%E8%87%AA%E5%8A%A8%E5%8F%91%E7%8E%B0/" title="服务自动发现">
+                        <span class="hidden-mobile">服务自动发现</span>
+                        <span class="visible-mobile">下一篇</span>
+                        <i class="iconfont icon-arrowright"></i>
+                      </a>
+                    
+                  </article>
+                </div>
+              
+            </div>
+
+            
+  
+  
+    <article id="comments" lazyload>
+      
+    <div id="giscus" class="giscus"></div>
+    <script type="text/javascript">
+      Fluid.utils.loadComments('#giscus', function() {
+        var options = {"repo":"ZJfans/ZJfans.github.io","repo-id":"R_kgDOLYg-XA","category":"Announcements","category-id":"DIC_kwDOLYg-XM4Ceo1C","theme-light":"light","theme-dark":"dark","mapping":"pathname","reactions-enabled":1,"emit-metadata":0,"input-position":"bottom","lang":"zh-CN"};
+        var attributes = {};
+        for (let option in options) {
+          if (!option.startsWith('theme-')) {
+            var key = option.startsWith('data-') ? option : 'data-' + option;
+            attributes[key] = options[option];
+          }
+        }
+        var light = 'light';
+        var dark = 'dark';
+        window.GiscusThemeLight = light;
+        window.GiscusThemeDark = dark;
+        attributes['data-theme'] = document.documentElement.getAttribute('data-user-color-scheme') === 'dark' ? dark : light;
+        for (let attribute in attributes) {
+          var value = attributes[attribute];
+          if (value === undefined || value === null || value === '') {
+            delete attributes[attribute];
+          }
+        }
+        var s = document.createElement('script');
+        s.setAttribute('src', 'https://giscus.app/client.js');
+        s.setAttribute('crossorigin', 'anonymous');
+        for (let attribute in attributes) {
+          s.setAttribute(attribute, attributes[attribute]);
+        }
+        var ss = document.getElementsByTagName('script');
+        var e = ss.length > 0 ? ss[ss.length - 1] : document.head || document.documentElement;
+        e.parentNode.insertBefore(s, e.nextSibling);
+      });
+    </script>
+    <noscript>Please enable JavaScript to view the comments</noscript>
+
+
+    </article>
+  
+
+
+          </article>
+        </div>
+      </div>
+    </div>
+
+    <div class="side-col d-none d-lg-block col-lg-2">
+      
+  <aside class="sidebar" style="margin-left: -1rem">
+    <div id="toc">
+  <p class="toc-header">
+    <i class="iconfont icon-list"></i>
+    <span>目录</span>
+  </p>
+  <div class="toc-body" id="toc-body"></div>
+</div>
+
+
+
+  </aside>
+
+
+    </div>
+  </div>
+</div>
+
+
+
+
+
+  
+
+
+
+  
+
+
+
+  
+
+
+
+  
+
+
+
+  
+
+
+
+
+
+
+
+    
+
+    
+      <a id="scroll-top-button" aria-label="TOP" href="#" role="button">
+        <i class="iconfont icon-arrowup" aria-hidden="true"></i>
+      </a>
+    
+
+    
+      <div class="modal fade" id="modalSearch" tabindex="-1" role="dialog" aria-labelledby="ModalLabel"
+     aria-hidden="true">
+  <div class="modal-dialog modal-dialog-scrollable modal-lg" role="document">
+    <div class="modal-content">
+      <div class="modal-header text-center">
+        <h4 class="modal-title w-100 font-weight-bold">搜索</h4>
+        <button type="button" id="local-search-close" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body mx-3">
+        <div class="md-form mb-5">
+          <input type="text" id="local-search-input" class="form-control validate">
+          <label data-error="x" data-success="v" for="local-search-input">关键词</label>
+        </div>
+        <div class="list-group" id="local-search-result"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+    
+
+    
+  </main>
+
+  <footer>
+    <div class="footer-inner">
+  
+    <div class="footer-content">
+       <a href="https://hexo.io" target="_blank" rel="nofollow noopener"><span>Hexo</span></a> <i class="iconfont icon-love"></i> <a href="https://github.com/fluid-dev/hexo-theme-fluid" target="_blank" rel="nofollow noopener"><span>Fluid</span></a> 
+    </div>
+  
+  
+    <div class="statistics">
+  
+  
+
+  
+    
+      <span id="busuanzi_container_site_pv" style="display: none">
+        总访问量 
+        <span id="busuanzi_value_site_pv"></span>
+         次
+      </span>
+    
+    
+      <span id="busuanzi_container_site_uv" style="display: none">
+        总访客数 
+        <span id="busuanzi_value_site_uv"></span>
+         人
+      </span>
+    
+    
+  
+</div>
+
+  
+  
+  
+</div>
+
+  </footer>
+
+  <!-- Scripts -->
+  
+  <script  src="https://lib.baomitu.com/nprogress/0.2.0/nprogress.min.js" ></script>
+  <link  rel="stylesheet" href="https://lib.baomitu.com/nprogress/0.2.0/nprogress.min.css" />
+
+  <script>
+    NProgress.configure({"showSpinner":false,"trickleSpeed":100})
+    NProgress.start()
+    window.addEventListener('load', function() {
+      NProgress.done();
+    })
+  </script>
+
+
+<script  src="https://lib.baomitu.com/jquery/3.6.4/jquery.min.js" ></script>
+<script  src="https://lib.baomitu.com/twitter-bootstrap/4.6.1/js/bootstrap.min.js" ></script>
+<script  src="/js/events.js" ></script>
+<script  src="/js/plugins.js" ></script>
+
+
+  <script  src="https://lib.baomitu.com/typed.js/2.0.12/typed.min.js" ></script>
+  <script>
+    (function (window, document) {
+      var typing = Fluid.plugins.typing;
+      var subtitle = document.getElementById('subtitle');
+      if (!subtitle || !typing) {
+        return;
+      }
+      var text = subtitle.getAttribute('data-typed-text');
+      
+        typing(text);
+      
+    })(window, document);
+  </script>
+
+
+
+
+  
+    <script  src="/js/img-lazyload.js" ></script>
+  
+
+
+
+
+  
+<script>
+  Fluid.utils.createScript('https://lib.baomitu.com/tocbot/4.20.1/tocbot.min.js', function() {
+    var toc = jQuery('#toc');
+    if (toc.length === 0 || !window.tocbot) { return; }
+    var boardCtn = jQuery('#board-ctn');
+    var boardTop = boardCtn.offset().top;
+
+    window.tocbot.init(Object.assign({
+      tocSelector     : '#toc-body',
+      contentSelector : '.markdown-body',
+      linkClass       : 'tocbot-link',
+      activeLinkClass : 'tocbot-active-link',
+      listClass       : 'tocbot-list',
+      isCollapsedClass: 'tocbot-is-collapsed',
+      collapsibleClass: 'tocbot-is-collapsible',
+      scrollSmooth    : true,
+      includeTitleTags: true,
+      headingsOffset  : -boardTop,
+    }, CONFIG.toc));
+    if (toc.find('.toc-list-item').length > 0) {
+      toc.css('visibility', 'visible');
+    }
+
+    Fluid.events.registerRefreshCallback(function() {
+      if ('tocbot' in window) {
+        tocbot.refresh();
+        var toc = jQuery('#toc');
+        if (toc.length === 0 || !tocbot) {
+          return;
+        }
+        if (toc.find('.toc-list-item').length > 0) {
+          toc.css('visibility', 'visible');
+        }
+      }
+    });
+  });
+</script>
+
+
+  <script src=https://lib.baomitu.com/clipboard.js/2.0.11/clipboard.min.js></script>
+
+  <script>Fluid.plugins.codeWidget();</script>
+
+
+  
+<script>
+  Fluid.utils.createScript('https://lib.baomitu.com/anchor-js/4.3.1/anchor.min.js', function() {
+    window.anchors.options = {
+      placement: CONFIG.anchorjs.placement,
+      visible  : CONFIG.anchorjs.visible
+    };
+    if (CONFIG.anchorjs.icon) {
+      window.anchors.options.icon = CONFIG.anchorjs.icon;
+    }
+    var el = (CONFIG.anchorjs.element || 'h1,h2,h3,h4,h5,h6').split(',');
+    var res = [];
+    for (var item of el) {
+      res.push('.markdown-body > ' + item.trim());
+    }
+    if (CONFIG.anchorjs.placement === 'left') {
+      window.anchors.options.class = 'anchorjs-link-left';
+    }
+    window.anchors.add(res.join(', '));
+
+    Fluid.events.registerRefreshCallback(function() {
+      if ('anchors' in window) {
+        anchors.removeAll();
+        var el = (CONFIG.anchorjs.element || 'h1,h2,h3,h4,h5,h6').split(',');
+        var res = [];
+        for (var item of el) {
+          res.push('.markdown-body > ' + item.trim());
+        }
+        if (CONFIG.anchorjs.placement === 'left') {
+          anchors.options.class = 'anchorjs-link-left';
+        }
+        anchors.add(res.join(', '));
+      }
+    });
+  });
+</script>
+
+
+  
+<script>
+  Fluid.utils.createScript('https://lib.baomitu.com/fancybox/3.5.7/jquery.fancybox.min.js', function() {
+    Fluid.plugins.fancyBox();
+  });
+</script>
+
+
+  <script>Fluid.plugins.imageCaption();</script>
+
+  <script  src="/js/local-search.js" ></script>
+
+  <script defer src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js" ></script>
+
+
+
+
+
+<!-- 主题的启动项，将它保持在最底部 -->
+<!-- the boot of the theme, keep it at the bottom -->
+<script  src="/js/boot.js" ></script>
+
+
+  
+
+  <noscript>
+    <div class="noscript-warning">博客在允许 JavaScript 运行的环境下浏览效果更佳</div>
+  </noscript>
+</body>
+</html>

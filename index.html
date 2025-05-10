@@ -256,6 +256,46 @@
     <article class="col-12 col-md-12 mx-auto index-info">
       <h2 class="index-header">
         
+        <a href="/2025/05/10/nginx%E4%B9%8B%E4%B8%8A%E4%B8%8B%E6%B8%B8%E4%B8%8D%E5%90%8C%E5%8D%8F%E8%AE%AE%E7%9A%84%E8%BD%AC%E6%8D%A2/" target="_self">
+          nginx之上下游不同协议的转换
+        </a>
+      </h2>
+
+      
+      <a class="index-excerpt index-excerpt__noimg" href="/2025/05/10/nginx%E4%B9%8B%E4%B8%8A%E4%B8%8B%E6%B8%B8%E4%B8%8D%E5%90%8C%E5%8D%8F%E8%AE%AE%E7%9A%84%E8%BD%AC%E6%8D%A2/" target="_self">
+        <div>
+          Nginx 主要用于实现路由与反向代理功能。在实际业务中，客户端与后端服务之间往往使用不同的协议，例如客户端采用 HTTP&#x2F;2，而后端仍使用 HTTP&#x2F;1.1。此时，Nginx 在作为 L7（应用层）代理时，会分别与上下游建立连接，并在两端之间转发请求和响应。由于协议不一致，Nginx 必须对请求进行解析与重新封装，实现上下游之间的“协议转换”。 1、HTTP请求的生命流程对于
+        </div>
+      </a>
+
+      <div class="index-btm post-metas">
+        
+          <div class="post-meta mr-3">
+            <i class="iconfont icon-date"></i>
+            <time datetime="2025-05-10 19:03" pubdate>
+              2025-05-10
+            </time>
+          </div>
+        
+        
+        
+          <div class="post-meta">
+            <i class="iconfont icon-tags"></i>
+            
+              <a href="/tags/nginx%EF%BC%8CHTTP/">#nginx，HTTP</a>
+            
+          </div>
+        
+      </div>
+    </article>
+  </div>
+
+  <div class="row mx-auto index-card">
+    
+    
+    <article class="col-12 col-md-12 mx-auto index-info">
+      <h2 class="index-header">
+        
         <a href="/2025/04/19/%E6%9C%8D%E5%8A%A1%E8%87%AA%E5%8A%A8%E5%8F%91%E7%8E%B0/" target="_self">
           服务自动发现
         </a>
@@ -614,46 +654,6 @@
             <i class="iconfont icon-date"></i>
             <time datetime="2024-07-30 20:28" pubdate>
               2024-07-30
-            </time>
-          </div>
-        
-        
-        
-          <div class="post-meta">
-            <i class="iconfont icon-tags"></i>
-            
-              <a href="/tags/nginx%EF%BC%8Cslab/">#nginx，slab</a>
-            
-          </div>
-        
-      </div>
-    </article>
-  </div>
-
-  <div class="row mx-auto index-card">
-    
-    
-    <article class="col-12 col-md-12 mx-auto index-info">
-      <h2 class="index-header">
-        
-        <a href="/2024/07/09/ngx_slab/" target="_self">
-          ngx_slab共享内存
-        </a>
-      </h2>
-
-      
-      <a class="index-excerpt index-excerpt__noimg" href="/2024/07/09/ngx_slab/" target="_self">
-        <div>
-          nginx是多进程，实现访问控制、限流功能时，进程需要共享数据，比如一个uri的多笔请求，可能由多个进程处理，此时进程需要判断这个uri是否达到了限制次数，因此访问控制模块和限流模块使用共享内存进行进程间的通信，nginx实现了ngx_shm_t共享内存，但是如果要共享一些复杂的数据结构，ngx_shm_t很难满足这种需求，因此在这个基础上实现了slab共享内存。 1、初始化共享内存模块在配置初始
-        </div>
-      </a>
-
-      <div class="index-btm post-metas">
-        
-          <div class="post-meta mr-3">
-            <i class="iconfont icon-date"></i>
-            <time datetime="2024-07-09 19:30" pubdate>
-              2024-07-09
             </time>
           </div>
         

@@ -256,6 +256,46 @@
     <article class="col-12 col-md-12 mx-auto index-info">
       <h2 class="index-header">
         
+        <a href="/2024/07/09/ngx_slab/" target="_self">
+          ngx_slab共享内存
+        </a>
+      </h2>
+
+      
+      <a class="index-excerpt index-excerpt__noimg" href="/2024/07/09/ngx_slab/" target="_self">
+        <div>
+          nginx是多进程，实现访问控制、限流功能时，进程需要共享数据，比如一个uri的多笔请求，可能由多个进程处理，此时进程需要判断这个uri是否达到了限制次数，因此访问控制模块和限流模块使用共享内存进行进程间的通信，nginx实现了ngx_shm_t共享内存，但是如果要共享一些复杂的数据结构，ngx_shm_t很难满足这种需求，因此在这个基础上实现了slab共享内存。 1、初始化共享内存模块在配置初始
+        </div>
+      </a>
+
+      <div class="index-btm post-metas">
+        
+          <div class="post-meta mr-3">
+            <i class="iconfont icon-date"></i>
+            <time datetime="2024-07-09 19:30" pubdate>
+              2024-07-09
+            </time>
+          </div>
+        
+        
+        
+          <div class="post-meta">
+            <i class="iconfont icon-tags"></i>
+            
+              <a href="/tags/nginx%EF%BC%8Cslab/">#nginx，slab</a>
+            
+          </div>
+        
+      </div>
+    </article>
+  </div>
+
+  <div class="row mx-auto index-card">
+    
+    
+    <article class="col-12 col-md-12 mx-auto index-info">
+      <h2 class="index-header">
+        
         <a href="/2024/06/02/Nginx%E8%B4%9F%E8%BD%BD%E5%9D%87%E8%A1%A1%E7%AE%97%E6%B3%95%E8%A7%A3%E6%9E%90/" target="_self">
           负载均衡算法解析
         </a>
