@@ -16,16 +16,17 @@
   <meta name="author" content="张三疯">
   <meta name="keywords" content="nginx,openresty,网关,HTTP/HTTPS,Websocket">
   
-    <meta name="description" content="Nginx 主要用于实现路由与反向代理功能。在实际业务中，客户端与后端服务之间往往使用不同的协议，例如客户端采用 HTTP&#x2F;2，而后端仍使用 HTTP&#x2F;1.1。此时，Nginx 在作为 L7（应用层）代理时，会分别与上下游建立连接，并在两端之间转发请求和响应。由于协议不一致，Nginx 必须对请求进行解析与重新封装，实现上下游之间的“协议转换”。 1、HTTP请求的生命流程对于">
+    <meta name="description" content="Nginx 主要用于实现路由和反向代理功能。在实际应用中，客户端与后端服务可能使用不同的协议，例如客户端使用 HTTP&#x2F;2，而后端仍采用 HTTP&#x2F;1.1。作为应用层（L7）代理，Nginx 会分别与客户端和后端建立独立的连接，解析、处理请求和响应，并根据目标协议格式重新构造数据后转发。 需要注意的是：无论前后端协议是否一致，Nginx 始终执行这一套“应用层重构”流程。当协议">
 <meta property="og:type" content="article">
 <meta property="og:title" content="nginx之上下游不同协议的转换">
 <meta property="og:url" content="https://zjfans.github.io/2025/05/10/nginx%E4%B9%8B%E4%B8%8A%E4%B8%8B%E6%B8%B8%E4%B8%8D%E5%90%8C%E5%8D%8F%E8%AE%AE%E7%9A%84%E8%BD%AC%E6%8D%A2/index.html">
 <meta property="og:site_name" content="ZJfans Blog">
-<meta property="og:description" content="Nginx 主要用于实现路由与反向代理功能。在实际业务中，客户端与后端服务之间往往使用不同的协议，例如客户端采用 HTTP&#x2F;2，而后端仍使用 HTTP&#x2F;1.1。此时，Nginx 在作为 L7（应用层）代理时，会分别与上下游建立连接，并在两端之间转发请求和响应。由于协议不一致，Nginx 必须对请求进行解析与重新封装，实现上下游之间的“协议转换”。 1、HTTP请求的生命流程对于">
+<meta property="og:description" content="Nginx 主要用于实现路由和反向代理功能。在实际应用中，客户端与后端服务可能使用不同的协议，例如客户端使用 HTTP&#x2F;2，而后端仍采用 HTTP&#x2F;1.1。作为应用层（L7）代理，Nginx 会分别与客户端和后端建立独立的连接，解析、处理请求和响应，并根据目标协议格式重新构造数据后转发。 需要注意的是：无论前后端协议是否一致，Nginx 始终执行这一套“应用层重构”流程。当协议">
 <meta property="og:locale" content="zh_CN">
 <meta property="article:published_time" content="2025-05-10T11:03:25.424Z">
-<meta property="article:modified_time" content="2025-05-10T11:03:49.944Z">
+<meta property="article:modified_time" content="2025-05-15T02:18:23.653Z">
 <meta property="article:author" content="张三疯">
+<meta property="article:tag" content="websocket">
 <meta property="article:tag" content="nginx，HTTP">
 <meta name="twitter:card" content="summary_large_image">
   
@@ -249,7 +250,7 @@
       <span class="post-meta mr-2">
         <i class="iconfont icon-chart"></i>
         
-          2.9k 字
+          3.2k 字
         
       </span>
     
@@ -260,7 +261,7 @@
         
         
         
-          24 分钟
+          27 分钟
         
       </span>
     
@@ -302,12 +303,21 @@
             
               <div class="markdown-body">
                 
-                <p>Nginx 主要用于实现路由与反向代理功能。在实际业务中，客户端与后端服务之间往往使用不同的协议，例如客户端采用 HTTP&#x2F;2，而后端仍使用 HTTP&#x2F;1.1。此时，Nginx 在作为 L7（应用层）代理时，会分别与上下游建立连接，并在两端之间转发请求和响应。由于协议不一致，Nginx 必须对请求进行解析与重新封装，实现上下游之间的“协议转换”。</p>
-<h2 id="1、HTTP请求的生命流程"><a href="#1、HTTP请求的生命流程" class="headerlink" title="1、HTTP请求的生命流程"></a>1、HTTP请求的生命流程</h2><p>对于一个http请求，work的处理流程如下</p>
+                <p>Nginx 主要用于实现路由和反向代理功能。在实际应用中，客户端与后端服务可能使用不同的协议，例如客户端使用 HTTP&#x2F;2，而后端仍采用 HTTP&#x2F;1.1。作为应用层（L7）代理，Nginx 会分别与客户端和后端建立独立的连接，解析、处理请求和响应，并根据目标协议格式重新构造数据后转发。</p>
+<p>需要注意的是：<strong>无论前后端协议是否一致，Nginx 始终执行这一套“应用层重构”流程</strong>。当协议不一致时，Nginx 会根据各自的协议要求，分别构造并发送符合协议格式的请求和响应（例如，将 HTTP&#x2F;2 帧格式转换为 HTTP&#x2F;1.1 文本响应）。因此，协议格式的转换是 Nginx 转发过程中的附加处理，而不是特殊情况。</p>
+<p>本文的关注点在于</p>
+<blockquote>
+<p><strong>Nginx 是如何根据upstream使用的协议，构造并发送不同格式的请求转发给后端</strong></p>
+</blockquote>
+<p>以及如何实现HTTP协议到私有协议的转换</p>
+<h2 id="1、HTTP请求的生命流程"><a href="#1、HTTP请求的生命流程" class="headerlink" title="1、HTTP请求的生命流程"></a>1、HTTP请求的生命流程</h2><p>上下游的流转，本文集中于第②步</p>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><code class="hljs javascript">              <br>┌────────┐        ①              ┌────────────┐       ②               ┌────────┐<br>│ <span class="hljs-title class_">Client</span> │  ⇄ protocol_xx  ⇄    │   <span class="hljs-variable constant_">NGINX</span>    │  ⇄ protocol_xx  ⇄    │  <span class="hljs-title class_">App</span>   │<br>└────────┘        ④              └────────────┘       ③               └────────┘<br>                                       ▲<br>                                       │<br>                        协议转换（protocol_xx ⇄ protocol_xx）<br><br></code></pre></td></tr></table></figure>
+
+<p>对于一个http请求，work的处理流程如下</p>
 <figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br></pre></td><td class="code"><pre><code class="hljs javascript">┌────────────────────────────┐<br>│      <span class="hljs-title class_">Worker</span> <span class="hljs-title class_">Process</span> <span class="hljs-title class_">Loop</span>   │<br>│  ngx_worker_process_cycle  │<br>└────────────┬───────────────┘<br>             ↓<br>    <span class="hljs-title function_">ngx_process_events_and_timers</span>()<br>             ↓<br>      <span class="hljs-title function_">ngx_event_process_events</span>()<br>             ↓<br>        🔔 <span class="hljs-title function_">epoll_wait</span>()<br>             ↓<br>     🔌 socket 可读 (新连接)<br>             ↓<br>       <span class="hljs-title function_">ngx_event_accept</span>()<br>             ↓                 <span class="hljs-comment">//此处tcp连接建立成功</span><br>  ✅ <span class="hljs-title function_">ngx_http_init_connection</span>()<br>             ↓<br>  设置连接回调为 ngx_http_wait_request_handler<br>             ↓<br>  🔁 等待并读取请求行（<span class="hljs-variable constant_">GET</span> /...）<br>             ↓<br>  <span class="hljs-title function_">ngx_http_process_request_line</span>()<br>             ↓<br>  读取并解析请求头<br>             ↓<br>  <span class="hljs-title function_">ngx_http_process_request_headers</span>()<br>             ↓<br>  创建 ngx_http_request_t 完整结构<br>             ↓                 <span class="hljs-comment">//初步解析HTTP行与头部，创建核心结构体r</span><br>  进入阶段引擎 <span class="hljs-title function_">ngx_http_core_run_phases</span>()<br>             ↓<br>  🔍 <span class="hljs-variable constant_">NGX_HTTP_FIND_CONFIG_PHASE</span><br>  → 匹配 location，找到 proxy_pass<br>  → 设置 r-&gt;content_handler = ngx_http_proxy_handler<br>             ↓<br>  ▶ <span class="hljs-variable constant_">NGX_HTTP_REWRITE_PHASE</span> 等（可选）<br>  → 执行重写指令，如 rewrite/set/<span class="hljs-keyword">return</span> 等<br>             ↓                 <span class="hljs-comment">//rewrite阶段，处理请求的相关逻辑</span><br>  ▶ <span class="hljs-variable constant_">NGX_HTTP_CONTENT_PHASE</span><br>  → 调用 <span class="hljs-title function_">ngx_http_proxy_handler</span>(r)<br>             ↓                 <span class="hljs-comment">//确认 upstream，初始化结构体，并建立连接</span><br>  <span class="hljs-title function_">ngx_http_proxy_handler</span>()<br>             ↓<br>  <span class="hljs-title function_">ngx_http_upstream_init</span>(r)<br>    → <span class="hljs-title function_">ngx_http_upstream_connect</span>(r, u)<br>      → <span class="hljs-title function_">ngx_event_connect_peer</span>()              <span class="hljs-comment">//发起与后端的连接</span><br>      → 设置 u-&gt;write_event_handler = ngx_http_upstream_send_request_handler<br>             ↓<br>  <span class="hljs-comment">//构造并发送请求到后端（构造 Host、URI）</span><br>    → <span class="hljs-title function_">ngx_http_upstream_send_request</span>()<br>             ↓<br>  <span class="hljs-comment">//异步读取后端响应（头 + body）</span><br>    → <span class="hljs-title function_">ngx_http_upstream_process_header</span>()<br>     		 ↓<br>    → <span class="hljs-title function_">ngx_http_upstream_send_response</span>()       <span class="hljs-comment">//开始转发响应体</span><br>             ↓<br>  <span class="hljs-comment">//通过 output filter 输出给客户端</span><br>    → <span class="hljs-title function_">ngx_http_output_filter</span>(r, out)<br>             ↓<br>  <span class="hljs-title function_">ngx_http_finalize_request</span>()<br>             ↓<br>  <span class="hljs-comment">//可保持 keepalive 或关闭连接</span><br></code></pre></td></tr></table></figure>
 
 <h2 id="2、实际的例子"><a href="#2、实际的例子" class="headerlink" title="2、实际的例子"></a>2、实际的例子</h2><p>一个实际的例子，链路如下：</p>
-<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><code class="hljs javascript">[<span class="hljs-title class_">Client</span>] —-&gt; <span class="hljs-variable constant_">HTTP</span>/<span class="hljs-number">2</span> ---&gt; [<span class="hljs-title class_">Nginx</span>] —-&gt; <span class="hljs-variable constant_">HTTP</span>/<span class="hljs-number">1</span> ---&gt; [<span class="hljs-title class_">App</span>]<br></code></pre></td></tr></table></figure>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><code class="hljs javascript">                <br>┌────────┐               ┌────────────┐               ┌────────┐<br>│ <span class="hljs-title class_">Client</span> │               │   <span class="hljs-variable constant_">NGINX</span>    │               │  <span class="hljs-title class_">App</span>   │<br>└────────┘               └────────────┘               └────────┘<br>    │                           │                          │<br>    │ ① 请求 (<span class="hljs-variable constant_">HTTP</span>/<span class="hljs-number">2</span>)                                     <br>    ├─────────────────────────▶ │                          <br>    │                                                     <br>    │                              ② 转发请求 (<span class="hljs-variable constant_">HTTP</span>/<span class="hljs-number">1</span>)       <br>    │                           │  ──────────────────────▶ │<br>    │                                                     <br>    │                               ③ 接收响应 (<span class="hljs-variable constant_">HTTP</span>/<span class="hljs-number">1</span>)      <br>    │                           │ ◀─────────────────────── │<br>    │                                                     <br>    │ ④ 返回响应 (<span class="hljs-variable constant_">HTTP</span>/<span class="hljs-number">2</span>)                                   <br>    ◀─────────────────────────  │                          <br><br></code></pre></td></tr></table></figure>
 
 <p>nginx的配置：</p>
 <figure class="highlight nginx"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><code class="hljs nginx"><span class="hljs-section">server</span> &#123;<br>    <span class="hljs-comment"># HTTP2</span><br>    <span class="hljs-attribute">listen</span> <span class="hljs-number">443</span> ssl http2;<br>    <span class="hljs-attribute">server_name</span> ZJfans.com;<br><br>    <span class="hljs-attribute">ssl_certificate</span>     /path/to/fullchain.pem;<br>    <span class="hljs-attribute">ssl_certificate_key</span> /path/to/privkey.pem;<br><br>    <span class="hljs-attribute">ssl_protocols</span>       TLSv1.<span class="hljs-number">2</span> TLSv1.<span class="hljs-number">3</span>;<br>    <span class="hljs-attribute">ssl_ciphers</span>         HIGH:!aNULL:!MD5;<br><br>    <span class="hljs-section">location</span> / &#123;<br>        <span class="hljs-attribute">proxy_pass</span> http://backend_app;<br><br>        <span class="hljs-comment"># HTTP1.1</span><br>        <span class="hljs-attribute">proxy_http_version</span> <span class="hljs-number">1</span>.<span class="hljs-number">1</span>;<br>        <span class="hljs-attribute">proxy_set_header</span> Connection <span class="hljs-string">&quot;&quot;</span>;<br>    &#125;<br>&#125;<br><br></code></pre></td></tr></table></figure>
@@ -352,7 +362,7 @@
 <li>根据http请求的uri&#x2F;参数&#x2F;头部确认是哪个upstream</li>
 <li>将http的uri、参数、头部、body转换为私有协议规范</li>
 <li>初始化upstream，接入到私有协议模块处理，进行交互</li>
-<li>判断客户端协议，然后交由http框架处理与客户端的交互</li>
+<li>判断客户端协议，将数据转换为HTTP协议格式，然后交由http框架处理与客户端的交互</li>
 </ol>
 <figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><code class="hljs c">HTTP 请求 -&gt; [ 路由规则 -&gt; upstream 确定 -&gt; 请求数据转私有协议 -&gt; upstream 通信 -&gt; 响应转 HTTP ] -&gt; 返回客户端<br></code></pre></td></tr></table></figure>
 
@@ -412,7 +422,7 @@
 <li>将私有协议响应体解码、转码成 JSON、HTML、纯文本等 HTTP 能识别的格式；</li>
 <li>调用 <code>ngx_http_send_header</code>、<code>ngx_http_output_filter</code> 等函数将内容写回客户端。</li>
 </ul>
-<p>只需要读取响应后，做对应协议的格式转换，剩下的交由http的框架处理即可。</p>
+<p>这里需要读取响应后，做对应协议的格式转换，即转换为HTTP协议的数据格式（本质就是提取包含信息的数据，例如body、header、args这些，私有协议也有对应的规则）。然后交由http的框架处理与客户端交互，实际上nginx采用了过滤器的机制，根据客户端的协议，触发对应的过滤器模块，然后返回给客户端。</p>
 <p>到此，这就是一个完整的由http接入的请求，经过nginx转发到私有协议的处理过程。</p>
 <h2 id="4、nginx的内部变量原理"><a href="#4、nginx的内部变量原理" class="headerlink" title="4、nginx的内部变量原理"></a>4、nginx的内部变量原理</h2><p>在 Nginx 中，<strong>内部变量</strong>（如 <code>$host</code>、<code>$uri</code>、<code>$args</code>、自定义变量等）是模块之间进行数据传递和动态配置的重要机制。理解其原理，有助于灵活实现如动态 <code>proxy_pass</code>、请求路由、协议转换等高级功能。</p>
 <hr>
@@ -489,6 +499,8 @@
     <div class="post-meta">
       <i class="iconfont icon-tags"></i>
       
+        <a href="/tags/websocket/" class="print-no-link">#websocket</a>
+      
         <a href="/tags/nginx%EF%BC%8CHTTP/" class="print-no-link">#nginx，HTTP</a>
       
     </div>
@@ -545,6 +557,12 @@
                 <div class="post-prevnext my-3">
                   <article class="post-prev col-6">
                     
+                    
+                      <a href="/2025/05/15/NGINX%20%E5%A6%82%E4%BD%95%E6%A0%B9%E6%8D%AE%E5%8D%8F%E8%AE%AE%E6%9E%84%E9%80%A0%E5%B9%B6%E8%BF%94%E5%9B%9E%E5%93%8D%E5%BA%94/" title="NGINX 如何根据客户端协议构造并返回响应">
+                        <i class="iconfont icon-arrowleft"></i>
+                        <span class="hidden-mobile">NGINX 如何根据客户端协议构造并返回响应</span>
+                        <span class="visible-mobile">上一篇</span>
+                      </a>
                     
                   </article>
                   <article class="post-next col-6">

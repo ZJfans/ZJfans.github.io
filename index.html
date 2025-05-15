@@ -256,6 +256,48 @@
     <article class="col-12 col-md-12 mx-auto index-info">
       <h2 class="index-header">
         
+        <a href="/2025/05/15/NGINX%20%E5%A6%82%E4%BD%95%E6%A0%B9%E6%8D%AE%E5%8D%8F%E8%AE%AE%E6%9E%84%E9%80%A0%E5%B9%B6%E8%BF%94%E5%9B%9E%E5%93%8D%E5%BA%94/" target="_self">
+          NGINX 如何根据客户端协议构造并返回响应
+        </a>
+      </h2>
+
+      
+      <a class="index-excerpt index-excerpt__noimg" href="/2025/05/15/NGINX%20%E5%A6%82%E4%BD%95%E6%A0%B9%E6%8D%AE%E5%8D%8F%E8%AE%AE%E6%9E%84%E9%80%A0%E5%B9%B6%E8%BF%94%E5%9B%9E%E5%93%8D%E5%BA%94/" target="_self">
+        <div>
+          NGINX 如何根据客户端协议构造并返回响应Nginx 向客户端返回响应时，会根据客户端使用的协议类型，构造对应格式的响应数据。为了实现这一点，Nginx 在响应阶段设置了一系列 filter（过滤器）模块，每个 filter 对应特定协议或处理职责。 当响应准备就绪后，这些 filter 会按照链式结构依次执行。Nginx 会根据请求上下文中的 r（ngx_http_request_t）结构体中
+        </div>
+      </a>
+
+      <div class="index-btm post-metas">
+        
+          <div class="post-meta mr-3">
+            <i class="iconfont icon-date"></i>
+            <time datetime="2025-05-15 11:14" pubdate>
+              2025-05-15
+            </time>
+          </div>
+        
+        
+        
+          <div class="post-meta">
+            <i class="iconfont icon-tags"></i>
+            
+              <a href="/tags/nginx%EF%BC%8CHTTP1/">#nginx，HTTP1</a>
+            
+              <a href="/tags/HTTP2/">#HTTP2</a>
+            
+          </div>
+        
+      </div>
+    </article>
+  </div>
+
+  <div class="row mx-auto index-card">
+    
+    
+    <article class="col-12 col-md-12 mx-auto index-info">
+      <h2 class="index-header">
+        
         <a href="/2025/05/10/nginx%E4%B9%8B%E4%B8%8A%E4%B8%8B%E6%B8%B8%E4%B8%8D%E5%90%8C%E5%8D%8F%E8%AE%AE%E7%9A%84%E8%BD%AC%E6%8D%A2/" target="_self">
           nginx之上下游不同协议的转换
         </a>
@@ -264,7 +306,7 @@
       
       <a class="index-excerpt index-excerpt__noimg" href="/2025/05/10/nginx%E4%B9%8B%E4%B8%8A%E4%B8%8B%E6%B8%B8%E4%B8%8D%E5%90%8C%E5%8D%8F%E8%AE%AE%E7%9A%84%E8%BD%AC%E6%8D%A2/" target="_self">
         <div>
-          Nginx 主要用于实现路由与反向代理功能。在实际业务中，客户端与后端服务之间往往使用不同的协议，例如客户端采用 HTTP&#x2F;2，而后端仍使用 HTTP&#x2F;1.1。此时，Nginx 在作为 L7（应用层）代理时，会分别与上下游建立连接，并在两端之间转发请求和响应。由于协议不一致，Nginx 必须对请求进行解析与重新封装，实现上下游之间的“协议转换”。 1、HTTP请求的生命流程对于
+          Nginx 主要用于实现路由和反向代理功能。在实际应用中，客户端与后端服务可能使用不同的协议，例如客户端使用 HTTP&#x2F;2，而后端仍采用 HTTP&#x2F;1.1。作为应用层（L7）代理，Nginx 会分别与客户端和后端建立独立的连接，解析、处理请求和响应，并根据目标协议格式重新构造数据后转发。 需要注意的是：无论前后端协议是否一致，Nginx 始终执行这一套“应用层重构”流程。当协议
         </div>
       </a>
 
@@ -281,6 +323,8 @@
         
           <div class="post-meta">
             <i class="iconfont icon-tags"></i>
+            
+              <a href="/tags/websocket/">#websocket</a>
             
               <a href="/tags/nginx%EF%BC%8CHTTP/">#nginx，HTTP</a>
             
@@ -623,46 +667,6 @@
               <a href="/tags/cas/">#cas</a>
             
               <a href="/tags/%E5%8D%95%E7%82%B9%E7%99%BB%E5%BD%95/">#单点登录</a>
-            
-          </div>
-        
-      </div>
-    </article>
-  </div>
-
-  <div class="row mx-auto index-card">
-    
-    
-    <article class="col-12 col-md-12 mx-auto index-info">
-      <h2 class="index-header">
-        
-        <a href="/2024/07/30/%E4%B8%80%E6%AC%A1ngx_slab%E5%86%85%E5%AD%98%E6%B3%84%E9%9C%B2%E9%97%AE%E9%A2%98/" target="_self">
-          一次ngx_slab内存泄露问题
-        </a>
-      </h2>
-
-      
-      <a class="index-excerpt index-excerpt__noimg" href="/2024/07/30/%E4%B8%80%E6%AC%A1ngx_slab%E5%86%85%E5%AD%98%E6%B3%84%E9%9C%B2%E9%97%AE%E9%A2%98/" target="_self">
-        <div>
-          1、问题根据现场描述，隔几天就会出现nginx无法访问的情况，场景为正常使用状态，出现异常时，日志报大量  ngx_slab_free() : chunk is already free的错误，出现core dump，进程会不端重新拉起，不断core。此情况下，需要重启nginx才能恢复正常。 现场使用了访问控制功能，其中配置了几百条对客户端ip的访问控制规则。 2、现象分析1、调试core，首先
-        </div>
-      </a>
-
-      <div class="index-btm post-metas">
-        
-          <div class="post-meta mr-3">
-            <i class="iconfont icon-date"></i>
-            <time datetime="2024-07-30 20:28" pubdate>
-              2024-07-30
-            </time>
-          </div>
-        
-        
-        
-          <div class="post-meta">
-            <i class="iconfont icon-tags"></i>
-            
-              <a href="/tags/nginx%EF%BC%8Cslab/">#nginx，slab</a>
             
           </div>
         
