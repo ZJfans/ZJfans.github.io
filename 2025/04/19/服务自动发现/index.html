@@ -24,7 +24,7 @@
 <meta property="og:description" content="Nginx 采用 master–worker 多进程模型，其中 master 进程负责管理和信号交互，worker 进程执行网络 I&#x2F;O、定时器和延迟队列事件循环 。 1、nginx的原理1.1、配置解析与端口初始化1 Master 进程：解析配置与打开监听端口  配置解析：在 main() 中，master 进程首先调用 ngx_init_cycle()，该函数基于 ngx_conf_">
 <meta property="og:locale" content="zh_CN">
 <meta property="article:published_time" content="2025-04-19T10:30:48.854Z">
-<meta property="article:modified_time" content="2025-04-20T10:09:42.787Z">
+<meta property="article:modified_time" content="2025-05-20T03:22:54.739Z">
 <meta property="article:author" content="张三疯">
 <meta property="article:tag" content="nginx，work">
 <meta property="article:tag" content="zookeeper">
@@ -250,7 +250,7 @@
       <span class="post-meta mr-2">
         <i class="iconfont icon-chart"></i>
         
-          4.4k 字
+          4.9k 字
         
       </span>
     
@@ -261,7 +261,7 @@
         
         
         
-          37 分钟
+          41 分钟
         
       </span>
     
@@ -350,7 +350,7 @@
 <ul>
 <li>单个 Worker 除了负责网络事件、限流、负载均衡等核心逻辑，还需要连接 ZooKeeper、监听节点变更、处理推送等操作；一旦配置发生变化，该进程还要执行本地配置文件的写入和内存更新；这些操作<strong>会阻塞事件循环</strong>，延迟请求响应，导致实际服务性能下降，尤其在高并发场景下更加明显。</li>
 <li>每个 Worker 都需要包含 ZooKeeper 连接管理、会话重连、Watcher 重订阅、异常恢复等完整流程；这些逻辑与原有的业务处理无关，但会侵入 Worker 的主循环结构，<strong>增加维护成本与出错风险</strong>；</li>
-<li>变更配置后，0号Worker 负责将数据写入本地配置文件，其它 Worker 则轮询共享内存标志后读取该文件，由于竞争关系需要加锁，work串行更新配置；同时读取文件的效率低下</li>
+<li>变更配置后，单个Worker 负责将数据写入本地配置文件，其它 Worker 则轮询共享内存标志后读取该文件，由于竞争关系需要加锁，work串行更新配置；同时读取文件的效率低下</li>
 </ul>
 <h3 id="2-新模式设计：引入-0-号-manage-进程"><a href="#2-新模式设计：引入-0-号-manage-进程" class="headerlink" title="2. 新模式设计：引入 0 号 manage 进程"></a>2. 新模式设计：引入 0 号 manage 进程</h3><h4 id="1、优化点"><a href="#1、优化点" class="headerlink" title="1、优化点"></a>1、优化点</h4><ul>
 <li>将与 ZooKeeper 交互、动态配置管理等耗时操作与网络 I&#x2F;O 分离，减轻 worker 负担，简化逻辑</li>
@@ -386,12 +386,12 @@
 </li>
 <li><p>实际可以使用读写锁ngx_rwlock_rlock，写时不可读，读时不可写，但是可以一起读，这样work可以并行更新配置</p>
 </li>
-<li><p>manage还处理热更新，这其实是调用式触发，主动模式，原理一致，即接收客户端的数据，更新本地内存、共享内存、本地文件，然后修改共享内存的标识</p>
+<li><p>manage还处理热更新，这其实是调用式触发，主动模式，原理一致，即接收客户端的数据，更新本地内存、共享内存、本地文件，然后修改共享内存的标识。对于热更新，还需要更新zookeeper的配置，满足集群多节点的配置同步更新。</p>
 </li>
 </ul>
 <p><strong>异常场景</strong></p>
 <ul>
-<li>watcher连续推送，manage进程更新完配置后，会将标志位恢复，然后重新创建定时器进行扫描标志位，如果manage进程正在更新配置（更新部分），此时又有watcher消息推送，manage接着更新完配置恢复了标志位，就会丢失这期间所有的变更推送。加锁解决不了这种竞争关系，新增updating标志位，标识更新期间再次发生更新，配置更新完毕后，不恢复更新标志位，等待下一个定时器再次触发</li>
+<li>watcher连续推送。manage进程更新完配置后，会将标志位恢复，然后重新创建定时器进行扫描标志位，如果manage进程正在更新配置（更新部分），此时又有watcher消息推送，manage接着更新完配置恢复了标志位，就会丢失这期间所有的变更推送。加锁解决不了这种竞争关系，新增updating标志位，标识更新期间再次发生更新，配置更新完毕后，不恢复更新标志位，等待下一个定时器再次触发</li>
 </ul>
 <h4 id="3、方案实现"><a href="#3、方案实现" class="headerlink" title="3、方案实现"></a>3、方案实现</h4><p>所有配置统一在 master 解析完成后共享，子进程（worker&#x2F;manage）在 init 阶段根据端口属性决定是否关闭 socket，并根据是否为 manage 调整是否参与 accept 竞争</p>
 <ol>
@@ -489,25 +489,42 @@
 <li>manage处理完毕本次变更，<strong>如果updating为1，就直接恢复标志位</strong>，<strong>否则，不恢复标志位</strong>，<strong>为0就说明此时发生了多次推送</strong>，然后创建定时器</li>
 <li>定时器继续扫描标志位，发现标志位<strong>依旧需要更新</strong>，开始更新</li>
 </ol>
-<h2 id="3、nginx关于accept锁"><a href="#3、nginx关于accept锁" class="headerlink" title="3、nginx关于accept锁"></a>3、nginx关于accept锁</h2><h3 id="3-1、空白期？"><a href="#3-1、空白期？" class="headerlink" title="3.1、空白期？"></a>3.1、空白期？</h3><p>如果说只有抢到锁的进程，才能将监听socket放到自己的epoll，从而处理新连接，那么当前work释放锁之后，从epoll删除这个socket，在下一次多个work抢锁，并添加到epoll的时间差中，<strong>是否存在空白期，即没有一个work将这个socket放到epoll里面</strong>？</p>
-<p>事实上不会，work释放锁之后，不会立即从epoll删除这个socket，所以不会空白期</p>
-<h3 id="3-2、冲突？"><a href="#3-2、冲突？" class="headerlink" title="3.2、冲突？"></a>3.2、冲突？</h3><p>如果不删除，下一次别的进程抢到锁，并将socket加到epoll，处理accept，但是此时上一个work还没删除这个socket的监听怎么办，2个进程都epoll_wait，惊群效应没解决？</p>
-<p>事实上也不会有冲突，<strong>因为只有拿到锁的work才会epoll_wait，拿不到锁的work，虽然epoll里面有这个监听socket，但是不会立马epoll_wait</strong>。这个老的work，没拿到锁，会进行删除操作，把socket从epoll删除，然后再epoll_wait，那么就不会有问题了！！！</p>
-<h3 id="3-3、举个例子"><a href="#3-3、举个例子" class="headerlink" title="3.3、举个例子"></a>3.3、举个例子</h3><p>🕒 第 1 轮事件循环</p>
+<h2 id="3、nginx关于accept锁"><a href="#3、nginx关于accept锁" class="headerlink" title="3、nginx关于accept锁"></a>3、nginx关于accept锁</h2><h3 id="3-1、空白期？"><a href="#3-1、空白期？" class="headerlink" title="3.1、空白期？"></a>3.1、空白期？</h3><p>在开始看这块代码时，我会有一个疑问，如果说只有抢到锁的进程，才能将监听socket放到自己的epoll，从而处理新连接，那么当前work释放锁之后，从epoll删除这个socket，在下一次多个work抢锁，并添加到epoll的时间差中，<strong>是否存在空白期，即没有一个work将这个socket放到epoll里面？这期间的新连接会怎么样，会丢失吗</strong>   这其实需要从2方面分析。</p>
+<ol>
+<li>内核如何处理socket</li>
+<li>nginx如何处理accept</li>
+</ol>
+<p><strong>事实上完全不会</strong></p>
+<p>对于内核，即使在两次操作之间理论上会有时间差，内核不会丢失连接，因为未被 accept 的新连接一直保留在 socket 的 backlog 队列中，且 epoll 的事件会在重新启用时一次性报告所有待处理的连接（包括中间到达的）。</p>
+<p>对于work，释放锁之后，不会立即从epoll删除这个socket，所以不会空白期。</p>
+<p>也就是说，就算有空白期，内核也不会丢失连接，更何况，nginx通过机制，不会存在空白期，保持高性能处理新连接-accept。</p>
+<h3 id="3-2、内核的处理"><a href="#3-2、内核的处理" class="headerlink" title="3.2、内核的处理"></a>3.2、内核的处理</h3><p>1、 backlog 队列保证连接不丢失</p>
+<ul>
+<li>TCP 新连接在完成三次握手后先放入内核的 backlog 队列，不会因为用户态未调用 <code>accept()</code> 而丢失；除非达到队列上限才会拒绝新连接。</li>
+<li>即便 nginx 在释放锁后删掉或禁用了自己 epoll 实例中的监听事件，内核 backlog 依然保留了所有已完成的连接请求，等待下一个 <code>accept()</code> 调用。</li>
+</ul>
+<p>2 、epoll 的“待报告”事件语义</p>
+<ul>
+<li><strong>Level-triggered</strong>（默认）模式下，只要文件描述符对应的内核读缓冲区或 backlog 非空，<code>epoll_wait()</code> 每次都会报告该事件；禁用后重新启用即可一次性报告所有积压的事件，不会遗漏。</li>
+<li>即使使用 <code>EPOLLONESHOT</code>、<code>EPOLL_EXCLUSIVE</code> 等高级选项，内核也会在重新 arm（重新添加或修改）后，将中间产生的事件一次性返回</li>
+</ul>
+<h3 id="3-3、nginx的处理"><a href="#3-3、nginx的处理" class="headerlink" title="3.3、nginx的处理"></a>3.3、nginx的处理</h3><p>只有拿到锁的work才会epoll_wait，拿不到锁的work，虽然epoll里面有这个监听socket，但是不会立马epoll_wait。这个老的work，在没拿到锁时，会进行删除操作，把socket从epoll删除，然后再epoll_wait，这样新连接可以即时处理，也不会存在竞争关系。</p>
+<p>1、举个例子</p>
+<p>🕒 第 1 轮事件循环</p>
 <ul>
 <li><strong>Worker 1：</strong><ol>
 <li>尝试获取 <code>accept_mutex</code>，成功。</li>
-<li>调用 <code>ngx_enable_accept_events()</code>，将监听 socket 添加到自己的 epoll interest list 中。</li>
+<li>调用 <code>ngx_enable_accept_events()</code>，将监听 socket 添加到自己的 epoll中。</li>
 <li>设置 <code>ngx_accept_mutex_held = 1</code>。</li>
 <li>调用 <code>epoll_wait()</code>，等待事件。</li>
 <li>接收到新连接事件，处理 <code>accept()</code>，建立连接。</li>
 <li>处理完事件后，调用 <code>ngx_shmtx_unlock(&amp;ngx_accept_mutex)</code>，释放锁。</li>
-<li>**注意：此时并未调用 <code>epoll_ctl(DEL)</code>，监听 socket 仍在 epoll interest list 中。</li>
+<li><strong>注意：此时并未调用 <code>epoll_ctl(DEL)</code>，监听 socket 仍在 epoll中。</strong></li>
 </ol>
 </li>
 <li><strong>Worker 2：</strong><ol>
 <li>尝试获取 <code>accept_mutex</code>，失败。</li>
-<li>由于 <code>ngx_accept_mutex_held == 0</code>，未持有锁，因此不会将监听 socket 添加到 epoll interest list 中。</li>
+<li>由于 <code>ngx_accept_mutex_held == 0</code>，未持有锁，因此不会将监听 socket 添加到 epoll 中。</li>
 <li>调用 <code>epoll_wait()</code>，等待事件。</li>
 <li>未接收到新连接事件，继续等待。</li>
 </ol>
@@ -517,18 +534,18 @@
 <ul>
 <li><strong>Worker 2：</strong><ol>
 <li>尝试获取 <code>accept_mutex</code>，成功。</li>
-<li>调用 <code>ngx_enable_accept_events()</code>，将监听 socket 添加到自己的 epoll interest list 中。</li>
+<li>调用 <code>ngx_enable_accept_events()</code>，将监听 socket 添加到自己的 epoll 中。</li>
 <li>设置 <code>ngx_accept_mutex_held = 1</code>。</li>
 <li>调用 <code>epoll_wait()</code>，等待事件。</li>
 <li>接收到新连接事件，处理 <code>accept()</code>，建立连接。</li>
 <li>处理完事件后，调用 <code>ngx_shmtx_unlock(&amp;ngx_accept_mutex)</code>，释放锁。</li>
-<li><strong>注意：此时并未调用 <code>epoll_ctl(DEL)</code>，监听 socket 仍在 epoll interest list 中。</strong></li>
+<li><strong>注意：此时并未调用 <code>epoll_ctl(DEL)</code>，监听 socket 仍在 epoll 中。</strong></li>
 </ol>
 </li>
 <li><strong>Worker 1：</strong><ol>
 <li>尝试获取 <code>accept_mutex</code>，失败。</li>
 <li>检测到 <code>ngx_accept_mutex_held == 1</code>，说明上一轮持有过锁。</li>
-<li>调用 <code>ngx_disable_accept_events()</code>，将监听 socket 从 epoll interest list 中删除。</li>
+<li>调用 <code>ngx_disable_accept_events()</code>，将监听 socket 从 epoll 中删除。</li>
 <li>设置 <code>ngx_accept_mutex_held = 0</code>。</li>
 <li>调用 <code>epoll_wait()</code>，等待事件。</li>
 <li>未接收到新连接事件，继续等待。</li>
@@ -538,8 +555,9 @@
 <hr>
 <p>✅ 总结</p>
 <ul>
-<li>在每轮事件循环中，只有成功获取 <code>accept_mutex</code> 的 worker 进程会将监听 socket 添加到其 epoll interest list 中，并处理新连接。</li>
-<li>释放锁后，监听 socket 并不会立即从 epoll interest list 中删除，而是在下一轮事件循环开始时，检测到未获取锁且上一轮持有过锁的情况下，才调用 <code>ngx_disable_accept_events()</code> 删除监听 socket。</li>
+<li>在每轮事件循环中，只有成功获取 <code>accept_mutex</code> 的 worker 进程会将监听 socket 添加到其 epoll 中，并处理新连接。</li>
+<li>释放锁后，监听 socket 并不会立即从 epoll 中删除，而是在下一轮事件循环开始时，检测到未获取锁且上一轮持有过锁的情况下，才调用 <code>ngx_disable_accept_events()</code> 删除监听 socket。</li>
+<li>释放锁后，监听 socket 并不会立即从 epoll 中删除，而是在下一轮事件循环开始时，当获取锁失败（说明已经有其他work获取到了锁，开始listen）检测到未获取锁且上一轮持有过锁的情况下，才调用 <code>ngx_disable_accept_events()</code> 删除监听 socket。</li>
 </ul>
 <h3 id="3-4、源码分析"><a href="#3-4、源码分析" class="headerlink" title="3.4、源码分析"></a>3.4、源码分析</h3><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-type">ngx_int_t</span><br><span class="hljs-title function_">ngx_trylock_accept_mutex</span><span class="hljs-params">(<span class="hljs-type">ngx_cycle_t</span> *cycle)</span><br>&#123;<br>    <span class="hljs-comment">// 尝试获取接受互斥锁</span><br>    <span class="hljs-keyword">if</span> (ngx_shmtx_trylock(&amp;ngx_accept_mutex)) &#123;<br><br>        <span class="hljs-comment">// 尝试启用接受事件，-----------  1、拿到锁的进程，在epoll添加socket</span><br>        <span class="hljs-keyword">if</span> (ngx_enable_accept_events(cycle) == NGX_ERROR) &#123;<br>            <span class="hljs-comment">// 如果启用失败，释放互斥锁</span><br>            ngx_shmtx_unlock(&amp;ngx_accept_mutex);<br>            <span class="hljs-keyword">return</span> NGX_ERROR;<br>        &#125;<br><br>        <span class="hljs-comment">// 重置接受事件计数</span><br>        ngx_accept_events = <span class="hljs-number">0</span>;<br>        <span class="hljs-comment">// 标记已经持有互斥锁</span><br>        ngx_accept_mutex_held = <span class="hljs-number">1</span>;<br>        <span class="hljs-keyword">return</span> NGX_OK;<br>    &#125;<br><br>    <span class="hljs-comment">// 如果之前已经持有互斥锁</span><br>    <span class="hljs-keyword">if</span> (ngx_accept_mutex_held) &#123;<br>        <span class="hljs-comment">// 尝试禁用接受事件,-------  2、拿不到锁的进程，在epoll删除socket</span><br>        <span class="hljs-keyword">if</span> (ngx_disable_accept_events(cycle, <span class="hljs-number">0</span>) == NGX_ERROR) &#123;<br>            <span class="hljs-keyword">return</span> NGX_ERROR;<br>        &#125;<br>        <span class="hljs-comment">// 标记不再持有互斥锁</span><br>        ngx_accept_mutex_held = <span class="hljs-number">0</span>;<br>    &#125;<br><br>    <span class="hljs-keyword">return</span> NGX_OK;<br>&#125;<br></code></pre></td></tr></table></figure>
 

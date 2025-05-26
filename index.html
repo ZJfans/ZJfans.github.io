@@ -256,6 +256,50 @@
     <article class="col-12 col-md-12 mx-auto index-info">
       <h2 class="index-header">
         
+        <a href="/2025/05/26/nginx%E5%9F%9F%E5%90%8D%E8%A7%A3%E6%9E%90%E5%8E%9F%E7%90%86/" target="_self">
+          NGINX域名解析
+        </a>
+      </h2>
+
+      
+      <a class="index-excerpt index-excerpt__noimg" href="/2025/05/26/nginx%E5%9F%9F%E5%90%8D%E8%A7%A3%E6%9E%90%E5%8E%9F%E7%90%86/" target="_self">
+        <div>
+          NGINX域名解析1、NGINX 支持的域名解析方式 静态解析：启动&#x2F;重载时仅调用系统解析库（getaddrinfo()），将域名映射为 IP 列表后缓存，后续不再更新。 变量驱动的动态解析：在 proxy_pass 等指令中使用 $variable，结合 resolver，使 NGINX 在每次请求阶段异步更新域名解析结果。 **异步 resolver + resolve**：开源版
+        </div>
+      </a>
+
+      <div class="index-btm post-metas">
+        
+          <div class="post-meta mr-3">
+            <i class="iconfont icon-date"></i>
+            <time datetime="2025-05-26 20:43" pubdate>
+              2025-05-26
+            </time>
+          </div>
+        
+        
+        
+          <div class="post-meta">
+            <i class="iconfont icon-tags"></i>
+            
+              <a href="/tags/nginx%EF%BC%8Copenresty/">#nginx，openresty</a>
+            
+              <a href="/tags/dns/">#dns</a>
+            
+              <a href="/tags/hosts/">#hosts</a>
+            
+          </div>
+        
+      </div>
+    </article>
+  </div>
+
+  <div class="row mx-auto index-card">
+    
+    
+    <article class="col-12 col-md-12 mx-auto index-info">
+      <h2 class="index-header">
+        
         <a href="/2025/05/17/%E7%BD%91%E5%85%B3%E6%94%AF%E6%8C%81redis%E5%93%A8%E5%85%B5/" target="_self">
           在OpenResty中实现Redis Sentinel支持
         </a>
@@ -621,50 +665,6 @@
               <a href="/tags/fcommon/">#fcommon</a>
             
               <a href="/tags/fno-common/">#fno-common</a>
-            
-          </div>
-        
-      </div>
-    </article>
-  </div>
-
-  <div class="row mx-auto index-card">
-    
-    
-    <article class="col-12 col-md-12 mx-auto index-info">
-      <h2 class="index-header">
-        
-        <a href="/2024/08/13/chunked%E7%BC%96%E7%A0%81%E6%A0%BC%E5%BC%8F%E5%BC%95%E5%8F%91%E7%9A%84%E9%97%AE%E9%A2%98/" target="_self">
-          chunked编码格式引发的问题
-        </a>
-      </h2>
-
-      
-      <a class="index-excerpt index-excerpt__noimg" href="/2024/08/13/chunked%E7%BC%96%E7%A0%81%E6%A0%BC%E5%BC%8F%E5%BC%95%E5%8F%91%E7%9A%84%E9%97%AE%E9%A2%98/" target="_self">
-        <div>
-          1、问题在适配某家的cas时，票据校验时一直失败，通常是以下几个问题引发的问题1、网关与cas服务器的网络不通，导致票校验的请求发送不出去2、cas服务器的票据校验接口，配置了域名，但是在nginx没有配置dns，导致域名无法解析，请求无法发送 3、配置了ip，但是cas服务端限制了host，禁用了ip访问 4、票据校验的请求有问题，service参数组装不正确 经过排查后，发现都不是上面的原因，
-        </div>
-      </a>
-
-      <div class="index-btm post-metas">
-        
-          <div class="post-meta mr-3">
-            <i class="iconfont icon-date"></i>
-            <time datetime="2024-08-13 19:45" pubdate>
-              2024-08-13
-            </time>
-          </div>
-        
-        
-        
-          <div class="post-meta">
-            <i class="iconfont icon-tags"></i>
-            
-              <a href="/tags/http/">#http</a>
-            
-              <a href="/tags/Transfer-Encoding/">#Transfer-Encoding</a>
-            
-              <a href="/tags/chunked/">#chunked</a>
             
           </div>
         
