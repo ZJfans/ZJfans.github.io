@@ -256,6 +256,50 @@
     <article class="col-12 col-md-12 mx-auto index-info">
       <h2 class="index-header">
         
+        <a href="/2024/08/17/gcc%E7%BC%96%E8%AF%91%E9%80%89%E9%A1%B9--fcommon/" target="_self">
+          gcc编译选项--fcommon
+        </a>
+      </h2>
+
+      
+      <a class="index-excerpt index-excerpt__noimg" href="/2024/08/17/gcc%E7%BC%96%E8%AF%91%E9%80%89%E9%A1%B9--fcommon/" target="_self">
+        <div>
+          multiple definition最近在龙蜥操作系统编译时，出现了multiple definition的错误，重复定义？查看了代码，有几个变量确实是重复定义了，简单来讲就是在一个.h文件定义了一个变量，多个.c文件又包含了这个.h，导致这个变量在多个.c文件重复定义，在编译时报错。 修复也很简单，.h文件的中的变量统一加extern，然后只有一个.c文件才能定义初始化这个变量，这样就可以避免
+        </div>
+      </a>
+
+      <div class="index-btm post-metas">
+        
+          <div class="post-meta mr-3">
+            <i class="iconfont icon-date"></i>
+            <time datetime="2024-08-17 16:04" pubdate>
+              2024-08-17
+            </time>
+          </div>
+        
+        
+        
+          <div class="post-meta">
+            <i class="iconfont icon-tags"></i>
+            
+              <a href="/tags/gcc/">#gcc</a>
+            
+              <a href="/tags/fcommon/">#fcommon</a>
+            
+              <a href="/tags/fno-common/">#fno-common</a>
+            
+          </div>
+        
+      </div>
+    </article>
+  </div>
+
+  <div class="row mx-auto index-card">
+    
+    
+    <article class="col-12 col-md-12 mx-auto index-info">
+      <h2 class="index-header">
+        
         <a href="/2024/08/13/chunked%E7%BC%96%E7%A0%81%E6%A0%BC%E5%BC%8F%E5%BC%95%E5%8F%91%E7%9A%84%E9%97%AE%E9%A2%98/" target="_self">
           chunked编码格式引发的问题
         </a>
@@ -623,54 +667,6 @@
               <a href="/tags/websocket/">#websocket</a>
             
               <a href="/tags/socket-io/">#socket.io</a>
-            
-          </div>
-        
-      </div>
-    </article>
-  </div>
-
-  <div class="row mx-auto index-card">
-    
-    
-    <article class="col-12 col-md-12 mx-auto index-info">
-      <h2 class="index-header">
-        
-        <a href="/2024/04/12/openresty---lua%E8%B0%83%E7%94%A8c%E5%8E%9F%E7%90%86%E5%88%86%E6%9E%90/" target="_self">
-          openresty---lua调用c原理分析
-        </a>
-      </h2>
-
-      
-      <a class="index-excerpt index-excerpt__noimg" href="/2024/04/12/openresty---lua%E8%B0%83%E7%94%A8c%E5%8E%9F%E7%90%86%E5%88%86%E6%9E%90/" target="_self">
-        <div>
-          openresty—lua调用c模块原理分析1、lua基础1、lua虚拟机lua是解释型语言，需要虚拟机对象。不同的lua虚拟机之间的工作是线程安全的，因为一切和虚拟机相关的内存操作都被关联到虚拟机对象中，而没有利用任何其它共享变量。lua的虚拟机核心部分，没有任何的系统调用，是一个纯粹的黑盒子，正确的使用lua，不会对系统造成任何干扰。这其中最关键的一点是，lua让用户自行定义内存管理器，在创建
-        </div>
-      </a>
-
-      <div class="index-btm post-metas">
-        
-          <div class="post-meta mr-3">
-            <i class="iconfont icon-date"></i>
-            <time datetime="2024-04-12 09:41" pubdate>
-              2024-04-12
-            </time>
-          </div>
-        
-        
-        
-          <div class="post-meta">
-            <i class="iconfont icon-tags"></i>
-            
-              <a href="/tags/lua%E8%99%9A%E6%8B%9F%E6%9C%BA/">#lua虚拟机</a>
-            
-              <a href="/tags/global-State/">#global_State</a>
-            
-              <a href="/tags/lua-State/">#lua_State</a>
-            
-              <a href="/tags/%E5%85%83%E8%A1%A8/">#元表</a>
-            
-              <a href="/tags/%E5%8D%8F%E7%A8%8B/">#协程</a>
             
           </div>
         

@@ -1,0 +1,1063 @@
+
+
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-color-scheme=auto>
+
+
+
+<head>
+  <meta charset="UTF-8">
+  <link rel="apple-touch-icon" sizes="76x76" href="/img/fluid.png">
+  <link rel="icon" href="/img/fluid.png">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, shrink-to-fit=no">
+  <meta http-equiv="x-ua-compatible" content="ie=edge">
+  
+  <meta name="theme-color" content="#2f4154">
+  <meta name="author" content="张三疯">
+  <meta name="keywords" content="nginx,openresty,网关,HTTP/HTTPS,Websocket">
+  
+    <meta name="description" content="前言在传统微服务体系中，热更新是一个非常重要的功能，可以在网关运行，不重启的情况下，动态修改配置并生效。我们可以把路由分为三种模式  nginx&#x2F;openresty支持的静态路由，本质是修改nginx.conf，重启nginx生效 服务自动发现 热更新  热更新最重要的是可以动态的更新upstream，Tengine提供的第三方模块nginxngx_http_dyups_module允许">
+<meta property="og:type" content="article">
+<meta property="og:title" content="热更新-动态路由">
+<meta property="og:url" content="https://zjfans.github.io/2025/06/08/%E7%83%AD%E6%9B%B4%E6%96%B0-%E5%8A%A8%E6%80%81%E8%B7%AF%E7%94%B1/index.html">
+<meta property="og:site_name" content="ZJfans Blog">
+<meta property="og:description" content="前言在传统微服务体系中，热更新是一个非常重要的功能，可以在网关运行，不重启的情况下，动态修改配置并生效。我们可以把路由分为三种模式  nginx&#x2F;openresty支持的静态路由，本质是修改nginx.conf，重启nginx生效 服务自动发现 热更新  热更新最重要的是可以动态的更新upstream，Tengine提供的第三方模块nginxngx_http_dyups_module允许">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2025-06-08T08:40:06.034Z">
+<meta property="article:modified_time" content="2025-06-08T08:39:49.076Z">
+<meta property="article:author" content="张三疯">
+<meta property="article:tag" content="zookeeper">
+<meta property="article:tag" content="nginx，dyups">
+<meta property="article:tag" content="manage">
+<meta property="article:tag" content="work">
+<meta name="twitter:card" content="summary_large_image">
+  
+  
+    <meta name="referrer" content="no-referrer-when-downgrade">
+  
+  
+  <title>热更新-动态路由 - ZJfans Blog</title>
+
+  <link  rel="stylesheet" href="https://lib.baomitu.com/twitter-bootstrap/4.6.1/css/bootstrap.min.css" />
+
+
+
+  <link  rel="stylesheet" href="https://lib.baomitu.com/github-markdown-css/4.0.0/github-markdown.min.css" />
+
+  <link  rel="stylesheet" href="https://lib.baomitu.com/hint.css/2.7.0/hint.min.css" />
+
+  <link  rel="stylesheet" href="https://lib.baomitu.com/fancybox/3.5.7/jquery.fancybox.min.css" />
+
+
+
+<!-- 主题依赖的图标库，不要自行修改 -->
+<!-- Do not modify the link that theme dependent icons -->
+
+<link rel="stylesheet" href="//at.alicdn.com/t/font_1749284_hj8rtnfg7um.css">
+
+
+
+<link rel="stylesheet" href="//at.alicdn.com/t/font_1736178_lbnruvf0jn.css">
+
+
+<link  rel="stylesheet" href="/css/main.css" />
+
+
+  <link id="highlight-css" rel="stylesheet" href="/css/highlight.css" />
+  
+    <link id="highlight-css-dark" rel="stylesheet" href="/css/highlight-dark.css" />
+  
+
+
+
+
+  <script id="fluid-configs">
+    var Fluid = window.Fluid || {};
+    Fluid.ctx = Object.assign({}, Fluid.ctx)
+    var CONFIG = {"hostname":"zjfans.github.io","root":"/","version":"1.9.7","typing":{"enable":true,"typeSpeed":70,"cursorChar":"_","loop":false,"scope":[]},"anchorjs":{"enable":true,"element":"h1,h2,h3,h4,h5,h6","placement":"left","visible":"hover","icon":""},"progressbar":{"enable":true,"height_px":3,"color":"#29d","options":{"showSpinner":false,"trickleSpeed":100}},"code_language":{"enable":true,"default":"TEXT"},"copy_btn":true,"image_caption":{"enable":true},"image_zoom":{"enable":true,"img_url_replace":["",""]},"toc":{"enable":true,"placement":"right","headingSelector":"h1,h2,h3,h4,h5,h6","collapseDepth":0},"lazyload":{"enable":true,"loading_img":"/img/loading.gif","onlypost":false,"offset_factor":2},"web_analytics":{"enable":true,"follow_dnt":true,"baidu":null,"google":{"measurement_id":null},"tencent":{"sid":null,"cid":null},"woyaola":null,"cnzz":null,"leancloud":{"app_id":null,"app_key":null,"server_url":null,"path":"window.location.pathname","ignore_local":false}},"search_path":"/local-search.xml","include_content_in_search":true};
+
+    if (CONFIG.web_analytics.follow_dnt) {
+      var dntVal = navigator.doNotTrack || window.doNotTrack || navigator.msDoNotTrack;
+      Fluid.ctx.dnt = dntVal && (dntVal.startsWith('1') || dntVal.startsWith('yes') || dntVal.startsWith('on'));
+    }
+  </script>
+  <script  src="/js/utils.js" ></script>
+  <script  src="/js/color-schema.js" ></script>
+  
+
+  
+
+  
+    <!-- Google tag (gtag.js) -->
+    <script async>
+      if (!Fluid.ctx.dnt) {
+        Fluid.utils.createScript("https://www.googletagmanager.com/gtag/js?id=", function() {
+          window.dataLayer = window.dataLayer || [];
+          function gtag() {
+            dataLayer.push(arguments);
+          }
+          gtag('js', new Date());
+          gtag('config', '');
+        });
+      }
+    </script>
+  
+
+  
+
+  
+
+  
+
+  
+
+
+
+  
+<meta name="generator" content="Hexo 6.3.0"></head>
+
+
+<body>
+  
+
+  <header>
+    
+
+<div class="header-inner" style="height: 70vh;">
+  <nav id="navbar" class="navbar fixed-top  navbar-expand-lg navbar-dark scrolling-navbar">
+  <div class="container">
+    <a class="navbar-brand" href="/">
+      <strong>ZJfans Blog</strong>
+    </a>
+
+    <button id="navbar-toggler-btn" class="navbar-toggler" type="button" data-toggle="collapse"
+            data-target="#navbarSupportedContent"
+            aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+      <div class="animated-icon"><span></span><span></span><span></span></div>
+    </button>
+
+    <!-- Collapsible content -->
+    <div class="collapse navbar-collapse" id="navbarSupportedContent">
+      <ul class="navbar-nav ml-auto text-center">
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/" target="_self">
+                <i class="iconfont icon-home-fill"></i>
+                <span>首页</span>
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/archives/" target="_self">
+                <i class="iconfont icon-archive-fill"></i>
+                <span>归档</span>
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/categories/" target="_self">
+                <i class="iconfont icon-category-fill"></i>
+                <span>分类</span>
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/tags/" target="_self">
+                <i class="iconfont icon-tags-fill"></i>
+                <span>标签</span>
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/about/" target="_self">
+                <i class="iconfont icon-user-fill"></i>
+                <span>关于</span>
+              </a>
+            </li>
+          
+        
+        
+          <li class="nav-item" id="search-btn">
+            <a class="nav-link" target="_self" href="javascript:;" data-toggle="modal" data-target="#modalSearch" aria-label="Search">
+              <i class="iconfont icon-search"></i>
+            </a>
+          </li>
+          
+        
+        
+          <li class="nav-item" id="color-toggle-btn">
+            <a class="nav-link" target="_self" href="javascript:;" aria-label="Color Toggle">
+              <i class="iconfont icon-dark" id="color-toggle-icon"></i>
+            </a>
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+</nav>
+
+  
+
+<div id="banner" class="banner" parallax=true
+     style="background: url('/img/theodor-lundqvist-WHhbYArwFt8-unsplash.jpg') no-repeat center center; background-size: cover;">
+  <div class="full-bg-img">
+    <div class="mask flex-center" style="background-color: rgba(0, 0, 0, 0.3)">
+      <div class="banner-text text-center fade-in-up">
+        <div class="h2">
+          
+            <span id="subtitle" data-typed-text="热更新-动态路由"></span>
+          
+        </div>
+
+        
+          
+  <div class="mt-3">
+    
+    
+      <span class="post-meta">
+        <i class="iconfont icon-date-fill" aria-hidden="true"></i>
+        <time datetime="2025-06-08 16:40" pubdate>
+          2025年6月8日 下午
+        </time>
+      </span>
+    
+  </div>
+
+  <div class="mt-1">
+    
+      <span class="post-meta mr-2">
+        <i class="iconfont icon-chart"></i>
+        
+          6.7k 字
+        
+      </span>
+    
+
+    
+      <span class="post-meta mr-2">
+        <i class="iconfont icon-clock-fill"></i>
+        
+        
+        
+          57 分钟
+        
+      </span>
+    
+
+    
+    
+  </div>
+
+
+        
+      </div>
+
+      
+    </div>
+  </div>
+</div>
+
+</div>
+
+  </header>
+
+  <main>
+    
+      
+
+<div class="container-fluid nopadding-x">
+  <div class="row nomargin-x">
+    <div class="side-col d-none d-lg-block col-lg-2">
+      
+
+    </div>
+
+    <div class="col-lg-8 nopadding-x-md">
+      <div class="container nopadding-x-md" id="board-ctn">
+        <div id="board">
+          <article class="post-content mx-auto">
+            <h1 id="seo-header">热更新-动态路由</h1>
+            
+            
+              <div class="markdown-body">
+                
+                <h2 id="前言"><a href="#前言" class="headerlink" title="前言"></a>前言</h2><p>在传统微服务体系中，热更新是一个非常重要的功能，可以在网关运行，不重启的情况下，动态修改配置并生效。我们可以把路由分为三种模式</p>
+<ol>
+<li>nginx&#x2F;openresty支持的静态路由，本质是修改nginx.conf，重启nginx生效</li>
+<li>服务自动发现</li>
+<li>热更新</li>
+</ol>
+<p>热更新最重要的是可以动态的更新upstream，Tengine提供的第三方模块<code>nginxngx_http_dyups_module</code>允许在运行时通过 HTTP 接口添加、删除或修改 upstream 配置，无需重启 Nginx。</p>
+<h2 id="1、ngx-http-dyups-module模块"><a href="#1、ngx-http-dyups-module模块" class="headerlink" title="1、ngx_http_dyups_module模块"></a>1、ngx_http_dyups_module模块</h2><ul>
+<li><code>ngx_http_dyups_module</code> 最初由阿里巴巴基于 Tengine 分支开发，目标是在不重启或重载 Nginx&#x2F;Tengine 进程的情况下，实现对 <code>upstream</code> 集群的动态管理（增删、更新、查询）。</li>
+<li>传统 Nginx 要更新 <code>upstream</code> 配置，需要修改配置文件后执行 <code>nginx -s reload</code>，过程中会有瞬间连接中断风险，而 dyups 模块则提供了一个 “在线” 接口，能够在 HTTP 运行时通过 RESTful 或 Lua API 对 <code>upstream</code> 进行增删改查</li>
+</ul>
+<h3 id="1-1、主要数据结构与共享内存设计"><a href="#1-1、主要数据结构与共享内存设计" class="headerlink" title="1.1、主要数据结构与共享内存设计"></a>1.1、主要数据结构与共享内存设计</h3><p><strong>全局上下文：<code>ngx_dyups_global_ctx</code></strong></p>
+<ul>
+<li>在初始化（<code>init_module</code>）阶段，模块通过 <code>ngx_shared_memory_add(&quot;dyups_shm_zone&quot;, size, &amp;ngx_http_dyups_module)</code> 分配一块共享内存。该内存段映射到主进程和所有 Worker，共同维护以下重要字段：<ul>
+<li><code>shpool</code>（类型为 <code>ngx_slab_pool_t *</code>）：专用于分配共享内存中的消息节点和字符串副本；</li>
+<li><code>shctx</code>（类型为自定义结构，通常称 <code>ngx_dyups_shctx_t *</code>）：包含消息队列头指针、尾指针、当前版本号 <code>version</code>、消息计数 <code>msg_count</code>、以及存储 <code>Worker</code> 状态的数组 <code>status[]</code> 等。</li>
+</ul>
+</li>
+</ul>
+<p><strong>消息节点：<code>ngx_dyups_msg_t</code></strong></p>
+<ul>
+<li><p>每条对 <code>upstream</code> 的增删改查动作最终会被封装成一个 <code>ngx_dyups_msg_t</code> 节点，写入共享内存中的链表：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-keyword">typedef</span> <span class="hljs-class"><span class="hljs-keyword">struct</span> &#123;</span><br>    <span class="hljs-type">ngx_queue_t</span>        <span class="hljs-built_in">queue</span>;    <span class="hljs-comment">// 链表节点</span><br>    <span class="hljs-type">ngx_uint_t</span>         type;     <span class="hljs-comment">// 操作类型：ADD / DELETE / UPDATE</span><br>    <span class="hljs-type">ngx_str_t</span>          name;     <span class="hljs-comment">// 上游名称</span><br>    <span class="hljs-type">ngx_str_t</span>          content;  <span class="hljs-comment">// 包含实际 server 列表的字符串</span><br>    <span class="hljs-type">pid_t</span>             pid[NGX_MAX_WORKERS];  <span class="hljs-comment">// 标记哪些 Worker 已处理</span><br>    <span class="hljs-type">ngx_uint_t</span>        count;    <span class="hljs-comment">// 已处理 Worker 数目</span><br>&#125; <span class="hljs-type">ngx_dyups_msg_t</span>;<br></code></pre></td></tr></table></figure>
+</li>
+<li><p><code>pid[]</code> 用来记录各 Worker 进程对该消息的处理状态；当 <code>count</code> 达到当前 <code>worker_processes</code> 数量时，表示所有 Worker 均已读取该消息，无需再转发或保留。</p>
+</li>
+</ul>
+<p><strong>Worker 状态数组：<code>sh-&gt;status[]</code></strong></p>
+<ul>
+<li><p><code>shctx-&gt;status</code> 是一个长度等于 <code>worker_processes</code> 的数组，每个元素为：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><code class="hljs cpp"><span class="hljs-keyword">typedef</span> <span class="hljs-keyword">struct</span> &#123;<br>    <span class="hljs-type">pid_t</span>    pid;    <span class="hljs-comment">// Worker 进程号</span><br>    <span class="hljs-type">time_t</span>   time;   <span class="hljs-comment">// 最后一次心跳时间戳</span><br>&#125; <span class="hljs-type">ngx_dyups_status_t</span>;<br></code></pre></td></tr></table></figure>
+</li>
+<li><p>在 <code>init_process</code> 阶段，每个 Worker 会在共享内存中注册自己的 <code>pid</code>，并设置第一次的 <code>time = now</code>。这一信息用于：</p>
+<ol>
+<li>标记哪些 Worker 仍处于活跃状态；</li>
+<li>防止由于某个 Worker 异常退出导致共享消息长时间无法累积至 <code>count == worker_processes</code> 而悬挂。</li>
+</ol>
+</li>
+</ul>
+<p><strong>共享内存分配粒度</strong></p>
+<ul>
+<li>共享内存池由 <code>ngx_slab_pool_t</code> 管理，所有对消息节点和动态存储 <code>upstream</code> 字符串的分配都来自该 Slab。这样可以避免不同进程使用各自的堆内存，确保跨进程可见。</li>
+<li>默认 <code>dyups_shm_zone_size 2M</code> 时，可能一次只能发送有限大小的 <code>upstream</code> 信息；对于包含大量 <code>server</code> 的集群，需要调大该参数以防止分配失败。</li>
+</ul>
+<h3 id="1-2、动态增删改查"><a href="#1-2、动态增删改查" class="headerlink" title="1.2、动态增删改查"></a>1.2、动态增删改查</h3><p>本节梳理一次典型的 “更新（Add&#x2F;Update）” 操作流程，删除操作类似，但在正式更新时会调用 <code>ngx_dyups_delete_upstream</code>。</p>
+<p><strong>1、 外部 API 触发与初步检查</strong></p>
+<ol>
+<li>当客户端通过 <code>curl -d &quot;server X:Y;&quot; http://host/dyups/upstream/&lt;name&gt;</code> 发送更新请求时，进入 Nginx 的某个 Worker 并调用 <code>ngx_http_dyups_update_upstream(ngx_str_t *name, ngx_buf_t *buf, ngx_str_t *rv)</code>。</li>
+<li>函数开头会检查全局 <code>ngx_http_dyups_api_enable</code> 标志；若未启用，则直接返回 <code>NGX_HTTP_NOT_ALLOWED (405)</code>，并在 <code>rv</code> 中设置 <code>&quot;API disabled&quot;</code> 提示。</li>
+</ol>
+<p><strong>2、 获取共享内存锁</strong></p>
+<ol>
+<li>根据主配置 <code>dmcf-&gt;trylock</code> 判断锁模式：<ul>
+<li>若 <code>trylock == 0</code>（阻塞模式），调用 <code>ngx_shmtx_lock(&amp;shpool-&gt;mutex)</code>，若有其它 Worker 持锁，则本 Worker 阻塞，直到锁可用；</li>
+<li>若 <code>trylock == 1</code>（非阻塞模式），调用 <code>ngx_shmtx_trylock(&amp;shpool-&gt;mutex)</code>，若抢锁失败，则立即设置 <code>rv=&quot;wait and try again&quot;</code> 并返回 <code>NGX_HTTP_CONFLICT (409)</code>，告知客户端稍后重试。</li>
+</ul>
+</li>
+<li>上锁成功后，才能安全访问 <code>shctx-&gt;msg_queue</code> 以及共享 <code>upstream</code> 数据。</li>
+</ol>
+<p><strong>3、 读取并清理历史消息</strong></p>
+<ol>
+<li>调用 <code>ngx_http_dyups_read_msg_locked(timer)</code>（需在持锁状态下执行），先扫描共享内存中 <code>shctx-&gt;msg_queue</code> 列表：<ul>
+<li>如果某个 <code>msg-&gt;count == total_worker</code>，则说明该消息已被所有 Worker 处理，可安全移出队列并调用 <code>ngx_dyups_destroy_msg</code> 释放对应共享内存；</li>
+<li>否则，对于尚未被本 Worker 处理的消息节点（通过检查 <code>pid[]</code> 数组判断），调用相应内部函数（如 <code>ngx_dyups_do_update</code> 或 <code>ngx_dyups_delete_upstream</code>）在本地内存执行对应操作，并将本 Worker PID 加入 <code>pid[]</code>，令 <code>msg-&gt;count++</code>。</li>
+</ul>
+</li>
+<li>该步骤的目的是：<strong>先把其他 Worker 上次发送的更新都在本进程内同步完成</strong>，保证不会在后续操作中丢失或冲突。</li>
+</ol>
+<p><strong>4、 沙箱验证（<code>ngx_dyups_sandbox_update</code>）</strong></p>
+<ol>
+<li>读取完历史消息后，函数调用 <code>status = ngx_dyups_sandbox_update(buf, rv)</code>：<ul>
+<li>该函数会在内存中临时创建一个 “伪” <code>ngx_http_upstream_srv_conf_t</code> 结构，解析并检查 <code>buf</code> 中包含的 <code>server ...;</code> 列表；</li>
+<li>如果语法错误（例如缺少分号、IP:端口格式不对）或参数非法（如 <code>weight=0</code>），则 <code>status != NGX_HTTP_OK</code>，并在 <code>rv</code> 中返回相应错误信息，跳转至 <code>finish</code> 标签，释放锁并返回错误。</li>
+</ul>
+</li>
+<li>通过沙箱验证意味着新配置符合 Nginx 语法要求且参数合法，但尚未正式写入到主内存结构。</li>
+</ol>
+<p><strong>5、 正式更新（<code>ngx_dyups_do_update</code>）</strong></p>
+<ol>
+<li>执行 <code>status = ngx_dyups_do_update(name, buf, rv)</code>：<ul>
+<li>在本 Worker 进程的 <code>upstream_conf_hash</code> 中，查找是否已存在名为 <code>name</code> 的 <code>upstream</code>；若不存在则创建新的 <code>ngx_http_upstream_srv_conf_t</code> 对象；</li>
+<li>按照沙箱中的解析结果，构建或更新一个 <code>ngx_http_upstream_server_t</code> 链表，其中包含每个后端服务器节点的 IP、权重、最大连接数、失败重试等参数；</li>
+<li>对比新旧列表，执行 “新增”、“修改”、“删除” 三类操作，替换原有数据结构；</li>
+<li>调用原生 Nginx 的 <code>ngx_http_upstream_init_round_robin</code>、<code>init_chash_peer</code> 等函数，重建负载均衡相关状态，保证后续请求调度能使用最新集群。</li>
+</ul>
+</li>
+<li>如果 <code>ngx_dyups_do_update</code> 返回非 <code>NGX_HTTP_OK</code>，说明更新过程中出现内存分配失败或其他异常，此时会跳到 <code>finish</code>，释放锁并返回错误码。</li>
+</ol>
+<p><strong>6、 消息广播到其他 Worker（<code>ngx_http_dyups_send_msg</code>）</strong></p>
+<ol>
+<li>若正式更新成功（<code>status == NGX_HTTP_OK</code>），则调用 <code>ngx_http_dyups_send_msg(name, buf, NGX_DYUPS_ADD)</code>：<ul>
+<li>通过 <code>ngx_slab_alloc_locked</code> 从 <code>shpool</code> 分配一个 <code>ngx_dyups_msg_t</code> 大小的内存；</li>
+<li>将 <code>name</code>、更新内容 <code>buf</code>（通常是以字符串形式保存）、<code>type = NGX_DYUPS_ADD</code>、<code>count = 1</code>（本 Worker 自己先算一次）以及 <code>pid[0] = ngx_pid</code> 填入消息结构；</li>
+<li>将新消息插入 <code>shctx-&gt;msg_queue</code> 链表尾部。</li>
+</ul>
+</li>
+<li>如果写入共享内存失败（如剩余空间不足），则 <code>ngx_http_dyups_send_msg</code> 返回非零，调用者将 <code>rv=&quot;alert: update success but not sync to other process&quot;</code>，并最终返回 <code>NGX_HTTP_INTERNAL_SERVER_ERROR (500)</code>，提醒运维重启或人工介入。</li>
+</ol>
+<p><strong>7、 释放共享内存锁并返回</strong></p>
+<ol>
+<li>不论上述哪个环节出错或成功，都会执行 <code>finish:</code> 标签中的 <code>ngx_shmtx_unlock(&amp;shpool-&gt;mutex)</code>，释放独占锁。</li>
+<li>最终返回值 <code>status</code> 可能是：<ul>
+<li><code>NGX_HTTP_OK (200)</code>：更新成功且消息已写入共享内存；</li>
+<li><code>NGX_HTTP_BAD_REQUEST (400)</code>：沙箱测试失败；</li>
+<li><code>NGX_HTTP_CONFLICT (409)</code>：非阻塞锁未能获得；</li>
+<li><code>NGX_HTTP_INTERNAL_SERVER_ERROR (500)</code>：正式更新成功但无法写入共享内存；</li>
+<li><code>NGX_HTTP_NOT_ALLOWED (405)</code>：未启用 dyups API。</li>
+</ul>
+</li>
+</ol>
+<h3 id="1-3、进程间同步机制（消息队列与定时器）"><a href="#1-3、进程间同步机制（消息队列与定时器）" class="headerlink" title="1.3、进程间同步机制（消息队列与定时器）"></a>1.3、进程间同步机制（消息队列与定时器）</h3><p>1、<strong>定时器驱动：<code>ngx_add_timer(&amp;msg_timer, read_msg_timeout)</code></strong></p>
+<ul>
+<li>在每个 Worker 的 <code>init_process</code> 阶段，模块会调用 <code>ngx_add_timer(&amp;ngx_dyups_global_ctx.msg_timer, read_msg_timeout)</code>，设置一个定时事件。</li>
+<li>定时器回调函数是 <code>ngx_http_dyups_read_msg</code>，其内部会先判断当前时间与 <code>ev-&gt;timer.key</code> 是否过期，若到期就调用 <code>ngx_http_dyups_read_msg_locked</code>。</li>
+<li>该定时器默认以 <code>dyups_read_msg_timeout 1s</code> 周期触发，但可根据场景调整（如改为 <code>500ms</code> 或 <code>2s</code>）。</li>
+</ul>
+<p>2、<strong>持锁读取消息：<code>ngx_http_dyups_read_msg_locked</code></strong></p>
+<ul>
+<li>该函数会首先调用 <code>ngx_shmtx_lock(&amp;shpool-&gt;mutex)</code>；若有其它 Worker 正在更新，会阻塞直到锁空闲；若设置了 <code>dyups_trylock on;</code>，读取方仍是阻塞获取锁，无法立即跳过。</li>
+<li>遍历 <code>shctx-&gt;msg_queue</code>：<ol>
+<li>若 <code>msg-&gt;count == total_worker</code>，说明所有 Worker 都已处理完毕，调用 <code>ngx_queue_remove</code> 将该消息从链表中移除，并调用 <code>ngx_dyups_destroy_msg</code> 释放内存；</li>
+<li>否则，检查 <code>msg-&gt;pid[]</code> 数组，如果当前 Worker PID 尚未出现，则根据 <code>msg-&gt;type</code>（<code>ADD</code>&#x2F;<code>DELETE</code>）执行对应操作（调用 <code>ngx_dyups_do_update</code> 或 <code>ngx_dyups_delete_upstream</code>），然后将本 PID 写入 <code>pid[]</code>，令 <code>msg-&gt;count++</code>；否则跳过。</li>
+</ol>
+</li>
+<li>处理完所有消息后，调用 <code>ngx_shmtx_unlock(&amp;shpool-&gt;mutex)</code>，并重置或延迟下一次定时器（<code>ngx_add_timer(ev, read_msg_timeout)</code>）。</li>
+</ul>
+<p>3、<strong>Worker 状态更新：<code>shctx-&gt;status[]</code></strong></p>
+<ul>
+<li>在 <code>ngx_http_dyups_read_msg_locked</code> 开头，Worker 会先尝试在 <code>shctx-&gt;status[]</code> 中找到或注册自己的 <code>pid</code>，并更新对应 <code>time = now</code>。</li>
+<li>若某些 <code>status[].pid</code> 长时间无 “心跳” 更新（超时），模块会认为对应 Worker 已崩溃或退出，并在后续清理过程中剔除它对消息的未处理计数，以避免死消息永久挂起。</li>
+</ul>
+<h3 id="1-4、锁机制与并发控制（阻塞与非阻塞模式）"><a href="#1-4、锁机制与并发控制（阻塞与非阻塞模式）" class="headerlink" title="1.4、锁机制与并发控制（阻塞与非阻塞模式）"></a>1.4、锁机制与并发控制（阻塞与非阻塞模式）</h3><p><strong>锁保护范围</strong></p>
+<ul>
+<li>每次写入或读取共享内存时，都必须先调用 <code>ngx_shmtx_lock(&amp;shpool-&gt;mutex)</code>；在写操作（如 <code>ngx_http_dyups_update_upstream</code>）中，整个流程包括读取旧消息、沙箱验证、正式更新、消息写入共享内存，全部在同一把锁内完成，保证对共享内存的原子性与一致性。</li>
+</ul>
+<p><strong>阻塞锁（默认模式）</strong></p>
+<ul>
+<li>当一个 Worker 开始更新时，其它尝试更新或读取消息的 Worker 都会在 <code>ngx_shmtx_lock</code> 处阻塞；在长时间更新（如包含大量节点的 <code>upstream</code>）期间，可能导致多个 Worker 长时间处于挂起状态，无法处理新来的业务请求。 </li>
+<li>这种场景在后文性能章节还会详细分析。</li>
+</ul>
+<p><strong>非阻塞锁（<code>dyups_trylock on</code>）</strong></p>
+<ul>
+<li>若设置 <code>dyups_trylock on;</code>，写操作中改用 <code>ngx_shmtx_trylock</code>，若锁被占用则立即返回 <code>NGX_HTTP_CONFLICT (409)</code>，上层接口告知客户端 “wait and try again”，无需 Worker 长时间阻塞。</li>
+<li>但 <strong>定时器读取消息</strong> 的路径仍是阻塞式 <code>ngx_shmtx_lock</code>，若锁被占用则轮询线程仍要等到锁空闲才能继续同步，可能短暂挂起业务。</li>
+</ul>
+<p><strong>锁粒度优化思考</strong></p>
+<ul>
+<li>将锁粒度最小化：沙箱验证、实际更新、消息写入间尽量迅速；</li>
+<li>调整 <code>dyups_read_msg_timeout</code> 周期：过小会频繁抢锁，过大则延迟配置同步；</li>
+<li>在高并发场景下，优先使用 <code>trylock on</code>，让更新请求自行重试，而不是让 Worker 一直挂起。</li>
+</ul>
+<h3 id="1-5、源码分析"><a href="#1-5、源码分析" class="headerlink" title="1.5、源码分析"></a>1.5、源码分析</h3><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><code class="hljs c">ngx_http_dyups_interface_handler()<br> └── ngx_http_dyups_interface_read_body()<br>      └── ngx_http_dyups_body_handler()<br>           └── ngx_dyups_update_upstream()<br>                └── ngx_dyups_do_update()<br>                     └── ngx_dyups_add_server()<br></code></pre></td></tr></table></figure>
+
+<p>1、注册location的处理函数</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><code class="hljs c">&#123; ngx_string(<span class="hljs-string">&quot;dyups_interface&quot;</span>),<br>     NGX_HTTP_LOC_CONF|NGX_CONF_NOARGS,<br>     ngx_http_dyups_interface,<br>     <span class="hljs-number">0</span>,<br>     <span class="hljs-number">0</span>,<br>     <span class="hljs-literal">NULL</span> &#125;,<br></code></pre></td></tr></table></figure>
+
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-type">static</span> <span class="hljs-type">char</span> *<br><span class="hljs-title function_">ngx_http_dyups_interface</span><span class="hljs-params">(<span class="hljs-type">ngx_conf_t</span> *cf, <span class="hljs-type">ngx_command_t</span> *cmd, <span class="hljs-type">void</span> *conf)</span><br>&#123;<br>    <span class="hljs-type">ngx_http_core_loc_conf_t</span>    *clcf;<br>    <span class="hljs-type">ngx_http_dyups_main_conf_t</span>  *dmcf;<br><br>    dmcf = ngx_http_conf_get_module_main_conf(cf, ngx_http_dyups_module);<br>    clcf = ngx_http_conf_get_module_loc_conf(cf, ngx_http_core_module);<br>    clcf-&gt;handler = ngx_http_dyups_interface_handler;<br>    dmcf-&gt;enable = <span class="hljs-number">1</span>;<br><br>    <span class="hljs-keyword">return</span> NGX_CONF_OK;<br>&#125;<br></code></pre></td></tr></table></figure>
+
+<p>2、更新upstream</p>
+<p>这是最主要处理函数，主要做了5步</p>
+<ul>
+<li>获取共享内存锁（可选阻塞或非阻塞模式），以保证多个进程不会并发修改</li>
+<li>从共享内存中读取之前未处理的消息，并根据需要在共享内存中进行更新或删除操作； </li>
+<li>在“沙箱”中（sandbox）先行尝试本次上游配置更新，以验证新配置语法和结构是否正确；</li>
+<li>如果沙箱测试通过，则按正式流程调用 <code>ngx_dyups_do_update</code> 实际更新上游链表；</li>
+<li>在更新成功后，将本次更新操作写入共享内存，使其他 Worker&#x2F;进程能够同步到新的配置；</li>
+</ul>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-type">ngx_int_t</span><br><span class="hljs-title function_">ngx_dyups_update_upstream</span><span class="hljs-params">(<span class="hljs-type">ngx_str_t</span> *name, <span class="hljs-type">ngx_buf_t</span> *buf, <span class="hljs-type">ngx_str_t</span> *rv)</span><br>&#123;<br>    <span class="hljs-type">ngx_int_t</span>                    status;          <br>    <span class="hljs-type">ngx_event_t</span>                 *timer;          <br>    <span class="hljs-type">ngx_slab_pool_t</span>             *shpool;     <br>    <span class="hljs-type">ngx_http_dyups_main_conf_t</span>  *dmcf;     <br>    <br>    dmcf = ngx_http_cycle_get_module_main_conf(ngx_cycle,<br>                                               ngx_http_dyups_module);<br> <br><br>     .......................<br>    <span class="hljs-comment">// 获取共享内存锁</span><br>     <span class="hljs-keyword">if</span> (!dmcf-&gt;trylock) &#123;<br>        ngx_shmtx_lock(&amp;shpool-&gt;mutex);           <span class="hljs-comment">// 阻塞方式获取锁</span><br>    &#125; <span class="hljs-keyword">else</span> &#123;<br>        <span class="hljs-keyword">if</span> (!ngx_shmtx_trylock(&amp;shpool-&gt;mutex)) &#123; <span class="hljs-comment">// 非阻塞方式尝试获取锁</span><br>            ngx_str_set(rv, <span class="hljs-string">&quot;wait and try again\n&quot;</span>);<br>            <span class="hljs-keyword">return</span> NGX_HTTP_CONFLICT;  <br>        &#125;<br>    &#125;<br>    <span class="hljs-comment">// 读取共享内存中的消息</span><br>    ngx_http_dyups_read_msg_locked(timer);<br><br>    <span class="hljs-comment">// 在沙箱中测试更新</span><br>    status = ngx_dyups_sandbox_update(buf, rv);<br>   .......................<br>       <br>    <span class="hljs-comment">// 执行实际的上游更新操作</span><br>    status = ngx_dyups_do_update(name, buf, rv);<br>    <span class="hljs-keyword">if</span> (status == NGX_HTTP_OK) &#123;<br>        <span class="hljs-comment">// 同步更新消息到其他进程</span><br>        <span class="hljs-keyword">if</span> (ngx_http_dyups_send_msg(name, buf, NGX_DYUPS_ADD)) &#123;<br>            .......................<br>        &#125;<br>    &#125;<br>        .......................<br>&#125;<br></code></pre></td></tr></table></figure>
+
+<h2 id="2、ingress-nginx的热更新实现"><a href="#2、ingress-nginx的热更新实现" class="headerlink" title="2、ingress-nginx的热更新实现"></a>2、ingress-nginx的热更新实现</h2><p>对于一个功能，一定要多学习借鉴同层次产品的实现。ingress-nginx也实现了热更新，但是是通过lua层面实现的，有一篇文章总结的非常好 <a target="_blank" rel="noopener" href="https://xiaorui.cc/archives/7342">https://xiaorui.cc/archives/7342</a></p>
+<ol>
+<li><strong>Lua 负载均衡</strong>：在 <code>balancer_by_lua_block</code> 中使用 <code>lua-resty-balancer</code>，在共享内存中根据算法选取可用后端。</li>
+<li><strong>主动推送</strong>：当 Kubernetes 集群中 Ingress&#x2F;Service&#x2F;Endpoint 变更时，Control-Plane 通过 HTTP POST 将新的后端 JSON 发送到 OpenResty 内部接口 <code>/configuration/backends</code> 。</li>
+<li><strong>写入共享内存</strong>：该 Lua 接口读取请求体，使用 <code>cjson.decode()</code> 解析 JSON，并将后端列表序列化后写入 <code>ngx.shared.dynamic_upstreams</code> 等 <code>lua_shared_dict</code> 。</li>
+<li><strong>Worker 周期性拉取</strong>：尽管 Control-Plane 会主动推送，仍需在每个 Worker 的 <code>init_worker_by_lua_block</code> 中注册定时器，每隔 1 秒调用 <code>sync_backends</code> 与 <code>sync_backends_with_external_name</code>，从 Controller HTTP 接口拉取最新后端配置，保证所有新启动或错过推送的 Worker 都能补偿性地同步到共享内存 。</li>
+<li><strong>请求时读取共享内存</strong>：在每个请求的 <code>balancer_by_lua_block</code> 阶段，Lua 脚本通过 <code>ngx.shared.dynamic_upstreams:get(service_name)</code> 读取最新后端列表，执行加权&#x2F;轮询等算法后调用 <code>ngx.balancer.set_current_peer(host, port)</code>，完成动态路由决策，而无需重载 NGINX。</li>
+<li>这样，Ingress-NGINX 能在高可用场景下实现“推送+拉取+读取”三步闭环，既能及时响应变更，又能弥补短暂的推送失效，最大化减少重载带来的抖动和中断。</li>
+</ol>
+<h3 id="2-1、前置三步确认"><a href="#2-1、前置三步确认" class="headerlink" title="2.1、前置三步确认"></a>2.1、前置三步确认</h3><ol>
+<li>Lua 负载均衡（lua-resty-balancer）</li>
+</ol>
+<ul>
+<li><p>Ingress-NGINX 在 <code>nginx.tmpl</code> 中定义了若干 <code>lua_shared_dict</code>，例如：</p>
+<figure class="highlight nginx"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><code class="hljs nginx"><span class="hljs-attribute">lua_shared_dict</span> dynamic_upstreams <span class="hljs-number">5m</span>;<br></code></pre></td></tr></table></figure>
+
+<p>用于存储后端服务地址与权重等信息，供 Lua 层访问</p>
+</li>
+<li><p>在具体的 <code>upstream</code> 块中，使用 <code>balancer_by_lua_block</code> 指令调用 Lua 脚本（如 <code>balancer.lua</code>）进行动态负载均衡：</p>
+<figure class="highlight nginx"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><code class="hljs nginx"><span class="hljs-section">upstream</span> dynamic_upstream &#123;<br>    <span class="hljs-section">balancer_by_lua_block</span> &#123;<br>        <span class="hljs-attribute">local</span> balancer = require(<span class="hljs-string">&quot;lua_ingress&quot;</span>).balancer<br>        balancer(<span class="hljs-string">&quot;default-my-service&quot;</span>)  -- 传入服务名<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+
+<p><code>lua-resty-balancer</code> 或自研脚本会读取 <code>ngx.shared.dynamic_upstreams</code> 中同名键对应的 JSON 字符串，<code>cjson.decode()</code> 转为 Lua 表后，根据配置选择后端</p>
+</li>
+</ul>
+<ol start="2">
+<li>路由变更时主动推送</li>
+</ol>
+<ul>
+<li><p>当 Kubernetes 集群中 Ingress 或 Service&#x2F;Endpoint 发生变更时，Ingress-NGINX Controller 会构建一个类似如下格式的 JSON：</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><code class="hljs yaml">&#123;<br>  <span class="hljs-attr">&quot;default-my-service&quot;:</span> [<span class="hljs-string">&quot;10.0.0.5:80&quot;</span>, <span class="hljs-string">&quot;10.0.0.6:80&quot;</span>]<br>&#125;<br></code></pre></td></tr></table></figure>
+
+<p>然后向本地 OpenResty 暴露的 <code>/configuration/backends</code> 接口发起 HTTP POST 请求 。</p>
+</li>
+<li><p>该接口在 Lua 层</p>
+<figure class="highlight lua"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><code class="hljs lua"><span class="hljs-keyword">if</span> ngx.var.request_uri == <span class="hljs-string">&quot;/configuration/backends&quot;</span> <span class="hljs-keyword">then</span><br>    handle_backends()<br>    <span class="hljs-keyword">return</span><br>  <span class="hljs-keyword">end</span><br></code></pre></td></tr></table></figure>
+
+<p>成功后返回 HTTP 200，完成一次“主动推送+写入共享内存”的操作 。</p>
+</li>
+</ul>
+<ol start="3">
+<li>接口解析与存储</li>
+</ol>
+<ul>
+<li><p><code>/configuration/backends</code> 接口对应的 Lua 实现在 <code>configuration.lua</code> 中，核心为 <code>handle_backends()</code> 函数：</p>
+</li>
+<li><p>这段代码主要实现以下功能：</p>
+<ol>
+<li>支持两种HTTP方法：<ul>
+<li>GET：获取当前后端配置</li>
+<li>POST：更新后端配置</li>
+</ul>
+</li>
+<li>关键操作流程：<ul>
+<li>读取请求体数据</li>
+<li>将新配置存入共享内存</li>
+<li>记录同步时间戳</li>
+<li>处理各种错误情况</li>
+</ul>
+</li>
+</ol>
+<figure class="highlight lua"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br></pre></td><td class="code"><pre><code class="hljs lua"><span class="hljs-keyword">local</span> <span class="hljs-function"><span class="hljs-keyword">function</span> <span class="hljs-title">handle_backends</span><span class="hljs-params">()</span></span><br>  <span class="hljs-comment">-- 处理GET请求：返回当前后端配置数据</span><br>  <span class="hljs-keyword">if</span> ngx.var.request_method == <span class="hljs-string">&quot;GET&quot;</span> <span class="hljs-keyword">then</span><br>    ngx.<span class="hljs-built_in">status</span> = ngx.HTTP_OK<br>    ngx.<span class="hljs-built_in">print</span>(_M.get_backends_data())<br>    <span class="hljs-keyword">return</span><br>  <span class="hljs-keyword">end</span><br><br>  <span class="hljs-comment">-- 读取请求体中的后端配置数据</span><br>  <span class="hljs-keyword">local</span> backends = fetch_request_body()<br>  <span class="hljs-keyword">if</span> <span class="hljs-keyword">not</span> backends <span class="hljs-keyword">then</span><br>    ngx.<span class="hljs-built_in">log</span>(ngx.ERR, <span class="hljs-string">&quot;dynamic-configuration: unable to read valid request body&quot;</span>)<br>    ngx.<span class="hljs-built_in">status</span> = ngx.HTTP_BAD_REQUEST<br>    <span class="hljs-keyword">return</span><br>  <span class="hljs-keyword">end</span><br><br>  <span class="hljs-comment">-- 将新的后端配置存入共享内存</span><br>  <span class="hljs-keyword">local</span> success, err = configuration_data:set(<span class="hljs-string">&quot;backends&quot;</span>, backends)<br>  <span class="hljs-keyword">if</span> <span class="hljs-keyword">not</span> success <span class="hljs-keyword">then</span><br>    ngx.<span class="hljs-built_in">log</span>(ngx.ERR, <span class="hljs-string">&quot;dynamic-configuration: error updating configuration: &quot;</span> .. <span class="hljs-built_in">tostring</span>(err))<br>    ngx.<span class="hljs-built_in">status</span> = ngx.HTTP_BAD_REQUEST<br>    <span class="hljs-keyword">return</span><br>  <span class="hljs-keyword">end</span><br><br>  <span class="hljs-comment">-- 更新同步时间戳</span><br>  ngx.update_time()  <span class="hljs-comment">-- 确保获取当前精确时间</span><br>  <span class="hljs-keyword">local</span> raw_backends_last_synced_at = ngx.<span class="hljs-built_in">time</span>()<br>  <br>  <span class="hljs-comment">-- 记录最后同步时间到共享内存</span><br>  success, err = configuration_data:set(<span class="hljs-string">&quot;raw_backends_last_synced_at&quot;</span>, raw_backends_last_synced_at)<br>  <span class="hljs-keyword">if</span> <span class="hljs-keyword">not</span> success <span class="hljs-keyword">then</span><br>    ngx.<span class="hljs-built_in">log</span>(ngx.ERR, <span class="hljs-string">&quot;dynamic-configuration: error updating when backends sync, &quot;</span> ..<br>                     <span class="hljs-string">&quot;new upstream peers waiting for force syncing: &quot;</span> .. <span class="hljs-built_in">tostring</span>(err))<br>    ngx.<span class="hljs-built_in">status</span> = ngx.HTTP_BAD_REQUEST<br>    <span class="hljs-keyword">return</span><br>  <span class="hljs-keyword">end</span><br><br>  <span class="hljs-comment">-- 返回创建成功的状态码</span><br>  ngx.<span class="hljs-built_in">status</span> = ngx.HTTP_CREATED<br><span class="hljs-keyword">end</span><br></code></pre></td></tr></table></figure>
+
+<p>如果需要同步 <code>ExternalName</code> 服务，则 Controller 还会调用 <code>/configuration/backends/external</code> 接口，Lua 在 <code>sync_backends_with_external_name()</code> 中提取域名并进行 DNS 解析，写入同一共享内存 。</p>
+</li>
+</ul>
+<hr>
+<h3 id="2-2、第4步：Worker-周期性拉取"><a href="#2-2、第4步：Worker-周期性拉取" class="headerlink" title="2.2、第4步：Worker 周期性拉取"></a>2.2、第4步：Worker 周期性拉取</h3><p><code>sync_backends</code> &amp; <code>sync_backends_with_external_name</code></p>
+<p>尽管 Controller 会主动推送，但需要在每个 Worker 内注册定时器，周期性（一般为 1 秒）拉取最新配置，原因如下：</p>
+<p>4.1、 设计初衷</p>
+<ol>
+<li><strong>Worker 冷启动补偿</strong><ul>
+<li>新创建的 Worker 并未能经历之前 Controller 的推送；如果不主动拉取，就只能在下一次有变更时才有机会拿到配置，造成“冷启动白屏”或“脏数据路由”现象 。</li>
+</ul>
+</li>
+<li><strong>网络或推送失败补偿</strong><ul>
+<li>Controller 在推送时可能因网络抖动、Lua 解析错误等意外导致部分 Worker 未能及时更新共享内存；定时拉取能在网络恢复后及时获取正确数据，保证“最终一致性” 。</li>
+</ul>
+</li>
+<li><strong>并发推送竞态场景</strong><ul>
+<li>当多个 Controller 同时推送不同版本的后端列表时，某些 Worker 可能接收 A 版本但错过 B 版本推送；定时拉取确保 Worker 能以“最新可用版本”为准，避免短暂竞态导致长时间漂移 。</li>
+</ul>
+</li>
+</ol>
+<p>4.2、 定时器注册</p>
+<p>1、初始化时启动定时器，ngx.timer.at只会执行一次，ngx.timer.every会重复执行</p>
+<figure class="highlight lua"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br></pre></td><td class="code"><pre><code class="hljs lua"><span class="hljs-function"><span class="hljs-keyword">function</span> <span class="hljs-title">_M.init_worker</span><span class="hljs-params">()</span></span><br>  <span class="hljs-comment">-- 当worker进程启动时，立即同步非ExternalName类型的后端服务</span><br>  <span class="hljs-comment">-- 这些后端不需要DNS解析，可以直接处理</span><br>  sync_backends()<br>  <br>  <span class="hljs-comment">-- 对于需要DNS解析的ExternalName类型后端服务，</span><br>  <span class="hljs-comment">-- 需要通过定时器异步处理（因为init_worker阶段无法使用socket）</span><br>  <span class="hljs-keyword">local</span> ok, err = ngx.timer.at(<span class="hljs-number">0</span>, sync_backends_with_external_name)<br>  <span class="hljs-keyword">if</span> <span class="hljs-keyword">not</span> ok <span class="hljs-keyword">then</span><br>    ngx.<span class="hljs-built_in">log</span>(ngx.ERR, <span class="hljs-string">&quot;failed to create timer: &quot;</span>, err)<br>  <span class="hljs-keyword">end</span><br><br>  <span class="hljs-comment">-- 设置定期同步普通后端服务的定时器</span><br>  <span class="hljs-comment">-- 同步间隔为BACKENDS_SYNC_INTERVAL（默认为1秒）</span><br>  ok, err = ngx.timer.every(BACKENDS_SYNC_INTERVAL, sync_backends)<br>  <span class="hljs-keyword">if</span> <span class="hljs-keyword">not</span> ok <span class="hljs-keyword">then</span><br>    ngx.<span class="hljs-built_in">log</span>(ngx.ERR, <span class="hljs-string">&quot;error when setting up timer.every for sync_backends: &quot;</span>, err)<br>  <span class="hljs-keyword">end</span><br>  <br>  <span class="hljs-comment">-- 设置定期同步ExternalName后端服务的定时器</span><br>  <span class="hljs-comment">-- 使用相同的同步间隔</span><br>  ok, err = ngx.timer.every(BACKENDS_SYNC_INTERVAL, sync_backends_with_external_name)<br>  <span class="hljs-keyword">if</span> <span class="hljs-keyword">not</span> ok <span class="hljs-keyword">then</span><br>    ngx.<span class="hljs-built_in">log</span>(ngx.ERR, <span class="hljs-string">&quot;error when setting up timer.every for sync_backends_with_external_name: &quot;</span>,<br>            err)<br>  <span class="hljs-keyword">end</span><br><span class="hljs-keyword">end</span><br></code></pre></td></tr></table></figure>
+
+<p>2、<code>sync_backends_with_external_name</code></p>
+<ul>
+<li><strong>作用</strong>：专门同步类型为 <code>ExternalName</code> 的 Kubernetes Service，先读取接口返回的数据，获取域名列表，再进行 DNS 解析后更新共享内存。</li>
+<li><strong>流程</strong>：<ol>
+<li>HTTP GET <code>/configuration/backends/external</code> 获取映射。（Controller 提供的接口）</li>
+<li>对每个域名调用 <code>ngx.socket.dns.toip(domain)</code> 获取 IP 列表。</li>
+<li>调用 <code>sync_backend()</code>（详见下文）将解析后的 IP 地址写入共享内存。</li>
+</ol>
+</li>
+<li><strong>使用频率</strong>：定时器注册后每秒执行一次 。</li>
+</ul>
+<figure class="highlight lua"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br></pre></td><td class="code"><pre><code class="hljs lua"><span class="hljs-keyword">local</span> <span class="hljs-function"><span class="hljs-keyword">function</span> <span class="hljs-title">sync_backends_with_external_name</span><span class="hljs-params">()</span></span><br>  <span class="hljs-keyword">for</span> _, backend_with_external_name <span class="hljs-keyword">in</span> <span class="hljs-built_in">pairs</span>(backends_with_external_name) <span class="hljs-keyword">do</span><br>    sync_backend(backend_with_external_name)<br>  <span class="hljs-keyword">end</span><br><span class="hljs-keyword">end</span><br><br><span class="hljs-keyword">local</span> <span class="hljs-function"><span class="hljs-keyword">function</span> <span class="hljs-title">sync_backend</span><span class="hljs-params">(backend)</span></span><br>  <span class="hljs-comment">-- 检查是否为ExternalName类型的后端服务</span><br>  <span class="hljs-comment">-- 如果是则解析外部名称获取实际IP地址</span><br>  <span class="hljs-keyword">if</span> is_backend_with_external_name(backend) <span class="hljs-keyword">then</span><br>    backend = resolve_external_names(backend)<br>  <span class="hljs-keyword">end</span><br><br>  <span class="hljs-comment">-- 检查后端端点是否为空</span><br>  <span class="hljs-comment">-- 如果为空则清除该后端的负载均衡器缓存</span><br>  <span class="hljs-keyword">if</span> <span class="hljs-keyword">not</span> backend.endpoints <span class="hljs-keyword">or</span> #backend.endpoints == <span class="hljs-number">0</span> <span class="hljs-keyword">then</span><br>    balancers[backend.name] = <span class="hljs-literal">nil</span><br>    <span class="hljs-keyword">return</span><br>  <span class="hljs-keyword">end</span><br><br>  <span class="hljs-comment">-- 格式化IPv6地址，确保被方括号包围</span><br>  backend.endpoints = format_ipv6_endpoints(backend.endpoints)<br><br>  <span class="hljs-comment">-- 根据后端配置获取对应的负载均衡算法实现</span><br>  <span class="hljs-keyword">local</span> implementation = get_implementation(backend)<br>  <span class="hljs-comment">-- 从缓存中获取该后端的负载均衡器实例</span><br>  <span class="hljs-keyword">local</span> balancer = balancers[backend.name]<br><br>  <span class="hljs-comment">-- 如果负载均衡器不存在，则创建新实例</span><br>  <span class="hljs-keyword">if</span> <span class="hljs-keyword">not</span> balancer <span class="hljs-keyword">then</span><br>    balancers[backend.name] = implementation:new(backend)<br>    <span class="hljs-keyword">return</span><br>  <span class="hljs-keyword">end</span><br><br>  <span class="hljs-comment">-- 检查负载均衡算法是否发生变化</span><br>  <span class="hljs-comment">-- 通过比较元表判断当前实例是否属于新的实现类</span><br>  <span class="hljs-keyword">if</span> <span class="hljs-built_in">getmetatable</span>(balancer) ~= implementation <span class="hljs-keyword">then</span><br>    ngx.<span class="hljs-built_in">log</span>(ngx.INFO,<br>        <span class="hljs-built_in">string</span>.<span class="hljs-built_in">format</span>(<span class="hljs-string">&quot;LB algorithm changed from %s to %s, resetting the instance&quot;</span>,<br>                      balancer.name, implementation.name))<br>    <span class="hljs-comment">-- 算法变化时创建新的负载均衡器实例</span><br>    balancers[backend.name] = implementation:new(backend)<br>    <span class="hljs-keyword">return</span><br>  <span class="hljs-keyword">end</span><br><br>  <span class="hljs-comment">-- 如果负载均衡器已存在且算法未变化，则同步更新后端配置</span><br>  balancer:sync(backend)<br><span class="hljs-keyword">end</span><br></code></pre></td></tr></table></figure>
+
+
+
+<p>3、<code>sync_backends</code></p>
+<ul>
+<li><strong>作用</strong>：获取 Controller 暴露的普通 Service 后端配置（<code>Endpoints</code>），同步到共享内存（<code>lua_shared_dict dynamic_upstreams</code>）。</li>
+<li><strong>数据来源</strong>：HTTP GET 请求 <code>/configuration/backends</code> 接口。（Controller 提供的接口）</li>
+<li><strong>使用频率</strong>：由 <code>init_worker_by_lua_block</code> 注册的定时器每秒执行一次，确保实时同步。</li>
+<li><strong>不处理</strong>：对于类型为 <code>ExternalName</code> 的服务不会同步（将由 <code>sync_backends_with_external_name</code> 处理）</li>
+</ul>
+<figure class="highlight lua"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br></pre></td><td class="code"><pre><code class="hljs lua"><span class="hljs-keyword">local</span> <span class="hljs-function"><span class="hljs-keyword">function</span> <span class="hljs-title">sync_backends</span><span class="hljs-params">()</span></span><br>  <span class="hljs-comment">-- 获取后端配置最后同步时间</span><br>  <span class="hljs-keyword">local</span> raw_backends_last_synced_at = configuration.get_raw_backends_last_synced_at()<br>  <span class="hljs-comment">-- 如果配置未更新则直接返回</span><br>  <span class="hljs-keyword">if</span> raw_backends_last_synced_at &lt;= backends_last_synced_at <span class="hljs-keyword">then</span><br>    <span class="hljs-keyword">return</span><br>  <span class="hljs-keyword">end</span><br><br>  <span class="hljs-comment">-- 获取后端配置数据</span><br>  <span class="hljs-keyword">local</span> backends_data = configuration.get_backends_data()<br>  <span class="hljs-comment">-- 如果没有配置数据则清空balancers缓存</span><br>  <span class="hljs-keyword">if</span> <span class="hljs-keyword">not</span> backends_data <span class="hljs-keyword">then</span><br>    balancers = &#123;&#125;<br>    <span class="hljs-keyword">return</span><br>  <span class="hljs-keyword">end</span><br><br>  <span class="hljs-comment">-- 解析JSON格式的后端配置</span><br>  <span class="hljs-keyword">local</span> new_backends, err = cjson.decode(backends_data)<br>  <span class="hljs-keyword">if</span> <span class="hljs-keyword">not</span> new_backends <span class="hljs-keyword">then</span><br>    ngx.<span class="hljs-built_in">log</span>(ngx.ERR, <span class="hljs-string">&quot;could not parse backends data: &quot;</span>, err)<br>    <span class="hljs-keyword">return</span><br>  <span class="hljs-keyword">end</span><br><br>  <span class="hljs-comment">-- 创建需要保留的后端名称集合</span><br>  <span class="hljs-keyword">local</span> balancers_to_keep = &#123;&#125;<br>  <span class="hljs-comment">-- 遍历所有新后端配置</span><br>  <span class="hljs-keyword">for</span> _, new_backend <span class="hljs-keyword">in</span> <span class="hljs-built_in">ipairs</span>(new_backends) <span class="hljs-keyword">do</span><br>    <span class="hljs-comment">-- 如果是ExternalName类型的服务</span><br>    <span class="hljs-keyword">if</span> is_backend_with_external_name(new_backend) <span class="hljs-keyword">then</span><br>      <span class="hljs-comment">-- 深拷贝配置并存入外部名称后端集合</span><br>      <span class="hljs-keyword">local</span> backend_with_external_name = util.deepcopy(new_backend)<br>      backends_with_external_name[backend_with_external_name.name] = backend_with_external_name<br>    <span class="hljs-keyword">else</span><br>      <span class="hljs-comment">-- 同步普通后端配置</span><br>      sync_backend(new_backend)<br>    <span class="hljs-keyword">end</span><br>    <span class="hljs-comment">-- 标记该后端需要保留</span><br>    balancers_to_keep[new_backend.name] = <span class="hljs-literal">true</span><br>  <span class="hljs-keyword">end</span><br><br>  <span class="hljs-comment">-- 清理不再存在的后端配置</span><br>  <span class="hljs-keyword">for</span> backend_name, _ <span class="hljs-keyword">in</span> <span class="hljs-built_in">pairs</span>(balancers) <span class="hljs-keyword">do</span><br>    <span class="hljs-keyword">if</span> <span class="hljs-keyword">not</span> balancers_to_keep[backend_name] <span class="hljs-keyword">then</span><br>      balancers[backend_name] = <span class="hljs-literal">nil</span><br>      backends_with_external_name[backend_name] = <span class="hljs-literal">nil</span><br>    <span class="hljs-keyword">end</span><br>  <span class="hljs-keyword">end</span><br>  <span class="hljs-comment">-- 更新最后同步时间</span><br>  backends_last_synced_at = raw_backends_last_synced_at<br><span class="hljs-keyword">end</span><br></code></pre></td></tr></table></figure>
+
+<ul>
+<li><code>ngx.timer.at(0, _M.sync_backends)</code> 表示在 Worker 启动后<strong>立即</strong>执行一次 <code>sync_backends</code>；</li>
+<li>在 <code>sync_backends</code> 与 <code>sync_backends_with_external_name</code> 的末尾，重新调用 <code>ngx.timer.at(1, ...)</code> 注册下一次 1 秒延迟的定时任务；</li>
+<li>这样每个 Worker 都会每秒主动拉取一次后端配置，无论 Controller 推送是否成功，均能在最多 1 秒内同步到最新状态 。</li>
+</ul>
+<hr>
+<h3 id="2-3、第5步：请求阶段读取共享内存并路由"><a href="#2-3、第5步：请求阶段读取共享内存并路由" class="headerlink" title="2.3、第5步：请求阶段读取共享内存并路由"></a>2.3、第5步：请求阶段读取共享内存并路由</h3><p>在完成“主动推送”与“定时拉取”后，共享内存 <code>ngx.shared.dynamic_upstreams</code> 中始终保存最新的后端列表。下一步，在 HTTP 请求到达时，Lua 负责从共享内存读取并选取后端。完整请求流程</p>
+<ol>
+<li><strong>DNS&#x2F;HTTP 解析</strong>：客户端请求到达 NodePort&#x2F;LoadBalancer，转发到 NGINX Worker 进程；</li>
+<li>**匹配 <code>location</code>**：Nginx 根据配置匹配到使用 <code>proxy_pass http://dynamic_upstream;</code> 的 <code>location /</code>；</li>
+<li>**执行 <code>balancer_by_lua_block</code>**：Nginx 在进入 upstream 阶段前执行 Lua 脚本，Lua 从 <code>ngx.shared.dynamic_upstreams</code> 中读取当前后端列表并选取一个后端；</li>
+<li><strong>设置上游 Peer</strong>：Lua 调用 <code>ngx.balancer.set_current_peer(host, port)</code>，指定本次请求的上游地址；</li>
+<li><strong>转发给上游</strong>：Nginx 将请求转发至以上步骤得出的 IP:Port，完成路由。</li>
+</ol>
+<p>这一路径实现了“读取-选取-转发”的动态更新，无需 <code>nginx -s reload</code>，大幅提升了路由变更后的可用性与稳定性。</p>
+<hr>
+<h3 id="2-4、总结"><a href="#2-4、总结" class="headerlink" title="2.4、总结"></a>2.4、总结</h3><ol>
+<li><strong>主动推送</strong>：Control-Plane 在后端变更时将 JSON 配置推送至 Lua 接口，写入共享内存。</li>
+<li><strong>定时拉取</strong>：为了保证新 Worker 与部分推送失败的补偿，每个 Worker 在 <code>init_worker_by_lua_block</code> 中注册定时器，每秒调用 <code>sync_backends</code> 和 <code>sync_backends_with_external_name</code>，从 Controller 接口再次拉取配置并更新共享内存。</li>
+<li><strong>请求时读取</strong>：在 <code>balancer_by_lua_block</code> 阶段，Lua 脚本从共享内存读取最新后端列表，执行负载均衡算法（<code>lua-resty-balancer</code>）并调用 <code>ngx.balancer.set_current_peer()</code>，实现动态路由。</li>
+</ol>
+<p>通过上述 “主动推送 + 周期性拉取 + 请求时读取” 的三步闭环，Ingress-NGINX 能在不重启 NGINX 的前提下，实现后端服务的动态热更新，兼顾了 <strong>低延迟</strong>、<strong>高可用</strong> 与 <strong>一致性</strong>。</p>
+<h2 id="3、扩展实现"><a href="#3、扩展实现" class="headerlink" title="3、扩展实现"></a>3、扩展实现</h2><p>对于自己实现网关，由于业务的复杂性，lua层面实现明显不符合需求。之前分析过服务自动发现的设计，2个功能都是在运行期更新路由信息，实际很多逻辑是重叠的。我们从一个经典的部署场景切入</p>
+<p>1个网关集群，包含2台网关</p>
+<p>1个zookeeper集群</p>
+<h3 id="3-1、整体架构"><a href="#3-1、整体架构" class="headerlink" title="3.1、整体架构"></a>3.1、整体架构</h3><p>很明显，2台为网关的配置需要一致，整体需要考虑集群和多进程的更新</p>
+<p>1、客户端调用A网关，变更dyups的配置，A网关更新后，同步到zk。 然后B网关定时感知到变更，然后进行更新。</p>
+<p>2、单独抽一个0号进程，专注于配置更新，而work专注于业务请求的处理。</p>
+<p>3、通过共享内存进行数据的共享，进行变更</p>
+<h3 id="3-2、具体设计"><a href="#3-2、具体设计" class="headerlink" title="3.2、具体设计"></a>3.2、具体设计</h3><p>主要的链路分为2种</p>
+<ul>
+<li>客户端调用    -&gt;   解析客户端body    -&gt;     修改路由信息（内存+配置文件）    -&gt;      同步到zookeeper</li>
+<li>定时器感知zookeeper路由信息变更     -&gt;     获取变更的部分    -&gt;     修改路由信息（内存+配置文件）</li>
+</ul>
+<p>网关集群对数据的一致性保证，与nginx的多进程对数据的一致性保证，其实非常相似。</p>
+<p>1、与服务自动发现一致，复用0号进程，使用0号进程监听特定端口，客户端可以调用该端口，进程配置更新</p>
+<p>2、0号进程处理客户端的变更请求，更新本地文件、共享内存的版本号、配置数据写入共享内存</p>
+<p>3、0号进程更新完数据后，将数据更新到zk，同时也要更新zk的版本号  </p>
+<p>4、0号进程开启定时器，比对zk的版本号与共享内存的版本号是否一致，不一致则进行变更</p>
+<p>5、0号进程获取zk最新的数据，更新本地文件、共享内存的版本号、配置数据写入共享内存</p>
+<p>6、work进程开启定时器，比对共享内存的版本号与本地内存中的版本号，不一致则进程更新</p>
+<h3 id="3-3、需要考虑的问题"><a href="#3-3、需要考虑的问题" class="headerlink" title="3.3、需要考虑的问题"></a>3.3、需要考虑的问题</h3><p>涉及到多台网关就需要考虑竞争关系，还好nginx是多进程，考虑过很多类似的问题，2者的情况类似</p>
+<p>1、2台网关同时主动式更新</p>
+<p>假设配置的版本号为10，A网关被主动式调用，版本号为11，配置写到zk，此时修改zk的版本号为11</p>
+<p>接着，B网关也被主动式调用，版本号也改为11，此时也要写到zk，这时就会存在问题，配置被覆盖了</p>
+<p>所以实际网关在写配置到zk时，需要先获取一下版本号，是否相等，如果相等说明没有其他网关更新，然后再加一，更新到zk</p>
+<p>2、多进程更新</p>
+<p>事实上，只有0号进程会修改配置，work只是读而已，所以不存在竞争关系。但是0号进程也会有问题，因为他不仅要从zk读取数据（其他网关的变更），他也会被主动式调用，修改数据，所以存在竞争关系，其实又回到了第1个问题。</p>
+<p>其实就是模仿ngx_dyups_update_upstream的逻辑，修改数据之前，先获取一下zk的版本号，确认当前拿到的是最新的数据，然后再进行主动式的更新。</p>
+<p>如果zk的数据已经变更，那本次主动式调用，需要返回失败。同时要提示客户端，需要先拿到最新的数据，才能进程主动式调用更新。</p>
+<h2 id="4、主动式调用"><a href="#4、主动式调用" class="headerlink" title="4、主动式调用"></a>4、主动式调用</h2><p>upstream只是一个很基础的路由属性，实际上复杂的业务需要很多属性，比如uri，uri+upstream，可以组成一个路由的基本单元，即客户端请求到业务服务端的映射。当然还有权重、负载策略、失败重试等等属性，有些属性是nginx本身具有的，有些属性需要嵌入ngixn模块开发，或者重新实现模块实现。但总的思想是，虚拟一个路由对象，然后进行动态路由更新。</p>
+<p>相比于ngx_dyups_update_upstream，也只是属性的不一样而已，所以按照同样的方式实现，其实就可以。当然实际实现起来，是有一些难度的。</p>
+<p>编写一个完整的http模块，接收post请求，解析json的body，组装为特定数据格式，在检查过配置的正确性后，分别调用多个路由模块的更新，实现共享内存内存更新，然后更新配置文件。而实际的work通过定时器从共享内存更新最新的路由信息。</p>
+<h2 id="5、资料"><a href="#5、资料" class="headerlink" title="5、资料"></a>5、资料</h2><p>参考：</p>
+<p>官方文档：<a target="_blank" rel="noopener" href="https://www.bookstack.cn/read/nginx-official-doc/5.md">https://www.bookstack.cn/read/nginx-official-doc/5.md</a></p>
+<p>GitHub仓库：<a target="_blank" rel="noopener" href="https://github.com/yzprofile/ngx_http_dyups_module">https://github.com/yzprofile/ngx_http_dyups_module</a></p>
+<p>openresty的balancer库：**<a target="_blank" rel="noopener" href="https://github.com/openresty/lua-resty-balancer">lua-resty-balancer</a>**</p>
+
+                
+              </div>
+            
+            <hr/>
+            <div>
+              <div class="post-metas my-3">
+  
+  
+    <div class="post-meta">
+      <i class="iconfont icon-tags"></i>
+      
+        <a href="/tags/zookeeper/" class="print-no-link">#zookeeper</a>
+      
+        <a href="/tags/nginx%EF%BC%8Cdyups/" class="print-no-link">#nginx，dyups</a>
+      
+        <a href="/tags/manage/" class="print-no-link">#manage</a>
+      
+        <a href="/tags/work/" class="print-no-link">#work</a>
+      
+    </div>
+  
+</div>
+
+
+              
+  
+
+  <div class="license-box my-3">
+    <div class="license-title">
+      <div>热更新-动态路由</div>
+      <div>https://zjfans.github.io/2025/06/08/热更新-动态路由/</div>
+    </div>
+    <div class="license-meta">
+      
+        <div class="license-meta-item">
+          <div>作者</div>
+          <div>张三疯</div>
+        </div>
+      
+      
+        <div class="license-meta-item license-meta-date">
+          <div>发布于</div>
+          <div>2025年6月8日</div>
+        </div>
+      
+      
+      
+        <div class="license-meta-item">
+          <div>许可协议</div>
+          <div>
+            
+              
+              
+                <a class="print-no-link" target="_blank" href="https://creativecommons.org/licenses/by/4.0/">
+                  <span class="hint--top hint--rounded" aria-label="BY - 署名">
+                    <i class="iconfont icon-by"></i>
+                  </span>
+                </a>
+              
+            
+          </div>
+        </div>
+      
+    </div>
+    <div class="license-icon iconfont"></div>
+  </div>
+
+
+
+              
+                <div class="post-prevnext my-3">
+                  <article class="post-prev col-6">
+                    
+                    
+                  </article>
+                  <article class="post-next col-6">
+                    
+                    
+                      <a href="/2025/05/26/nginx%E5%9F%9F%E5%90%8D%E8%A7%A3%E6%9E%90%E5%8E%9F%E7%90%86/" title="openresty-域名解析">
+                        <span class="hidden-mobile">openresty-域名解析</span>
+                        <span class="visible-mobile">下一篇</span>
+                        <i class="iconfont icon-arrowright"></i>
+                      </a>
+                    
+                  </article>
+                </div>
+              
+            </div>
+
+            
+  
+  
+    <article id="comments" lazyload>
+      
+    <div id="giscus" class="giscus"></div>
+    <script type="text/javascript">
+      Fluid.utils.loadComments('#giscus', function() {
+        var options = {"repo":"ZJfans/ZJfans.github.io","repo-id":"R_kgDOLYg-XA","category":"Announcements","category-id":"DIC_kwDOLYg-XM4Ceo1C","theme-light":"light","theme-dark":"dark","mapping":"pathname","reactions-enabled":1,"emit-metadata":0,"input-position":"bottom","lang":"zh-CN"};
+        var attributes = {};
+        for (let option in options) {
+          if (!option.startsWith('theme-')) {
+            var key = option.startsWith('data-') ? option : 'data-' + option;
+            attributes[key] = options[option];
+          }
+        }
+        var light = 'light';
+        var dark = 'dark';
+        window.GiscusThemeLight = light;
+        window.GiscusThemeDark = dark;
+        attributes['data-theme'] = document.documentElement.getAttribute('data-user-color-scheme') === 'dark' ? dark : light;
+        for (let attribute in attributes) {
+          var value = attributes[attribute];
+          if (value === undefined || value === null || value === '') {
+            delete attributes[attribute];
+          }
+        }
+        var s = document.createElement('script');
+        s.setAttribute('src', 'https://giscus.app/client.js');
+        s.setAttribute('crossorigin', 'anonymous');
+        for (let attribute in attributes) {
+          s.setAttribute(attribute, attributes[attribute]);
+        }
+        var ss = document.getElementsByTagName('script');
+        var e = ss.length > 0 ? ss[ss.length - 1] : document.head || document.documentElement;
+        e.parentNode.insertBefore(s, e.nextSibling);
+      });
+    </script>
+    <noscript>Please enable JavaScript to view the comments</noscript>
+
+
+    </article>
+  
+
+
+          </article>
+        </div>
+      </div>
+    </div>
+
+    <div class="side-col d-none d-lg-block col-lg-2">
+      
+  <aside class="sidebar" style="margin-left: -1rem">
+    <div id="toc">
+  <p class="toc-header">
+    <i class="iconfont icon-list"></i>
+    <span>目录</span>
+  </p>
+  <div class="toc-body" id="toc-body"></div>
+</div>
+
+
+
+  </aside>
+
+
+    </div>
+  </div>
+</div>
+
+
+
+
+
+  
+
+
+
+  
+
+
+
+  
+
+
+
+  
+
+
+
+  
+
+
+
+
+
+
+
+    
+
+    
+      <a id="scroll-top-button" aria-label="TOP" href="#" role="button">
+        <i class="iconfont icon-arrowup" aria-hidden="true"></i>
+      </a>
+    
+
+    
+      <div class="modal fade" id="modalSearch" tabindex="-1" role="dialog" aria-labelledby="ModalLabel"
+     aria-hidden="true">
+  <div class="modal-dialog modal-dialog-scrollable modal-lg" role="document">
+    <div class="modal-content">
+      <div class="modal-header text-center">
+        <h4 class="modal-title w-100 font-weight-bold">搜索</h4>
+        <button type="button" id="local-search-close" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body mx-3">
+        <div class="md-form mb-5">
+          <input type="text" id="local-search-input" class="form-control validate">
+          <label data-error="x" data-success="v" for="local-search-input">关键词</label>
+        </div>
+        <div class="list-group" id="local-search-result"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+    
+
+    
+  </main>
+
+  <footer>
+    <div class="footer-inner">
+  
+    <div class="footer-content">
+       <a href="https://hexo.io" target="_blank" rel="nofollow noopener"><span>Hexo</span></a> <i class="iconfont icon-love"></i> <a href="https://github.com/fluid-dev/hexo-theme-fluid" target="_blank" rel="nofollow noopener"><span>Fluid</span></a> 
+    </div>
+  
+  
+    <div class="statistics">
+  
+  
+
+  
+    
+      <span id="busuanzi_container_site_pv" style="display: none">
+        总访问量 
+        <span id="busuanzi_value_site_pv"></span>
+         次
+      </span>
+    
+    
+      <span id="busuanzi_container_site_uv" style="display: none">
+        总访客数 
+        <span id="busuanzi_value_site_uv"></span>
+         人
+      </span>
+    
+    
+  
+</div>
+
+  
+  
+  
+</div>
+
+  </footer>
+
+  <!-- Scripts -->
+  
+  <script  src="https://lib.baomitu.com/nprogress/0.2.0/nprogress.min.js" ></script>
+  <link  rel="stylesheet" href="https://lib.baomitu.com/nprogress/0.2.0/nprogress.min.css" />
+
+  <script>
+    NProgress.configure({"showSpinner":false,"trickleSpeed":100})
+    NProgress.start()
+    window.addEventListener('load', function() {
+      NProgress.done();
+    })
+  </script>
+
+
+<script  src="https://lib.baomitu.com/jquery/3.6.4/jquery.min.js" ></script>
+<script  src="https://lib.baomitu.com/twitter-bootstrap/4.6.1/js/bootstrap.min.js" ></script>
+<script  src="/js/events.js" ></script>
+<script  src="/js/plugins.js" ></script>
+
+
+  <script  src="https://lib.baomitu.com/typed.js/2.0.12/typed.min.js" ></script>
+  <script>
+    (function (window, document) {
+      var typing = Fluid.plugins.typing;
+      var subtitle = document.getElementById('subtitle');
+      if (!subtitle || !typing) {
+        return;
+      }
+      var text = subtitle.getAttribute('data-typed-text');
+      
+        typing(text);
+      
+    })(window, document);
+  </script>
+
+
+
+
+  
+    <script  src="/js/img-lazyload.js" ></script>
+  
+
+
+
+
+  
+<script>
+  Fluid.utils.createScript('https://lib.baomitu.com/tocbot/4.20.1/tocbot.min.js', function() {
+    var toc = jQuery('#toc');
+    if (toc.length === 0 || !window.tocbot) { return; }
+    var boardCtn = jQuery('#board-ctn');
+    var boardTop = boardCtn.offset().top;
+
+    window.tocbot.init(Object.assign({
+      tocSelector     : '#toc-body',
+      contentSelector : '.markdown-body',
+      linkClass       : 'tocbot-link',
+      activeLinkClass : 'tocbot-active-link',
+      listClass       : 'tocbot-list',
+      isCollapsedClass: 'tocbot-is-collapsed',
+      collapsibleClass: 'tocbot-is-collapsible',
+      scrollSmooth    : true,
+      includeTitleTags: true,
+      headingsOffset  : -boardTop,
+    }, CONFIG.toc));
+    if (toc.find('.toc-list-item').length > 0) {
+      toc.css('visibility', 'visible');
+    }
+
+    Fluid.events.registerRefreshCallback(function() {
+      if ('tocbot' in window) {
+        tocbot.refresh();
+        var toc = jQuery('#toc');
+        if (toc.length === 0 || !tocbot) {
+          return;
+        }
+        if (toc.find('.toc-list-item').length > 0) {
+          toc.css('visibility', 'visible');
+        }
+      }
+    });
+  });
+</script>
+
+
+  <script src=https://lib.baomitu.com/clipboard.js/2.0.11/clipboard.min.js></script>
+
+  <script>Fluid.plugins.codeWidget();</script>
+
+
+  
+<script>
+  Fluid.utils.createScript('https://lib.baomitu.com/anchor-js/4.3.1/anchor.min.js', function() {
+    window.anchors.options = {
+      placement: CONFIG.anchorjs.placement,
+      visible  : CONFIG.anchorjs.visible
+    };
+    if (CONFIG.anchorjs.icon) {
+      window.anchors.options.icon = CONFIG.anchorjs.icon;
+    }
+    var el = (CONFIG.anchorjs.element || 'h1,h2,h3,h4,h5,h6').split(',');
+    var res = [];
+    for (var item of el) {
+      res.push('.markdown-body > ' + item.trim());
+    }
+    if (CONFIG.anchorjs.placement === 'left') {
+      window.anchors.options.class = 'anchorjs-link-left';
+    }
+    window.anchors.add(res.join(', '));
+
+    Fluid.events.registerRefreshCallback(function() {
+      if ('anchors' in window) {
+        anchors.removeAll();
+        var el = (CONFIG.anchorjs.element || 'h1,h2,h3,h4,h5,h6').split(',');
+        var res = [];
+        for (var item of el) {
+          res.push('.markdown-body > ' + item.trim());
+        }
+        if (CONFIG.anchorjs.placement === 'left') {
+          anchors.options.class = 'anchorjs-link-left';
+        }
+        anchors.add(res.join(', '));
+      }
+    });
+  });
+</script>
+
+
+  
+<script>
+  Fluid.utils.createScript('https://lib.baomitu.com/fancybox/3.5.7/jquery.fancybox.min.js', function() {
+    Fluid.plugins.fancyBox();
+  });
+</script>
+
+
+  <script>Fluid.plugins.imageCaption();</script>
+
+  <script  src="/js/local-search.js" ></script>
+
+  <script defer src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js" ></script>
+
+
+
+
+
+<!-- 主题的启动项，将它保持在最底部 -->
+<!-- the boot of the theme, keep it at the bottom -->
+<script  src="/js/boot.js" ></script>
+
+
+  
+
+  <noscript>
+    <div class="noscript-warning">博客在允许 JavaScript 运行的环境下浏览效果更佳</div>
+  </noscript>
+</body>
+</html>
