@@ -14,13 +14,15 @@
     
     <tags>
       
-      <tag>zookeeper</tag>
-      
-      <tag>nginx，dyups</tag>
-      
-      <tag>manage</tag>
+      <tag>nginx</tag>
       
       <tag>work</tag>
+      
+      <tag>zookeeper</tag>
+      
+      <tag>dyups</tag>
+      
+      <tag>manage</tag>
       
     </tags>
     
@@ -39,7 +41,9 @@
     
     <tags>
       
-      <tag>nginx，openresty</tag>
+      <tag>nginx</tag>
+      
+      <tag>openresty</tag>
       
       <tag>dns</tag>
       
@@ -62,7 +66,9 @@
     
     <tags>
       
-      <tag>openresty，redis</tag>
+      <tag>openresty</tag>
+      
+      <tag>redis</tag>
       
       <tag>sentinel</tag>
       
@@ -83,7 +89,9 @@
     
     <tags>
       
-      <tag>nginx，HTTP1</tag>
+      <tag>nginx</tag>
+      
+      <tag>HTTP1</tag>
       
       <tag>HTTP2</tag>
       
@@ -104,9 +112,11 @@
     
     <tags>
       
+      <tag>nginx</tag>
+      
       <tag>websocket</tag>
       
-      <tag>nginx，HTTP</tag>
+      <tag>HTTP</tag>
       
     </tags>
     
@@ -125,7 +135,9 @@
     
     <tags>
       
-      <tag>nginx，work</tag>
+      <tag>nginx</tag>
+      
+      <tag>work</tag>
       
       <tag>zookeeper</tag>
       
@@ -146,7 +158,9 @@
     
     <tags>
       
-      <tag>nginx，chrome</tag>
+      <tag>nginx</tag>
+      
+      <tag>chrome</tag>
       
     </tags>
     
@@ -165,7 +179,9 @@
     
     <tags>
       
-      <tag>linux，io_uring</tag>
+      <tag>linux</tag>
+      
+      <tag>io_uring</tag>
       
       <tag>epoll</tag>
       
@@ -186,9 +202,11 @@
     
     <tags>
       
+      <tag>nginx</tag>
+      
       <tag>epoll</tag>
       
-      <tag>nginx，socket</tag>
+      <tag>socket</tag>
       
     </tags>
     
@@ -297,7 +315,9 @@
     
     <tags>
       
-      <tag>nginx，slab</tag>
+      <tag>nginx</tag>
+      
+      <tag>slab</tag>
       
     </tags>
     
@@ -316,7 +336,9 @@
     
     <tags>
       
-      <tag>nginx，slab</tag>
+      <tag>nginx</tag>
+      
+      <tag>slab</tag>
       
     </tags>
     
@@ -335,9 +357,9 @@
     
     <tags>
       
-      <tag>负载均衡</tag>
-      
       <tag>nginx</tag>
+      
+      <tag>负载均衡</tag>
       
     </tags>
     
@@ -377,9 +399,11 @@
     
     <tags>
       
+      <tag>nginx</tag>
+      
       <tag>协商缓存</tag>
       
-      <tag>no cache nginx</tag>
+      <tag>no cache</tag>
       
     </tags>
     
@@ -495,6 +519,8 @@
     <tags>
       
       <tag>http</tag>
+      
+      <tag>Cookie</tag>
       
     </tags>
     
