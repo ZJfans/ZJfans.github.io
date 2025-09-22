@@ -1,0 +1,838 @@
+
+
+<!DOCTYPE html>
+<html lang="zh-CN" data-default-color-scheme=auto>
+
+
+
+<head>
+  <meta charset="UTF-8">
+  <link rel="apple-touch-icon" sizes="76x76" href="/img/fluid.png">
+  <link rel="icon" href="/img/fluid.png">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, shrink-to-fit=no">
+  <meta http-equiv="x-ua-compatible" content="ie=edge">
+  
+  <meta name="theme-color" content="#2f4154">
+  <meta name="author" content="张三疯">
+  <meta name="keywords" content="nginx,openresty,网关,HTTP/HTTPS,Websocket">
+  
+    <meta name="description" content="1、问题现象在生产现场，早上 6 点，网关出现与所有节点连接断连的异常，具体表现为：  网关所有进程与南北向、东西向的节点全部断开连接； 日志显示与所有的节点都心跳超时； 6 点异常必现  受影响的节点包括：  客户端 后端微服务 ZooKeeper Redis（哨兵） RabbitMQ  2、初步分析与验证思路 现场确认 与现场确认这两个时间段是否有特殊操作，答复：无。  日志分析  获取并分析">
+<meta property="og:type" content="article">
+<meta property="og:title" content="协程、Lua 队列、带宽打满">
+<meta property="og:url" content="https://zjfans.github.io/2025/08/27/%E5%8D%8F%E7%A8%8B%E3%80%81Lua%20%E9%98%9F%E5%88%97%E3%80%81%E5%B8%A6%E5%AE%BD%E6%89%93%E6%BB%A1/index.html">
+<meta property="og:site_name" content="ZJfans Blog">
+<meta property="og:description" content="1、问题现象在生产现场，早上 6 点，网关出现与所有节点连接断连的异常，具体表现为：  网关所有进程与南北向、东西向的节点全部断开连接； 日志显示与所有的节点都心跳超时； 6 点异常必现  受影响的节点包括：  客户端 后端微服务 ZooKeeper Redis（哨兵） RabbitMQ  2、初步分析与验证思路 现场确认 与现场确认这两个时间段是否有特殊操作，答复：无。  日志分析  获取并分析">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://zjfans.github.io/img/%E5%8D%8F%E7%A8%8B-%E5%9B%BE1.png">
+<meta property="article:published_time" content="2025-08-27T07:36:10.865Z">
+<meta property="article:modified_time" content="2025-08-27T07:40:19.793Z">
+<meta property="article:author" content="张三疯">
+<meta property="article:tag" content="openresty">
+<meta property="article:tag" content="协程">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://zjfans.github.io/img/%E5%8D%8F%E7%A8%8B-%E5%9B%BE1.png">
+  
+  
+    <meta name="referrer" content="no-referrer-when-downgrade">
+  
+  
+  <title>协程、Lua 队列、带宽打满 - ZJfans Blog</title>
+
+  <link  rel="stylesheet" href="https://lib.baomitu.com/twitter-bootstrap/4.6.1/css/bootstrap.min.css" />
+
+
+
+  <link  rel="stylesheet" href="https://lib.baomitu.com/github-markdown-css/4.0.0/github-markdown.min.css" />
+
+  <link  rel="stylesheet" href="https://lib.baomitu.com/hint.css/2.7.0/hint.min.css" />
+
+  <link  rel="stylesheet" href="https://lib.baomitu.com/fancybox/3.5.7/jquery.fancybox.min.css" />
+
+
+
+<!-- 主题依赖的图标库，不要自行修改 -->
+<!-- Do not modify the link that theme dependent icons -->
+
+<link rel="stylesheet" href="//at.alicdn.com/t/font_1749284_hj8rtnfg7um.css">
+
+
+
+<link rel="stylesheet" href="//at.alicdn.com/t/font_1736178_lbnruvf0jn.css">
+
+
+<link  rel="stylesheet" href="/css/main.css" />
+
+
+  <link id="highlight-css" rel="stylesheet" href="/css/highlight.css" />
+  
+    <link id="highlight-css-dark" rel="stylesheet" href="/css/highlight-dark.css" />
+  
+
+
+
+
+  <script id="fluid-configs">
+    var Fluid = window.Fluid || {};
+    Fluid.ctx = Object.assign({}, Fluid.ctx)
+    var CONFIG = {"hostname":"zjfans.github.io","root":"/","version":"1.9.7","typing":{"enable":true,"typeSpeed":70,"cursorChar":"_","loop":false,"scope":[]},"anchorjs":{"enable":true,"element":"h1,h2,h3,h4,h5,h6","placement":"left","visible":"hover","icon":""},"progressbar":{"enable":true,"height_px":3,"color":"#29d","options":{"showSpinner":false,"trickleSpeed":100}},"code_language":{"enable":true,"default":"TEXT"},"copy_btn":true,"image_caption":{"enable":true},"image_zoom":{"enable":true,"img_url_replace":["",""]},"toc":{"enable":true,"placement":"right","headingSelector":"h1,h2,h3,h4,h5,h6","collapseDepth":0},"lazyload":{"enable":true,"loading_img":"/img/loading.gif","onlypost":false,"offset_factor":2},"web_analytics":{"enable":true,"follow_dnt":true,"baidu":null,"google":{"measurement_id":null},"tencent":{"sid":null,"cid":null},"woyaola":null,"cnzz":null,"leancloud":{"app_id":null,"app_key":null,"server_url":null,"path":"window.location.pathname","ignore_local":false}},"search_path":"/local-search.xml","include_content_in_search":true};
+
+    if (CONFIG.web_analytics.follow_dnt) {
+      var dntVal = navigator.doNotTrack || window.doNotTrack || navigator.msDoNotTrack;
+      Fluid.ctx.dnt = dntVal && (dntVal.startsWith('1') || dntVal.startsWith('yes') || dntVal.startsWith('on'));
+    }
+  </script>
+  <script  src="/js/utils.js" ></script>
+  <script  src="/js/color-schema.js" ></script>
+  
+
+  
+
+  
+    <!-- Google tag (gtag.js) -->
+    <script async>
+      if (!Fluid.ctx.dnt) {
+        Fluid.utils.createScript("https://www.googletagmanager.com/gtag/js?id=", function() {
+          window.dataLayer = window.dataLayer || [];
+          function gtag() {
+            dataLayer.push(arguments);
+          }
+          gtag('js', new Date());
+          gtag('config', '');
+        });
+      }
+    </script>
+  
+
+  
+
+  
+
+  
+
+  
+
+
+
+  
+<meta name="generator" content="Hexo 6.3.0"></head>
+
+
+<body>
+  
+
+  <header>
+    
+
+<div class="header-inner" style="height: 70vh;">
+  <nav id="navbar" class="navbar fixed-top  navbar-expand-lg navbar-dark scrolling-navbar">
+  <div class="container">
+    <a class="navbar-brand" href="/">
+      <strong>ZJfans Blog</strong>
+    </a>
+
+    <button id="navbar-toggler-btn" class="navbar-toggler" type="button" data-toggle="collapse"
+            data-target="#navbarSupportedContent"
+            aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+      <div class="animated-icon"><span></span><span></span><span></span></div>
+    </button>
+
+    <!-- Collapsible content -->
+    <div class="collapse navbar-collapse" id="navbarSupportedContent">
+      <ul class="navbar-nav ml-auto text-center">
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/" target="_self">
+                <i class="iconfont icon-home-fill"></i>
+                <span>首页</span>
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/archives/" target="_self">
+                <i class="iconfont icon-archive-fill"></i>
+                <span>归档</span>
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/categories/" target="_self">
+                <i class="iconfont icon-category-fill"></i>
+                <span>分类</span>
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/tags/" target="_self">
+                <i class="iconfont icon-tags-fill"></i>
+                <span>标签</span>
+              </a>
+            </li>
+          
+        
+          
+          
+          
+          
+            <li class="nav-item">
+              <a class="nav-link" href="/about/" target="_self">
+                <i class="iconfont icon-user-fill"></i>
+                <span>关于</span>
+              </a>
+            </li>
+          
+        
+        
+          <li class="nav-item" id="search-btn">
+            <a class="nav-link" target="_self" href="javascript:;" data-toggle="modal" data-target="#modalSearch" aria-label="Search">
+              <i class="iconfont icon-search"></i>
+            </a>
+          </li>
+          
+        
+        
+          <li class="nav-item" id="color-toggle-btn">
+            <a class="nav-link" target="_self" href="javascript:;" aria-label="Color Toggle">
+              <i class="iconfont icon-dark" id="color-toggle-icon"></i>
+            </a>
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+</nav>
+
+  
+
+<div id="banner" class="banner" parallax=true
+     style="background: url('/img/theodor-lundqvist-WHhbYArwFt8-unsplash.jpg') no-repeat center center; background-size: cover;">
+  <div class="full-bg-img">
+    <div class="mask flex-center" style="background-color: rgba(0, 0, 0, 0.3)">
+      <div class="banner-text text-center fade-in-up">
+        <div class="h2">
+          
+            <span id="subtitle" data-typed-text="协程、Lua 队列、带宽打满"></span>
+          
+        </div>
+
+        
+          
+  <div class="mt-3">
+    
+    
+      <span class="post-meta">
+        <i class="iconfont icon-date-fill" aria-hidden="true"></i>
+        <time datetime="2025-08-27 15:36" pubdate>
+          2025年8月27日 下午
+        </time>
+      </span>
+    
+  </div>
+
+  <div class="mt-1">
+    
+      <span class="post-meta mr-2">
+        <i class="iconfont icon-chart"></i>
+        
+          1.6k 字
+        
+      </span>
+    
+
+    
+      <span class="post-meta mr-2">
+        <i class="iconfont icon-clock-fill"></i>
+        
+        
+        
+          13 分钟
+        
+      </span>
+    
+
+    
+    
+  </div>
+
+
+        
+      </div>
+
+      
+    </div>
+  </div>
+</div>
+
+</div>
+
+  </header>
+
+  <main>
+    
+      
+
+<div class="container-fluid nopadding-x">
+  <div class="row nomargin-x">
+    <div class="side-col d-none d-lg-block col-lg-2">
+      
+
+    </div>
+
+    <div class="col-lg-8 nopadding-x-md">
+      <div class="container nopadding-x-md" id="board-ctn">
+        <div id="board">
+          <article class="post-content mx-auto">
+            <h1 id="seo-header">协程、Lua 队列、带宽打满</h1>
+            
+            
+              <div class="markdown-body">
+                
+                <h2 id="1、问题现象"><a href="#1、问题现象" class="headerlink" title="1、问题现象"></a>1、问题现象</h2><p>在生产现场，早上 6 点，网关出现与所有节点连接断连的异常，具体表现为：</p>
+<ul>
+<li>网关所有进程与南北向、东西向的节点全部断开连接；</li>
+<li>日志显示与所有的节点都心跳超时；</li>
+<li>6 点异常必现</li>
+</ul>
+<p>受影响的节点包括：</p>
+<ul>
+<li>客户端</li>
+<li>后端微服务</li>
+<li>ZooKeeper</li>
+<li>Redis（哨兵）</li>
+<li>RabbitMQ</li>
+</ul>
+<h2 id="2、初步分析与验证思路"><a href="#2、初步分析与验证思路" class="headerlink" title="2、初步分析与验证思路"></a>2、初步分析与验证思路</h2><ol>
+<li><p><strong>现场确认</strong><br> 与现场确认这两个时间段是否有特殊操作，答复：无。</p>
+</li>
+<li><p><strong>日志分析</strong></p>
+<ul>
+<li>获取并分析 <code>error.log</code>、<code>access.log</code> 以及相关组件日志。</li>
+<li>发现 9 个进程中，8 个 worker 与客户端、后端服务节点全部心跳超时（HTTP 及私有协议均受影响）。</li>
+<li><code>manage</code> 进程与 ZooKeeper、Redis Sentinel、RabbitMQ 也出现连接拒绝或重连。</li>
+<li>后端微服务日志显示与网关心跳超时， 但是和zookeeper不超时</li>
+</ul>
+</li>
+<li><p><strong>关键现象</strong></p>
+<ul>
+<li><p>网关 ↔ zookeeper 异常</p>
+</li>
+<li><p>网关 ↔ 微服务 异常</p>
+</li>
+<li><p>微服务 ↔ zookeeper未见明显异常</p>
+<p> 三者对比，于是重点就在于“网关或网络”可能存在问题。</p>
+</li>
+</ul>
+</li>
+</ol>
+<h2 id="3、前置假设"><a href="#3、前置假设" class="headerlink" title="3、前置假设"></a>3、前置假设</h2><p>基于现象，列出网关出问题的可能性：</p>
+<p><strong>正向理由（怀疑网关）</strong></p>
+<ul>
+<li>两台网关与所有组件心跳超时，而组件之间的交互正常。</li>
+<li>现场曾更换过机器，且网关独立部署，依然存在问题，所以和机器本身没关系，原因指向网关应用。</li>
+</ul>
+<p><strong>反向理由（怀疑环境&#x2F;网络）</strong></p>
+<ul>
+<li>该系统在多家基金上线运行多年，历史上无类似问题。</li>
+<li>网关进程运行正常，持续记录日志，且无异常运行日志，无core生成</li>
+<li>日志显示在某一段时间内，与所有节点的连接都心跳超时，日志信息清晰明了，且其余时间段无任何异常</li>
+</ul>
+<p><strong>可能原因假设</strong></p>
+<ul>
+<li>网关 Bug 导致假死，无法及时处理心跳。</li>
+<li>网络质量差，流量高时丢包抖动严重。</li>
+</ul>
+<h2 id="4、抓包分析"><a href="#4、抓包分析" class="headerlink" title="4、抓包分析"></a>4、抓包分析</h2><p>分为2步，<strong>抓包+流量监控</strong></p>
+<p>在网关、zookeeper、后端服务三端进行同步抓包。</p>
+<p>结果：</p>
+<ul>
+<li>三端均能看到心跳包发出，但在网关侧存在大量延迟与重传，且超时集中在 <strong>网关 ↔ 各组件</strong> 的交互方向。</li>
+<li>同时查看网络监控，发现异常时段网关机器的入口带宽飙升至接近万兆上限。</li>
+</ul>
+<h2 id="5、问题定位"><a href="#5、问题定位" class="headerlink" title="5、问题定位"></a>5、问题定位</h2><p><strong>高带宽来源</strong></p>
+<ul>
+<li><p>网络报文分析显示，异常时段的高流量主要是网关与 Redis 的数据交互。</p>
+</li>
+<li><p><img src="/img/%E5%8D%8F%E7%A8%8B-%E5%9B%BE1.png" srcset="/img/loading.gif" lazyload alt="异常高流量"></p>
+</li>
+<li><p>数据类型为某类公共数据，单份数据体积约 20 MB。</p>
+</li>
+<li><p>在 6:00~7:00，会进行集中登录，单小时登录量可达 2000+。</p>
+</li>
+<li><p>登录过程会写入redis：</p>
+<ul>
+<li>某类数据（0.5M，每次登录一份）</li>
+<li>公共数据（每个进程总共一份）</li>
+</ul>
+</li>
+</ul>
+<p>公共数据采用的是本地cache、redis、权限数据接口的三级缓存。照理来说，公共数据，如果本地cache、redis数据不存在，会调用接口会去获取一份数据，然后写到redis，后续其他进程就可以从redis获取到数据，写入cache，最后就可以直接从cache获取，达到三级缓存的效果。</p>
+<p>但是看日志，以及端口，确认nginx从redis获取了32次该类数据，照理8个进程最多获取8次，明显有异常。</p>
+<p><strong>代码分析</strong></p>
+<p>首先cache整个队列只设置了100，即存储100个key-value，lru的机制。所以怀疑是不是队列被持续打满，导致不停的从redis获取数据。对集中登录的场景进行复现，8个进程的效果并不明显，切换为32个进程，马上可以复现全部超时的场景。</p>
+<p>在高并发时，会出现一笔请求从redis获取公共数据，发起网络io调用时，下一笔请求又来临，在cache查询不到公共数据（此时上一笔请求还没有从redis获取到数据，写到本进程的cache），又去redis获取数据，导致重复从redis获取数据。</p>
+<p>同时，每笔请求都会进行权限校验，即会从cache get公共数据，应当一直保持为热点数据，就算队列只有100，也应该不会替换。</p>
+<p>那么此时，底层技术问题就分为2个部分：</p>
+<ul>
+<li>openresty实现的协程-cosocket</li>
+<li>cache的lru机制</li>
+</ul>
+<p><strong>原理分析</strong></p>
+<p>实际上，公共数据是预加载的，所以redis的数据是一直存在，否则如果redis的数据也不存在，那么直接会打穿缓存到权限数据接口。而对于打满带宽，实际还是打穿了cache，到了redis。</p>
+<p>缓存机制</p>
+<ul>
+<li>网关缓存结构为：<strong>LRU 本地缓存（每进程） + Redis 缓存</strong>。</li>
+<li>本地 LRU 容量默认 100（key-value 对）。</li>
+<li>公共数据由于登录阶段几乎不被访问，LRU 认为它是“非热点”数据，容易被淘汰。</li>
+<li>大量并发登录写入其他数据，触发 LRU 淘汰，将公共数据移除。</li>
+<li>当随后的鉴权请求需要公共数据时，本地缓存命中失败 → Redis 拉取。</li>
+<li>协程机制 → 出现并发多次拉取相同大数据的情况。</li>
+</ul>
+<p>最终后果</p>
+<ul>
+<li>Redis 出口带宽被大量大包传输占满（接近万兆上限）。</li>
+<li>Redis 返回包堵在链路上，阻塞了：<ul>
+<li>网关 ↔ Redis 的正常交互。</li>
+<li>微服务响应网关的心跳包（因为走相同带宽出口）。</li>
+</ul>
+</li>
+<li>心跳包超时 → 网关判定连接断开 → 南北向、东西向链路全部中断。</li>
+</ul>
+<hr>
+<h2 id="6、优化"><a href="#6、优化" class="headerlink" title="6、优化"></a>6、优化</h2><p>协程的问题无法解决，也不可能加锁来保证时序，影响网关的高性能，因此重点还在于保证数据不被淘汰。那么对缓存进行优化，将cache替换为共享内存，多个进程共享一份，渐少拉取次数，同时共享内存也是LRU的机制，但不是队列，而是内存单位M，最终缓存调整为</p>
+<ul>
+<li><strong>Worker 使用lua_shared_dict 共享缓存，减少跨 Worker 重复拉取</strong></li>
+<li><strong>共享内存可以减少公共数据被淘汰的概率，预留足够大小，几乎不会被淘汰</strong></li>
+</ul>
+
+                
+              </div>
+            
+            <hr/>
+            <div>
+              <div class="post-metas my-3">
+  
+  
+    <div class="post-meta">
+      <i class="iconfont icon-tags"></i>
+      
+        <a href="/tags/openresty/" class="print-no-link">#openresty</a>
+      
+        <a href="/tags/%E5%8D%8F%E7%A8%8B/" class="print-no-link">#协程</a>
+      
+    </div>
+  
+</div>
+
+
+              
+  
+
+  <div class="license-box my-3">
+    <div class="license-title">
+      <div>协程、Lua 队列、带宽打满</div>
+      <div>https://zjfans.github.io/2025/08/27/协程、Lua 队列、带宽打满/</div>
+    </div>
+    <div class="license-meta">
+      
+        <div class="license-meta-item">
+          <div>作者</div>
+          <div>张三疯</div>
+        </div>
+      
+      
+        <div class="license-meta-item license-meta-date">
+          <div>发布于</div>
+          <div>2025年8月27日</div>
+        </div>
+      
+      
+      
+        <div class="license-meta-item">
+          <div>许可协议</div>
+          <div>
+            
+              
+              
+                <a class="print-no-link" target="_blank" href="https://creativecommons.org/licenses/by/4.0/">
+                  <span class="hint--top hint--rounded" aria-label="BY - 署名">
+                    <i class="iconfont icon-by"></i>
+                  </span>
+                </a>
+              
+            
+          </div>
+        </div>
+      
+    </div>
+    <div class="license-icon iconfont"></div>
+  </div>
+
+
+
+              
+                <div class="post-prevnext my-3">
+                  <article class="post-prev col-6">
+                    
+                    
+                  </article>
+                  <article class="post-next col-6">
+                    
+                    
+                      <a href="/2025/06/08/%E7%83%AD%E6%9B%B4%E6%96%B0-%E5%8A%A8%E6%80%81%E8%B7%AF%E7%94%B1/" title="热更新-动态路由">
+                        <span class="hidden-mobile">热更新-动态路由</span>
+                        <span class="visible-mobile">下一篇</span>
+                        <i class="iconfont icon-arrowright"></i>
+                      </a>
+                    
+                  </article>
+                </div>
+              
+            </div>
+
+            
+  
+  
+    <article id="comments" lazyload>
+      
+    <div id="giscus" class="giscus"></div>
+    <script type="text/javascript">
+      Fluid.utils.loadComments('#giscus', function() {
+        var options = {"repo":"ZJfans/ZJfans.github.io","repo-id":"R_kgDOLYg-XA","category":"Announcements","category-id":"DIC_kwDOLYg-XM4Ceo1C","theme-light":"light","theme-dark":"dark","mapping":"pathname","reactions-enabled":1,"emit-metadata":0,"input-position":"bottom","lang":"zh-CN"};
+        var attributes = {};
+        for (let option in options) {
+          if (!option.startsWith('theme-')) {
+            var key = option.startsWith('data-') ? option : 'data-' + option;
+            attributes[key] = options[option];
+          }
+        }
+        var light = 'light';
+        var dark = 'dark';
+        window.GiscusThemeLight = light;
+        window.GiscusThemeDark = dark;
+        attributes['data-theme'] = document.documentElement.getAttribute('data-user-color-scheme') === 'dark' ? dark : light;
+        for (let attribute in attributes) {
+          var value = attributes[attribute];
+          if (value === undefined || value === null || value === '') {
+            delete attributes[attribute];
+          }
+        }
+        var s = document.createElement('script');
+        s.setAttribute('src', 'https://giscus.app/client.js');
+        s.setAttribute('crossorigin', 'anonymous');
+        for (let attribute in attributes) {
+          s.setAttribute(attribute, attributes[attribute]);
+        }
+        var ss = document.getElementsByTagName('script');
+        var e = ss.length > 0 ? ss[ss.length - 1] : document.head || document.documentElement;
+        e.parentNode.insertBefore(s, e.nextSibling);
+      });
+    </script>
+    <noscript>Please enable JavaScript to view the comments</noscript>
+
+
+    </article>
+  
+
+
+          </article>
+        </div>
+      </div>
+    </div>
+
+    <div class="side-col d-none d-lg-block col-lg-2">
+      
+  <aside class="sidebar" style="margin-left: -1rem">
+    <div id="toc">
+  <p class="toc-header">
+    <i class="iconfont icon-list"></i>
+    <span>目录</span>
+  </p>
+  <div class="toc-body" id="toc-body"></div>
+</div>
+
+
+
+  </aside>
+
+
+    </div>
+  </div>
+</div>
+
+
+
+
+
+  
+
+
+
+  
+
+
+
+  
+
+
+
+  
+
+
+
+  
+
+
+
+
+
+
+
+    
+
+    
+      <a id="scroll-top-button" aria-label="TOP" href="#" role="button">
+        <i class="iconfont icon-arrowup" aria-hidden="true"></i>
+      </a>
+    
+
+    
+      <div class="modal fade" id="modalSearch" tabindex="-1" role="dialog" aria-labelledby="ModalLabel"
+     aria-hidden="true">
+  <div class="modal-dialog modal-dialog-scrollable modal-lg" role="document">
+    <div class="modal-content">
+      <div class="modal-header text-center">
+        <h4 class="modal-title w-100 font-weight-bold">搜索</h4>
+        <button type="button" id="local-search-close" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body mx-3">
+        <div class="md-form mb-5">
+          <input type="text" id="local-search-input" class="form-control validate">
+          <label data-error="x" data-success="v" for="local-search-input">关键词</label>
+        </div>
+        <div class="list-group" id="local-search-result"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+    
+
+    
+  </main>
+
+  <footer>
+    <div class="footer-inner">
+  
+    <div class="footer-content">
+       <a href="https://hexo.io" target="_blank" rel="nofollow noopener"><span>Hexo</span></a> <i class="iconfont icon-love"></i> <a href="https://github.com/fluid-dev/hexo-theme-fluid" target="_blank" rel="nofollow noopener"><span>Fluid</span></a> 
+    </div>
+  
+  
+    <div class="statistics">
+  
+  
+
+  
+    
+      <span id="busuanzi_container_site_pv" style="display: none">
+        总访问量 
+        <span id="busuanzi_value_site_pv"></span>
+         次
+      </span>
+    
+    
+      <span id="busuanzi_container_site_uv" style="display: none">
+        总访客数 
+        <span id="busuanzi_value_site_uv"></span>
+         人
+      </span>
+    
+    
+  
+</div>
+
+  
+  
+  
+</div>
+
+  </footer>
+
+  <!-- Scripts -->
+  
+  <script  src="https://lib.baomitu.com/nprogress/0.2.0/nprogress.min.js" ></script>
+  <link  rel="stylesheet" href="https://lib.baomitu.com/nprogress/0.2.0/nprogress.min.css" />
+
+  <script>
+    NProgress.configure({"showSpinner":false,"trickleSpeed":100})
+    NProgress.start()
+    window.addEventListener('load', function() {
+      NProgress.done();
+    })
+  </script>
+
+
+<script  src="https://lib.baomitu.com/jquery/3.6.4/jquery.min.js" ></script>
+<script  src="https://lib.baomitu.com/twitter-bootstrap/4.6.1/js/bootstrap.min.js" ></script>
+<script  src="/js/events.js" ></script>
+<script  src="/js/plugins.js" ></script>
+
+
+  <script  src="https://lib.baomitu.com/typed.js/2.0.12/typed.min.js" ></script>
+  <script>
+    (function (window, document) {
+      var typing = Fluid.plugins.typing;
+      var subtitle = document.getElementById('subtitle');
+      if (!subtitle || !typing) {
+        return;
+      }
+      var text = subtitle.getAttribute('data-typed-text');
+      
+        typing(text);
+      
+    })(window, document);
+  </script>
+
+
+
+
+  
+    <script  src="/js/img-lazyload.js" ></script>
+  
+
+
+
+
+  
+<script>
+  Fluid.utils.createScript('https://lib.baomitu.com/tocbot/4.20.1/tocbot.min.js', function() {
+    var toc = jQuery('#toc');
+    if (toc.length === 0 || !window.tocbot) { return; }
+    var boardCtn = jQuery('#board-ctn');
+    var boardTop = boardCtn.offset().top;
+
+    window.tocbot.init(Object.assign({
+      tocSelector     : '#toc-body',
+      contentSelector : '.markdown-body',
+      linkClass       : 'tocbot-link',
+      activeLinkClass : 'tocbot-active-link',
+      listClass       : 'tocbot-list',
+      isCollapsedClass: 'tocbot-is-collapsed',
+      collapsibleClass: 'tocbot-is-collapsible',
+      scrollSmooth    : true,
+      includeTitleTags: true,
+      headingsOffset  : -boardTop,
+    }, CONFIG.toc));
+    if (toc.find('.toc-list-item').length > 0) {
+      toc.css('visibility', 'visible');
+    }
+
+    Fluid.events.registerRefreshCallback(function() {
+      if ('tocbot' in window) {
+        tocbot.refresh();
+        var toc = jQuery('#toc');
+        if (toc.length === 0 || !tocbot) {
+          return;
+        }
+        if (toc.find('.toc-list-item').length > 0) {
+          toc.css('visibility', 'visible');
+        }
+      }
+    });
+  });
+</script>
+
+
+  <script src=https://lib.baomitu.com/clipboard.js/2.0.11/clipboard.min.js></script>
+
+  <script>Fluid.plugins.codeWidget();</script>
+
+
+  
+<script>
+  Fluid.utils.createScript('https://lib.baomitu.com/anchor-js/4.3.1/anchor.min.js', function() {
+    window.anchors.options = {
+      placement: CONFIG.anchorjs.placement,
+      visible  : CONFIG.anchorjs.visible
+    };
+    if (CONFIG.anchorjs.icon) {
+      window.anchors.options.icon = CONFIG.anchorjs.icon;
+    }
+    var el = (CONFIG.anchorjs.element || 'h1,h2,h3,h4,h5,h6').split(',');
+    var res = [];
+    for (var item of el) {
+      res.push('.markdown-body > ' + item.trim());
+    }
+    if (CONFIG.anchorjs.placement === 'left') {
+      window.anchors.options.class = 'anchorjs-link-left';
+    }
+    window.anchors.add(res.join(', '));
+
+    Fluid.events.registerRefreshCallback(function() {
+      if ('anchors' in window) {
+        anchors.removeAll();
+        var el = (CONFIG.anchorjs.element || 'h1,h2,h3,h4,h5,h6').split(',');
+        var res = [];
+        for (var item of el) {
+          res.push('.markdown-body > ' + item.trim());
+        }
+        if (CONFIG.anchorjs.placement === 'left') {
+          anchors.options.class = 'anchorjs-link-left';
+        }
+        anchors.add(res.join(', '));
+      }
+    });
+  });
+</script>
+
+
+  
+<script>
+  Fluid.utils.createScript('https://lib.baomitu.com/fancybox/3.5.7/jquery.fancybox.min.js', function() {
+    Fluid.plugins.fancyBox();
+  });
+</script>
+
+
+  <script>Fluid.plugins.imageCaption();</script>
+
+  <script  src="/js/local-search.js" ></script>
+
+  <script defer src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js" ></script>
+
+
+
+
+
+<!-- 主题的启动项，将它保持在最底部 -->
+<!-- the boot of the theme, keep it at the bottom -->
+<script  src="/js/boot.js" ></script>
+
+
+  
+
+  <noscript>
+    <div class="noscript-warning">博客在允许 JavaScript 运行的环境下浏览效果更佳</div>
+  </noscript>
+</body>
+</html>
