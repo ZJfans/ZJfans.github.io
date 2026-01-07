@@ -24,7 +24,7 @@
 <meta property="og:description" content="在OpenResty中实现Redis Sentinel支持1、引言OpenResty 通过 lua-resty-redis 模块为 Nginx 提供了与 Redis 交互的能力，但该模块原生仅支持直连模式，不具备高可用场景下的故障转移能力。在复杂的生产环境中，单点 Redis 容易因节点故障导致服务中断，因此需要借助 Redis Sentinel 来实现监控、故障切换、通知和配置提供者等高可用特性">
 <meta property="og:locale" content="zh_CN">
 <meta property="article:published_time" content="2025-05-17T10:33:01.228Z">
-<meta property="article:modified_time" content="2025-06-08T09:37:35.698Z">
+<meta property="article:modified_time" content="2025-09-24T02:05:41.995Z">
 <meta property="article:author" content="张三疯">
 <meta property="article:tag" content="openresty">
 <meta property="article:tag" content="redis">
@@ -537,7 +537,7 @@
 <li><p>将 slave 信息也写入共享配置：</p>
 </li>
 </ul>
-<h3 id="3-2、work更新节点信息"><a href="#3-2、work更新节点信息" class="headerlink" title="3.2、work更新节点信息"></a>3.2、work更新节点信息</h3><p><strong>1、其他 Worker 周期性同步新配置</strong></p>
+<h3 id="3-2、worker更新节点信息"><a href="#3-2、worker更新节点信息" class="headerlink" title="3.2、worker更新节点信息"></a>3.2、worker更新节点信息</h3><p><strong>1、其他 Worker 周期性同步新配置</strong></p>
 <ul>
 <li><p>所有非第一个 worker 会定时读取共享内存中配置</p>
 </li>
@@ -690,7 +690,7 @@
 <li>解析和更新配置</li>
 </ol>
 <ul>
-<li>获取主从节点，更新共享内存，让work可以感知切换</li>
+<li>获取主从节点，更新共享内存，让worker可以感知切换</li>
 </ul>
 <h2 id="5、参考"><a href="#5、参考" class="headerlink" title="5、参考"></a>5、参考</h2><p>sentinel:    <a target="_blank" rel="noopener" href="http://doc.redisfans.com/topic/sentinel.html">http://doc.redisfans.com/topic/sentinel.html</a></p>
 <p>客户端实现规范：<a target="_blank" rel="noopener" href="https://redis.io/docs/latest/develop/reference/sentinel-clients/">https://redis.io/docs/latest/develop/reference/sentinel-clients/</a></p>

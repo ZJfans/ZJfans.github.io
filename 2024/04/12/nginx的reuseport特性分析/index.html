@@ -16,12 +16,12 @@
   <meta name="author" content="张三疯">
   <meta name="keywords" content="nginx,openresty,网关,HTTP/HTTPS,Websocket">
   
-    <meta name="description" content="1、奇怪的现象1.1、断崖问题业务进行性能测试，发现一个奇怪的现象，整个压测过程中总会有断崖的情况。本来TPS在2万8左右，会直接掉到1500左右，然后又马上恢复，但是只能恢复到2万2，损耗了20%。 现场架构：  现场XXX、nginx、服务都部署在一个机器，配置为： 1234567机器：海光麒麟v10  sp4  x86性能指标：128c  512Gnginx配置：16个work进程，句柄数4">
+    <meta name="description" content="1、问题现象1.1、性能断崖问题在业务性能测试过程中，发现了一个异常现象：整个压测过程中会出现性能断崖。正常情况下 TPS 维持在 2.8 万左右，但会突然降至 1500 左右，随后立即恢复，但只能恢复到 2.2 万，性能损耗约 20%。 测试架构：  测试环境配置如下： 1234567机器：海光麒麟 v10 SP4 x86性能指标：128 核 CPU，512G 内存Nginx 配置：16 个 w">
 <meta property="og:type" content="article">
 <meta property="og:title" content="nginx的reuseport特性分析">
 <meta property="og:url" content="https://zjfans.github.io/2024/04/12/nginx%E7%9A%84reuseport%E7%89%B9%E6%80%A7%E5%88%86%E6%9E%90/index.html">
 <meta property="og:site_name" content="ZJfans Blog">
-<meta property="og:description" content="1、奇怪的现象1.1、断崖问题业务进行性能测试，发现一个奇怪的现象，整个压测过程中总会有断崖的情况。本来TPS在2万8左右，会直接掉到1500左右，然后又马上恢复，但是只能恢复到2万2，损耗了20%。 现场架构：  现场XXX、nginx、服务都部署在一个机器，配置为： 1234567机器：海光麒麟v10  sp4  x86性能指标：128c  512Gnginx配置：16个work进程，句柄数4">
+<meta property="og:description" content="1、问题现象1.1、性能断崖问题在业务性能测试过程中，发现了一个异常现象：整个压测过程中会出现性能断崖。正常情况下 TPS 维持在 2.8 万左右，但会突然降至 1500 左右，随后立即恢复，但只能恢复到 2.2 万，性能损耗约 20%。 测试架构：  测试环境配置如下： 1234567机器：海光麒麟 v10 SP4 x86性能指标：128 核 CPU，512G 内存Nginx 配置：16 个 w">
 <meta property="og:locale" content="zh_CN">
 <meta property="og:image" content="https://zjfans.github.io/img/%E7%A7%81%E6%9C%89%E5%8D%8F%E8%AE%AE%E5%8E%8B%E6%B5%8B.jpg">
 <meta property="og:image" content="https://zjfans.github.io/img/nginx%E5%90%84%E4%B8%AA%E8%BF%9B%E7%A8%8B%E8%BF%9E%E6%8E%A5%E6%95%B0%E5%88%86%E5%B8%83%E5%9B%BE.png">
@@ -30,7 +30,7 @@
 <meta property="og:image" content="https://zjfans.github.io/img/openresty-1.15.8%E5%BC%80%E5%90%AFreuseport.png">
 <meta property="og:image" content="https://zjfans.github.io/img/openresty-1.25.3%E5%BC%80%E5%90%AFreuseport.png">
 <meta property="article:published_time" content="2024-04-12T01:41:09.424Z">
-<meta property="article:modified_time" content="2024-11-29T14:04:35.750Z">
+<meta property="article:modified_time" content="2026-01-07T13:37:53.872Z">
 <meta property="article:author" content="张三疯">
 <meta property="article:tag" content="nginx">
 <meta property="article:tag" content="reuseport">
@@ -259,7 +259,7 @@
       <span class="post-meta mr-2">
         <i class="iconfont icon-chart"></i>
         
-          7.5k 字
+          7.2k 字
         
       </span>
     
@@ -270,7 +270,7 @@
         
         
         
-          63 分钟
+          60 分钟
         
       </span>
     
@@ -312,170 +312,252 @@
             
               <div class="markdown-body">
                 
-                <h2 id="1、奇怪的现象"><a href="#1、奇怪的现象" class="headerlink" title="1、奇怪的现象"></a>1、奇怪的现象</h2><h3 id="1-1、断崖问题"><a href="#1-1、断崖问题" class="headerlink" title="1.1、断崖问题"></a>1.1、断崖问题</h3><p>业务进行性能测试，发现一个奇怪的现象，整个压测过程中总会有断崖的情况。本来TPS在2万8左右，会直接掉到1500左右，然后又马上恢复，但是只能恢复到2万2，损耗了20%。</p>
-<p>现场架构：</p>
+                <h2 id="1、问题现象"><a href="#1、问题现象" class="headerlink" title="1、问题现象"></a>1、问题现象</h2><h3 id="1-1、性能断崖问题"><a href="#1-1、性能断崖问题" class="headerlink" title="1.1、性能断崖问题"></a>1.1、性能断崖问题</h3><p>在业务性能测试过程中，发现了一个异常现象：整个压测过程中会出现性能断崖。正常情况下 TPS 维持在 2.8 万左右，但会突然降至 1500 左右，随后立即恢复，但只能恢复到 2.2 万，性能损耗约 20%。</p>
+<p><strong>测试架构：</strong></p>
 <p><img src="/img/%E7%A7%81%E6%9C%89%E5%8D%8F%E8%AE%AE%E5%8E%8B%E6%B5%8B.jpg" srcset="/img/loading.gif" lazyload alt="私有协议压测"></p>
-<p>现场XXX、nginx、服务都部署在一个机器，配置为：</p>
-<figure class="highlight html"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><code class="hljs html">机器：海光麒麟v10  sp4  x86<br><br>性能指标：128c  512G<br><br>nginx配置：16个work进程，句柄数40960<br><br>客户端与nginx建立的长连接：16个<br></code></pre></td></tr></table></figure>
+<p>测试环境配置如下：</p>
+<figure class="highlight html"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><code class="hljs html">机器：海光麒麟 v10 SP4 x86<br><br>性能指标：128 核 CPU，512G 内存<br><br>Nginx 配置：16 个 worker 进程，文件句柄数 40960<br><br>客户端与 Nginx 建立的长连接数：16 个<br></code></pre></td></tr></table></figure>
 
-<p>问题在于nginx调大进程为64，或者客户端通道数调大为64，就没有问题。即16-64，64-16没问题，但是16-16有问题，100%复现断崖。</p>
-<p>排查步骤：现场没有监控，所以排查过程比较困难，不过还是确认了一些问题</p>
-<p>1、整个压测过程中，瓶颈不在nginx，因为最大cpu压力才到45%，主要排查问题是断崖。</p>
-<p>2、查看nginx的日志，没有任何报错，但是发现断崖时，客户端给的流量下降了，根据日志绘出曲线后，与压力机的曲线一致</p>
-<p>3、所以着重分析为什么此时客户端给的压力会突降低。但是整个链路的节点都有可能有问题，客户端队列阻塞？nginx处理变慢？服务端处理变慢？</p>
-<p>重点是，这是私有协议，没有做access.log日志，根本看不到请求的耗时、数量等信息，从压力机看，64个进程和16个进程的平均时延没有差距。2中查看的流量还是打开debug，数的日志条数🙂，苦力活。因此开始tcpdump抓包，一个包抓了21个G，现场内网环境拷贝需要经过2层网络，现场还有其他的测试计划，只能见缝插针压测一把，第一天就这样过去了</p>
-<p>第二天包终于拷贝出来了，在看包之前，我想起是信创系统，看了一下nginx的版本，不适配😬，赶快换了对应版本，16-16的模式没有再出现断崖，而且TPS上升了4千，到了3万2，一个数据库的分区直接被打满，断崖问题解决，但是因为操作系统不适配导致的断崖<strong>来日待查</strong>。紧急的问题是，压测的过程中，nginx的各个进程压力不均匀？进程的压力呈递减状态？</p>
-<h3 id="1-2、每个work的连接数不均衡"><a href="#1-2、每个work的连接数不均衡" class="headerlink" title="1.2、每个work的连接数不均衡"></a>1.2、每个work的连接数不均衡</h3><p>我们拥有2种私有协议，可以理解为tcp+xxx数据格式、tcp+json。这类协议的客户端和服务端会建立一条长连接，通常成为通道，后续的请求都是依靠这个通道传输。</p>
-<p>因此为了更加直观的复现，nginx开启了64个进程，xxx应用与nginx建立64条连接。使用netstat命令统计连接数，得以下结果，nginx共有64条连接（其中39个nginx进程有连接，25个进程处于空闲，没有连接。其中1个进程的连接数为4条；5个进程的连接数分别为3条；14个进程的连接数为2条；19个进程的连接数为1条；25个进程的连接数为0条；</p>
-<p><img src="/img/nginx%E5%90%84%E4%B8%AA%E8%BF%9B%E7%A8%8B%E8%BF%9E%E6%8E%A5%E6%95%B0%E5%88%86%E5%B8%83%E5%9B%BE.png" srcset="/img/loading.gif" lazyload alt="nginx各个进程连接数分布图"></p>
-<p>压测过程中，发现共有39个nginx进程有压力，且压力大小与该进程数的连接数成正比，即nginx进程的连接数越多，压力越大，一个进程拿到了4个连接，一个进程拿到了1个连接，压力比是4：1。现场反馈的“递减”现象，其实就是这个现象。那么为什么连接数不一致？</p>
-<p>2、HTTP协议的不均衡</p>
-<p>既然私有协议的连接数不一致，那么来试试HTTP，直接使用HTTP协议连接nginx，配置做了更新，如下：</p>
-<figure class="highlight html"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><code class="hljs html">128个work进程<br><br>keepalive_request默认值为100<br><br>服务每个增加到3个节点<br><br>数据库增加到3个分区<br></code></pre></td></tr></table></figure>
-
-<p>架构如下：</p>
-<p><img src="/img/HTTP%E7%9B%B4%E8%BF%9E.jpg" srcset="/img/loading.gif" lazyload alt="HTTP直连"></p>
-<p>发现nginx的压力依旧不均衡，只有十几个进程有压力，维持在60%~90%，此时tps已经达到8万+，依旧是数据库的瓶颈，到这里就需要研究nginx建立连接的机制。</p>
-<h2 id="2、基础知识"><a href="#2、基础知识" class="headerlink" title="2、基础知识"></a>2、基础知识</h2><p>2.1、epoll</p>
-<p>回顾一下4年前写的epoll的例子，<a target="_blank" rel="noopener" href="https://github.com/ZJfans/EpollET-Server/blob/master/epollET.c">https://github.com/ZJfans/EpollET-Server/blob/master/epollET.c</a> </p>
+<p><strong>问题特征：</strong> 当 Nginx worker 进程数调整为 64，或客户端通道数调整为 64 时，问题不会出现。即 16-64、64-16 配置均正常，但 16-16 配置下 100% 复现断崖问题。</p>
+<p><strong>排查过程：</strong></p>
+<p>由于现场缺少监控，排查过程较为困难，但通过分析确认了以下问题：</p>
+<ol>
+<li><p><strong>性能瓶颈不在 Nginx</strong>：整个压测过程中，Nginx 最大 CPU 使用率仅 45%，主要问题在于性能断崖。</p>
+</li>
+<li><p><strong>流量下降现象</strong>：查看 Nginx 日志未发现报错，但断崖发生时客户端流量明显下降。根据日志绘制的曲线与压力机曲线一致。</p>
+</li>
+<li><p><strong>问题定位</strong>：重点分析客户端流量突降的原因。整个链路中多个节点都可能存在问题：客户端队列阻塞、Nginx 处理变慢、服务端处理变慢等。</p>
+</li>
+</ol>
+<p><strong>关键难点：</strong> 由于是私有协议，未启用 <code>access.log</code>，无法获取请求耗时、数量等关键信息。从压力机数据看，64 个进程和 16 个进程的平均时延无明显差异。流量数据是通过开启 debug 日志并手动统计日志条数获得的。因此开始使用 <code>tcpdump</code> 抓包分析，单个抓包文件达到 21GB。</p>
+<p><strong>问题解决：</strong> 第二天分析抓包数据前，发现是信创系统，检查 Nginx 版本后发现版本不适配。更换适配版本后，16-16 配置下断崖问题消失，TPS 提升至 3.2 万（提升 4000），达到数据库分区瓶颈。断崖问题已解决，但操作系统不适配导致断崖的根因<strong>待进一步分析</strong>。</p>
+<p><strong>新发现的问题：</strong> 压测过程中，Nginx 各进程压力不均衡，进程压力呈递减状态。</p>
+<h3 id="1-2、Worker-进程连接数不均衡"><a href="#1-2、Worker-进程连接数不均衡" class="headerlink" title="1.2、Worker 进程连接数不均衡"></a>1.2、Worker 进程连接数不均衡</h3><p>我们有两种私有协议，可理解为 <code>TCP + 自定义数据格式</code> 和 <code>TCP + JSON</code>。这类协议的客户端和服务端会建立长连接（通常称为通道），后续请求均通过该通道传输。</p>
+<p><strong>复现测试：</strong> 为更直观地复现问题，将 Nginx 配置为 64 个 worker 进程，应用与 Nginx 建立 64 条连接。使用 <code>netstat</code> 命令统计连接数，结果如下：</p>
 <ul>
-<li>初始化监听套接字</li>
-<li>创建epoll实例</li>
-<li>监听套接字设置到epoll_ctl中</li>
-<li>使用epoll_wait，循环等待事件</li>
-<li>如果触发事件的是监听套接字，那么建立新的连接</li>
-<li>如果触发事件的是客户端的套接字，那么处理读写事件</li>
+<li>Nginx 共有 64 条连接</li>
+<li>39 个 Nginx 进程有连接，25 个进程处于空闲（无连接）</li>
+<li>连接数分布：<ul>
+<li>1 个进程：4 条连接</li>
+<li>5 个进程：各 3 条连接</li>
+<li>14 个进程：各 2 条连接</li>
+<li>19 个进程：各 1 条连接</li>
+<li>25 个进程：0 条连接</li>
 </ul>
-<p>2.2、nginx的工作模式  区别于 muduo</p>
-<p>nginx为多进程模式，初始化时，master监听端口，而后master fork多个work进程，此时所有的work监听同一端口</p>
-<p>muduo为多线程的工作方式，main主线程负责处理监听套接字的事件，在建立连接后，将连接分配给work thread，后续的读写事件都由work线程处理</p>
+</li>
+</ul>
+<p><img src="/img/nginx%E5%90%84%E4%B8%AA%E8%BF%9B%E7%A8%8B%E8%BF%9E%E6%8E%A5%E6%95%B0%E5%88%86%E5%B8%83%E5%9B%BE.png" srcset="/img/loading.gif" lazyload alt="nginx各个进程连接数分布图"></p>
+<p><strong>压力分布特征：</strong> 压测过程中，共有 39 个 Nginx 进程有压力，且压力大小与进程连接数成正比。例如，一个进程拥有 4 条连接，另一个进程拥有 1 条连接，压力比约为 4:1。现场反馈的”递减”现象正是此现象。<strong>那么为什么连接数会不一致？</strong></p>
+<h3 id="1-3、HTTP-协议下的不均衡现象"><a href="#1-3、HTTP-协议下的不均衡现象" class="headerlink" title="1.3、HTTP 协议下的不均衡现象"></a>1.3、HTTP 协议下的不均衡现象</h3><p>既然私有协议存在连接数不均衡问题，接下来测试 HTTP 协议。直接使用 HTTP 协议连接 Nginx，配置更新如下：</p>
+<figure class="highlight html"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><code class="hljs html">128 个 worker 进程<br><br>keepalive_request 默认值为 100<br><br>后端服务增加到 3 个节点<br><br>数据库增加到 3 个分区<br></code></pre></td></tr></table></figure>
+
+<p><strong>测试架构：</strong></p>
+<p><img src="/img/HTTP%E7%9B%B4%E8%BF%9E.jpg" srcset="/img/loading.gif" lazyload alt="HTTP直连"></p>
+<p><strong>测试结果：</strong> Nginx 压力依旧不均衡，仅有十几个进程有压力，CPU 使用率维持在 60%~90%。此时 TPS 已达到 8 万+，瓶颈在数据库。<strong>因此需要深入研究 Nginx 建立连接的机制。</strong></p>
+<h2 id="2、基础知识"><a href="#2、基础知识" class="headerlink" title="2、基础知识"></a>2、基础知识</h2><h3 id="2-1、epoll-基础"><a href="#2-1、epoll-基础" class="headerlink" title="2.1、epoll 基础"></a>2.1、epoll 基础</h3><p>epoll 是 Linux 内核提供的高效 I&#x2F;O 事件通知机制。典型的 epoll 使用流程如下（参考示例：<a target="_blank" rel="noopener" href="https://github.com/ZJfans/EpollET-Server/blob/master/epollET.c%EF%BC%89%EF%BC%9A">https://github.com/ZJfans/EpollET-Server/blob/master/epollET.c）：</a></p>
+<ol>
+<li><strong>初始化监听套接字</strong>：创建并绑定监听套接字</li>
+<li><strong>创建 epoll 实例</strong>：调用 <code>epoll_create</code> 创建 epoll 文件描述符</li>
+<li><strong>注册监听套接字</strong>：使用 <code>epoll_ctl</code> 将监听套接字添加到 epoll 实例</li>
+<li><strong>事件循环</strong>：使用 <code>epoll_wait</code> 循环等待事件</li>
+<li><strong>处理事件</strong>：<ul>
+<li>如果触发的是监听套接字，则调用 <code>accept</code> 建立新连接</li>
+<li>如果触发的是客户端套接字，则处理读写事件</li>
+</ul>
+</li>
+</ol>
+<h3 id="2-2、Nginx-工作模式（与-muduo-对比）"><a href="#2-2、Nginx-工作模式（与-muduo-对比）" class="headerlink" title="2.2、Nginx 工作模式（与 muduo 对比）"></a>2.2、Nginx 工作模式（与 muduo 对比）</h3><p><strong>Nginx 多进程模式：</strong></p>
+<ul>
+<li>Nginx 采用多进程架构</li>
+<li>初始化时，Master 进程监听端口</li>
+<li>Master 进程 fork 多个 Worker 进程</li>
+<li><strong>所有 Worker 进程共享同一个监听套接字</strong></li>
+</ul>
+<p><strong>muduo 多线程模式（对比）：</strong></p>
+<ul>
+<li>muduo 采用多线程架构</li>
+<li>主线程负责处理监听套接字的事件</li>
+<li>建立连接后，将连接分配给 Worker 线程</li>
+<li>后续的读写事件均由 Worker 线程处理</li>
+</ul>
 <p><img src="/img/nginx%E5%90%84%E4%B8%AA%E8%BF%9B%E7%A8%8B%E7%BB%91%E5%AE%9A%E5%90%8C%E4%B8%80%E4%B8%AAsocket.png" srcset="/img/loading.gif" lazyload alt="nginx各个进程绑定同一个socket"></p>
-<h2 id="3、reuseport-SO-REUSEPORT"><a href="#3、reuseport-SO-REUSEPORT" class="headerlink" title="3、reuseport  &amp;&amp;  SO_REUSEPORT"></a>3、reuseport  &amp;&amp;  SO_REUSEPORT</h2><h3 id="3-1、惊群效应"><a href="#3-1、惊群效应" class="headerlink" title="3.1、惊群效应"></a>3.1、惊群效应</h3><p>惊群效应（Thundering Herd）是多进程或多线程系统在等待同一事件时可能遇到的问题。在网络编程中，尤其是在使用epoll进行I&#x2F;O多路复用时，惊群效应可能导致性能问题。下面是关于Nginx如何处理惊群效应的详细解释。</p>
-<p>原因</p>
-<p>nginx的多个进程等待新的网络连接请求。当事件发生时（例如，一个新连接到达），所有等待的进程都会被唤醒。但最终只有一个进程能够处理该事件（例如，通过<code>accept</code>系统调用接受连接），其他进程在尝试处理事件失败后会重新进入等待状态。这个过程会导致大量的上下文切换和CPU资源的浪费。</p>
-<p>Nginx采用了几种策略来避免或减少惊群效应的影响：</p>
+<h2 id="3、SO-REUSEPORT-与惊群效应"><a href="#3、SO-REUSEPORT-与惊群效应" class="headerlink" title="3、SO_REUSEPORT 与惊群效应"></a>3、SO_REUSEPORT 与惊群效应</h2><h3 id="3-1、惊群效应（Thundering-Herd）"><a href="#3-1、惊群效应（Thundering-Herd）" class="headerlink" title="3.1、惊群效应（Thundering Herd）"></a>3.1、惊群效应（Thundering Herd）</h3><p><strong>惊群效应</strong>是多进程或多线程系统在等待同一事件时可能遇到的问题。在网络编程中，尤其是在使用 epoll 进行 I&#x2F;O 多路复用时，惊群效应可能导致性能问题。</p>
+<p><strong>产生原因：</strong></p>
+<p>当多个进程同时等待新的网络连接请求时，如果事件发生（例如新连接到达），所有等待的进程都会被唤醒。但最终只有一个进程能够处理该事件（通过 <code>accept</code> 系统调用接受连接），其他进程在尝试处理事件失败后会重新进入等待状态。这个过程会导致大量的上下文切换和 CPU 资源浪费。</p>
+<p><strong>Nginx 的解决方案：</strong></p>
+<p>Nginx 采用以下几种策略来避免或减少惊群效应的影响：</p>
 <ol>
-<li><strong><code>accept_mutex</code></strong>:<ul>
-<li>Nginx可以使用<code>accept_mutex</code>来同步对<code>accept</code>调用的访问。这意味着在任何给定时间，只有一个工作进程可以处理新的连接请求。这通过在工作进程之间引入互斥锁来实现，从而避免了多个进程同时尝试接受同一个连接的情况。</li>
-<li>通过在配置文件中设置<code>accept_mutex</code>为<code>on</code>，可以启用此功能。这有助于减少因多个进程竞争同一个<code>accept</code>操作而产生的惊群效应。</li>
+<li><p><strong><code>accept_mutex</code>（接受互斥锁）</strong>：</p>
+<ul>
+<li>Nginx 可以使用 <code>accept_mutex</code> 来同步对 <code>accept</code> 调用的访问</li>
+<li>在任何给定时间，只有一个 Worker 进程可以处理新的连接请求</li>
+<li>通过在工作进程之间引入互斥锁，避免多个进程同时尝试接受同一个连接</li>
+<li>在配置文件中设置 <code>accept_mutex on</code> 可启用此功能</li>
 </ul>
 </li>
-<li><strong><code>EPOLLEXCLUSIVE</code></strong>:<ul>
-<li>从Linux内核版本4.5开始，引入了<code>EPOLLEXCLUSIVE</code>标志。Nginx从1.11.3版本开始支持这个特性。</li>
-<li>当使用<code>EPOLLEXCLUSIVE</code>标志添加<code>epoll</code>事件时，内核保证在事件发生时只唤醒一个等待的进程。这减少了因多个进程监听同一个文件描述符而产生的惊群效应。</li>
+<li><p><strong><code>EPOLLEXCLUSIVE</code>（独占唤醒）</strong>：</p>
+<ul>
+<li>Linux 内核 4.5 版本引入的标志</li>
+<li>Nginx 从 1.11.3 版本开始支持</li>
+<li>使用 <code>EPOLLEXCLUSIVE</code> 标志添加 epoll 事件时，内核保证事件发生时只唤醒一个等待的进程</li>
+<li>减少因多个进程监听同一个文件描述符而产生的惊群效应</li>
 </ul>
 </li>
-<li><strong><code>SO_REUSEPORT</code></strong>:<ul>
-<li><code>SO_REUSEPORT</code>是Linux内核3.9版本引入的一个选项，允许多个进程绑定到相同的端口上。Nginx从1.9.1版本开始支持这个特性。</li>
-<li>使用<code>SO_REUSEPORT</code>时，内核会在多个监听相同端口的进程之间进行负载均衡。这样，当新的连接请求到达时，内核会根据一定的规则选择一个进程来处理该请求，从而避免了多个进程同时被唤醒的问题。</li>
+<li><p><strong><code>SO_REUSEPORT</code>（端口复用）</strong>：</p>
+<ul>
+<li>Linux 内核 3.9 版本引入的套接字选项</li>
+<li>Nginx 从 1.9.1 版本开始支持</li>
+<li>允许多个进程绑定到相同的端口上</li>
+<li>内核在多个监听相同端口的进程之间进行负载均衡</li>
+<li>新连接请求到达时，内核根据一定规则选择一个进程处理，避免多个进程同时被唤醒</li>
 </ul>
 </li>
 </ol>
-<h3 id="3-2、SO-REUSEPORT"><a href="#3-2、SO-REUSEPORT" class="headerlink" title="3.2、SO_REUSEPORT"></a>3.2、SO_REUSEPORT</h3><p><code>SO_REUSEPORT</code> 是一个 Linux 内核级别的套接字选项，它允许多个套接字（通常是监听套接字）绑定到相同的网络地址和端口上。这个特性在 Linux 3.9 版本中引入，主要用于解决多进程或多线程环境中的惊群效应问题。以下是 <code>SO_REUSEPORT</code> 的实现原理的详细解释：</p>
-<p>传统的端口绑定</p>
-<p>在 <code>SO_REUSEPORT</code> 出现之前，根据 POSIX 标准，一个网络端口在同一时间内只能被一个套接字绑定。如果有多个进程想要监听同一个端口，它们必须使用某种同步机制（如互斥锁）来协调对端口的访问，这可能会导致性能问题和复杂的编程模型。</p>
-<p><code>SO_REUSEPORT</code> 的引入</p>
-<p><code>SO_REUSEPORT</code> 选项的引入打破了这个限制，它允许多个套接字监听同一个端口，而不需要特殊的同步机制。当启用 <code>SO_REUSEPORT</code> 时，内核会在内部进行负载均衡，将到达的数据包分发给监听该端口的多个套接字。</p>
-<p>实现原理</p>
+<h3 id="3-2、SO-REUSEPORT-原理"><a href="#3-2、SO-REUSEPORT-原理" class="headerlink" title="3.2、SO_REUSEPORT 原理"></a>3.2、SO_REUSEPORT 原理</h3><p><code>SO_REUSEPORT</code> 是 Linux 内核级别的套接字选项，允许多个套接字（通常是监听套接字）绑定到相同的网络地址和端口上。该特性在 Linux 3.9 版本中引入，主要用于解决多进程或多线程环境中的惊群效应问题。</p>
+<p><strong>传统端口绑定的限制：</strong></p>
+<p>在 <code>SO_REUSEPORT</code> 出现之前，根据 POSIX 标准，一个网络端口在同一时间内只能被一个套接字绑定。如果有多个进程想要监听同一个端口，必须使用同步机制（如互斥锁）来协调对端口的访问，这可能导致性能问题和复杂的编程模型。</p>
+<p><strong>SO_REUSEPORT 的突破：</strong></p>
+<p><code>SO_REUSEPORT</code> 选项打破了这一限制，允许多个套接字监听同一个端口，无需特殊的同步机制。当启用 <code>SO_REUSEPORT</code> 时，内核会在内部进行负载均衡，将到达的数据包分发给监听该端口的多个套接字。</p>
+<p><strong>实现原理：</strong></p>
 <ol>
-<li><strong>端口复用</strong>：<ul>
-<li>当多个进程或线程的套接字启用了 <code>SO_REUSEPORT</code> 并绑定到同一个端口时，内核会为每个套接字创建一个独立的接收队列。</li>
-<li>所有到达的数据包（例如，新的连接请求）都会根据某种负载均衡算法在这些队列之间进行分配。</li>
+<li><p><strong>端口复用</strong>：</p>
+<ul>
+<li>多个进程或线程的套接字启用 <code>SO_REUSEPORT</code> 并绑定到同一端口时，内核为每个套接字创建独立的接收队列</li>
+<li>所有到达的数据包（如新的连接请求）根据负载均衡算法在这些队列之间分配</li>
 </ul>
 </li>
-<li><strong>负载均衡</strong>：<ul>
-<li>内核使用一种负载均衡算法（通常是轮询或某种形式的哈希算法）来决定哪个套接字应该接收特定的连接请求。</li>
-<li>这意味着即使多个进程在监听同一个端口，每个进程也只会接收到一部分的连接请求，而不是全部。</li>
+<li><p><strong>负载均衡</strong>：</p>
+<ul>
+<li>内核使用负载均衡算法（通常是哈希算法）决定哪个套接字接收特定的连接请求</li>
+<li>即使多个进程监听同一端口，每个进程也只会接收一部分连接请求，而非全部</li>
 </ul>
 </li>
-<li><strong>并发处理</strong>：<ul>
-<li>由于每个进程都有自己的接收队列，它们可以并发地处理连接请求，而不会相互干扰。</li>
-<li>这种方式显著减少了进程间的上下文切换和竞争，提高了系统的并发处理能力。</li>
+<li><p><strong>并发处理</strong>：</p>
+<ul>
+<li>每个进程拥有独立的接收队列，可并发处理连接请求，互不干扰</li>
+<li>显著减少进程间的上下文切换和竞争，提高系统并发处理能力</li>
 </ul>
 </li>
-<li><strong>安全性和隔离</strong>：<ul>
-<li>尽管多个套接字绑定到了同一个端口，但它们之间的通信是隔离的。每个套接字只能处理分配给它的数据包。</li>
-<li>此外，<code>SO_REUSEPORT</code> 选项通常要求所有绑定到同一端口的套接字必须属于同一个用户，以避免潜在的安全问题。</li>
+<li><p><strong>安全性和隔离</strong>：</p>
+<ul>
+<li>多个套接字绑定到同一端口，但通信相互隔离，每个套接字只能处理分配给它的数据包</li>
+<li><code>SO_REUSEPORT</code> 要求所有绑定到同一端口的套接字必须属于同一用户，以避免潜在的安全问题</li>
 </ul>
 </li>
 </ol>
-<h3 id="3-3、负载均衡算法"><a href="#3-3、负载均衡算法" class="headerlink" title="3.3、负载均衡算法"></a>3.3、负载均衡算法</h3><p>这是内核从监听的哈希表中查找匹配的套接字，关键函数是compute_score，会给每一个socket算一个权重值，有点类似于nginx的轮询，也是按照算法，得出同一个upstream下每个server的权重，最大的分配请求</p>
-<p>但是当开启SO_REUSEPORT后，其实会直接调用<strong>inet_lookup_reuseport</strong>，这里直接选择socket，选择到就return了。具体分析见第4节。</p>
+<h3 id="3-3、负载均衡算法概述"><a href="#3-3、负载均衡算法概述" class="headerlink" title="3.3、负载均衡算法概述"></a>3.3、负载均衡算法概述</h3><p>内核从监听哈希表中查找匹配的套接字时，关键函数是 <code>compute_score</code>，它为每个 socket 计算一个权重值（得分）。这类似于 Nginx 的轮询算法，根据算法得出同一个 upstream 下每个 server 的权重，将请求分配给权重最大的 server。</p>
+<p><strong>重要说明：</strong> 当开启 <code>SO_REUSEPORT</code> 后，内核会直接调用 <code>inet_lookup_reuseport</code>，该函数直接选择 socket，选择到即返回。具体分析见第 4 节。</p>
 <figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-type">static</span> <span class="hljs-keyword">struct</span> sock *<span class="hljs-title function_">inet_lhash2_lookup</span><span class="hljs-params">(<span class="hljs-keyword">struct</span> net *net,</span><br><span class="hljs-params">				<span class="hljs-keyword">struct</span> inet_listen_hashbucket *ilb2,</span><br><span class="hljs-params">				<span class="hljs-keyword">struct</span> sk_buff *skb, <span class="hljs-type">int</span> doff,</span><br><span class="hljs-params">				<span class="hljs-type">const</span> __be32 saddr, __be16 sport,</span><br><span class="hljs-params">				<span class="hljs-type">const</span> __be32 daddr, <span class="hljs-type">const</span> <span class="hljs-type">unsigned</span> <span class="hljs-type">short</span> hnum,</span><br><span class="hljs-params">				<span class="hljs-type">const</span> <span class="hljs-type">int</span> dif, <span class="hljs-type">const</span> <span class="hljs-type">int</span> sdif)</span><br>&#123;<br>	<span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">sock</span> *<span class="hljs-title">sk</span>, *<span class="hljs-title">result</span> =</span> <span class="hljs-literal">NULL</span>;<br>	<span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">hlist_nulls_node</span> *<span class="hljs-title">node</span>;</span><br>	<span class="hljs-type">int</span> score, hiscore = <span class="hljs-number">0</span>;<br><br>	sk_nulls_for_each_rcu(sk, node, &amp;ilb2-&gt;nulls_head) &#123;<br>		score = compute_score(sk, net, hnum, daddr, dif, sdif);<br>		<span class="hljs-keyword">if</span> (score &gt; hiscore) &#123;<br>			result = inet_lookup_reuseport(net, sk, skb, doff,<br>						       saddr, sport, daddr, hnum, inet_ehashfn);<br>			<span class="hljs-keyword">if</span> (result)<br>				<span class="hljs-keyword">return</span> result;<br><br>			result = sk;<br>			hiscore = score;<br>		&#125;<br>	&#125;<br><br>	<span class="hljs-keyword">return</span> result;<br>&#125;<br></code></pre></td></tr></table></figure>
 
 
 
-<h3 id="3-4、均衡吗？引发reuseport奇怪的现象"><a href="#3-4、均衡吗？引发reuseport奇怪的现象" class="headerlink" title="3.4、均衡吗？引发reuseport奇怪的现象"></a>3.4、均衡吗？引发reuseport奇怪的现象</h3><p>如果nginx有8个进程监听这个端口，为什么我觉得会很不均匀的分配连接呢？于是用了我们自己的nginx，不开启reuseport的情况下，多个进程都监听了一个socket，但是开启了reuseport后，8个进程每个进程都监听了8个socket？？为什么不是8个进程各自监听自己的socket呢？<br>1、难道是内核版本太低了不支持？或者显示有问题？</p>
-<p>我这个虚拟机的内核是3.1，确实低了，于是找了一个4.19的操作系统，也是这样？</p>
-<p>那就不是linux内核的版本问题</p>
+<h3 id="3-4、Nginx-版本差异导致的异常现象"><a href="#3-4、Nginx-版本差异导致的异常现象" class="headerlink" title="3.4、Nginx 版本差异导致的异常现象"></a>3.4、Nginx 版本差异导致的异常现象</h3><p><strong>问题发现：</strong> 如果 Nginx 有 4 个进程监听同一端口，为什么连接分配会不均匀？使用自定义 Nginx 进行测试：</p>
+<ul>
+<li><strong>不开启 reuseport</strong>：多个进程共享一个 socket</li>
+<li><strong>开启 reuseport</strong>：4 个进程，每个进程都监听了 4 个 socket？</li>
+</ul>
+<p><strong>为什么不是 4 个进程各自监听自己的 socket？</strong></p>
+<p><strong>排查过程：</strong></p>
+<ol>
+<li><p><strong>内核版本问题？</strong></p>
+<ul>
+<li>测试环境内核版本为 3.1（较低）</li>
+<li>更换为 4.19 内核，现象依然存在</li>
+<li><strong>结论：</strong> 不是 Linux 内核版本问题</li>
+</ul>
 <p><img src="/img/openresty-1.15.8%E5%BC%80%E5%90%AFreuseport.png" srcset="/img/loading.gif" lazyload alt="openresty-1.15.8开启reuseport"></p>
-<p>2、nginx的版本的问题？</p>
-<p>我用的是openresty-1.15.8版本，因此nginx的版本也是15.8，因此我下载了最新的openresty-1.25版本，重新编译启动后，结果如下图，work进程完全符合我的预期！！！</p>
+</li>
+<li><p><strong>Nginx 版本问题？</strong></p>
+<ul>
+<li>测试版本：OpenResty 1.15.8（对应 Nginx 1.15.8）</li>
+<li>升级到 OpenResty 1.25.3，重新编译启动后，Worker 进程行为符合预期</li>
+</ul>
 <p><img src="/img/openresty-1.25.3%E5%BC%80%E5%90%AFreuseport.png" srcset="/img/loading.gif" lazyload alt="openresty-1.25.3开启reuseport"></p>
-<p>因此我去对比了2个版本的代码，发现新版本确实做了优化，<strong>会close多余的socket</strong>。</p>
-<p>而且lsof -i出来的也只是绑定的意思，nginx1.15.8版本的nginx进程虽然绑定了多个socket，但是并没有监听每一个，也就是没有把每一个socket放到epoll里面</p>
-<p>nginx-15</p>
-<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-meta">#<span class="hljs-keyword">if</span> (NGX_HAVE_REUSEPORT)</span><br>        <span class="hljs-keyword">if</span> (ls[i].reuseport &amp;&amp; ls[i].worker != ngx_worker) &#123;<br>            <span class="hljs-keyword">continue</span>;<br>        &#125;<br><span class="hljs-meta">#<span class="hljs-keyword">endif</span></span><br></code></pre></td></tr></table></figure>
+</li>
+</ol>
+<p><strong>代码对比分析：</strong></p>
+<p>对比两个版本的代码，发现新版本确实做了优化：<strong>会关闭多余的 socket</strong>。</p>
+<p><strong>重要说明：</strong> <code>lsof -i</code> 显示的结果仅表示绑定关系。Nginx 1.15.8 版本的进程虽然绑定了多个 socket，但并未监听每一个，即没有将每个 socket 添加到 epoll 中。</p>
+<p><strong>代码对比：</strong></p>
+<p><strong>Nginx 1.15.8 版本：</strong></p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-meta">#<span class="hljs-keyword">if</span> (NGX_HAVE_REUSEPORT)</span><br>        <span class="hljs-keyword">if</span> (ls[i].reuseport &amp;&amp; ls[i].worker != ngx_worker) &#123;<br>            <span class="hljs-keyword">continue</span>;  <span class="hljs-comment">// 仅跳过，不关闭 socket</span><br>        &#125;<br><span class="hljs-meta">#<span class="hljs-keyword">endif</span></span><br></code></pre></td></tr></table></figure>
 
-<p>nginx-25</p>
-<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-meta">#<span class="hljs-keyword">if</span> (NGX_HAVE_REUSEPORT)</span><br>        <span class="hljs-keyword">if</span> (ls[i].reuseport &amp;&amp; ls[i].worker != ngx_worker) &#123;<br>            ngx_log_debug2(NGX_LOG_DEBUG_CORE, cycle-&gt;<span class="hljs-built_in">log</span>, <span class="hljs-number">0</span>,<br>                           <span class="hljs-string">&quot;closing unused fd:%d listening on %V&quot;</span>,<br>                           ls[i].fd, &amp;ls[i].addr_text);<br><br>            <span class="hljs-keyword">if</span> (ngx_close_socket(ls[i].fd) == <span class="hljs-number">-1</span>) &#123;<br>                ngx_log_error(NGX_LOG_EMERG, cycle-&gt;<span class="hljs-built_in">log</span>, ngx_socket_errno,<br>                              ngx_close_socket_n <span class="hljs-string">&quot; %V failed&quot;</span>,<br>                              &amp;ls[i].addr_text);<br>            &#125;<br><br>            ls[i].fd = (<span class="hljs-type">ngx_socket_t</span>) <span class="hljs-number">-1</span>;<br><br>            <span class="hljs-keyword">continue</span>;<br>        &#125;<br><span class="hljs-meta">#<span class="hljs-keyword">endif</span></span><br></code></pre></td></tr></table></figure>
+<p><strong>Nginx 1.25.3 版本：</strong></p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-meta">#<span class="hljs-keyword">if</span> (NGX_HAVE_REUSEPORT)</span><br>        <span class="hljs-keyword">if</span> (ls[i].reuseport &amp;&amp; ls[i].worker != ngx_worker) &#123;<br>            ngx_log_debug2(NGX_LOG_DEBUG_CORE, cycle-&gt;<span class="hljs-built_in">log</span>, <span class="hljs-number">0</span>,<br>                           <span class="hljs-string">&quot;closing unused fd:%d listening on %V&quot;</span>,<br>                           ls[i].fd, &amp;ls[i].addr_text);<br><br>            <span class="hljs-keyword">if</span> (ngx_close_socket(ls[i].fd) == <span class="hljs-number">-1</span>) &#123;<br>                ngx_log_error(NGX_LOG_EMERG, cycle-&gt;<span class="hljs-built_in">log</span>, ngx_socket_errno,<br>                              ngx_close_socket_n <span class="hljs-string">&quot; %V failed&quot;</span>,<br>                              &amp;ls[i].addr_text);<br>            &#125;<br><br>            ls[i].fd = (<span class="hljs-type">ngx_socket_t</span>) <span class="hljs-number">-1</span>;  <span class="hljs-comment">// 关闭多余的 socket</span><br><br>            <span class="hljs-keyword">continue</span>;<br>        &#125;<br><span class="hljs-meta">#<span class="hljs-keyword">endif</span></span><br></code></pre></td></tr></table></figure>
 
-
-
-<p>问题是master为什么也绑定了4个socket？acceept事件来时，master也会触发？</p>
-<p>事实上不用担心这个问题，因为master根本不会把这些socket放到epoll里面，所以永远不会触发。</p>
-<p>那能不能删除绑定呢？</p>
-<p>nginx的重启依赖于master  fork  work，我在想是不是master的socket不能丢掉，要不然reload的时候，重新创建socket，那之前的一些状态是不是就丢掉了？</p>
-<p>或者停止时，要关掉socket，那么master需要知道当前打开的句柄数，我觉得这个怀疑是最合理的</p>
-<p><strong>有兴趣待查</strong></p>
-<h2 id="4、linux内核源码分析"><a href="#4、linux内核源码分析" class="headerlink" title="4、linux内核源码分析"></a>4、linux内核源码分析</h2><p>现在来看下linux内核是如何实现<code>SO_REUSEPORT</code>，Linux 内核版本 3.9 中引入了这个特性，所以我下载了2个版本的linux内核代码，目前广泛使用的4.19和最新的6.8</p>
-<p>6.8的代码比较清晰直观，直接用ai生成注释😀</p>
+<p><strong>关于 Master 进程绑定多个 socket 的问题：</strong></p>
+<p><strong>问题：</strong> Master 进程为什么也绑定了 4 个 socket？<code>accept</code> 事件到来时，Master 进程也会触发吗？</p>
+<p><strong>答案：</strong> 无需担心。Master 进程不会将这些 socket 添加到 epoll 中，因此永远不会触发 <code>accept</code> 事件。</p>
+<p><strong>能否删除 Master 进程的绑定？</strong></p>
+<p>Nginx 的重启依赖于 Master 进程 fork Worker 进程。Master 进程的 socket 不能丢弃，原因可能是：</p>
+<ul>
+<li><code>reload</code> 时需要重新创建 socket，如果丢弃可能导致之前的状态丢失</li>
+<li>停止时需要关闭 socket，Master 进程需要知道当前打开的句柄数</li>
+</ul>
+<p><strong>此问题有待进一步分析。</strong></p>
+<h2 id="4、Linux-内核源码分析"><a href="#4、Linux-内核源码分析" class="headerlink" title="4、Linux 内核源码分析"></a>4、Linux 内核源码分析</h2><p>本节分析 Linux 内核如何实现 <code>SO_REUSEPORT</code>。该特性在 Linux 内核 3.9 版本中引入。本文基于两个版本的内核代码进行分析：广泛使用的 4.19 版本和最新的 6.8 版本。</p>
+<p><strong>说明：</strong> 6.8 版本的代码结构更清晰直观，以下注释基于该版本。</p>
 <figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-comment">/*</span><br><span class="hljs-comment"> * 在特定的网络环境中，查找监听哈希桶中与给定条件匹配的套接字。</span><br><span class="hljs-comment"> * 此函数在持有RCU读锁时被调用，不会增加套接字的引用计数。</span><br><span class="hljs-comment"> *</span><br><span class="hljs-comment"> * 参数:</span><br><span class="hljs-comment"> *  - net: 网络环境上下文。</span><br><span class="hljs-comment"> *  - ilb2: 指向当前监听哈希桶的指针。</span><br><span class="hljs-comment"> *  - skb: 数据包缓冲区，可用于查找过程中的某些计算。</span><br><span class="hljs-comment"> *  - doff: 数据包中头部的偏移量。</span><br><span class="hljs-comment"> *  - saddr: 源IP地址。</span><br><span class="hljs-comment"> *  - sport: 源端口号。</span><br><span class="hljs-comment"> *  - daddr: 目标IP地址。</span><br><span class="hljs-comment"> *  - hnum: 目标端口号。</span><br><span class="hljs-comment"> *  - dif: 发送接口索引。</span><br><span class="hljs-comment"> *  - sdif: 源发送接口索引。</span><br><span class="hljs-comment"> *</span><br><span class="hljs-comment"> * 返回值:</span><br><span class="hljs-comment"> *  - 查找到的套接字指针，如果没有找到匹配的套接字则返回NULL。</span><br><span class="hljs-comment"> */</span><br><span class="hljs-type">static</span> <span class="hljs-keyword">struct</span> sock *<span class="hljs-title function_">inet_lhash2_lookup</span><span class="hljs-params">(<span class="hljs-keyword">struct</span> net *net,</span><br><span class="hljs-params">				<span class="hljs-keyword">struct</span> inet_listen_hashbucket *ilb2,</span><br><span class="hljs-params">				<span class="hljs-keyword">struct</span> sk_buff *skb, <span class="hljs-type">int</span> doff,</span><br><span class="hljs-params">				<span class="hljs-type">const</span> __be32 saddr, __be16 sport,</span><br><span class="hljs-params">				<span class="hljs-type">const</span> __be32 daddr, <span class="hljs-type">const</span> <span class="hljs-type">unsigned</span> <span class="hljs-type">short</span> hnum,</span><br><span class="hljs-params">				<span class="hljs-type">const</span> <span class="hljs-type">int</span> dif, <span class="hljs-type">const</span> <span class="hljs-type">int</span> sdif)</span><br>&#123;<br>	<span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">sock</span> *<span class="hljs-title">sk</span>, *<span class="hljs-title">result</span> =</span> <span class="hljs-literal">NULL</span>;<br>	<span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">hlist_nulls_node</span> *<span class="hljs-title">node</span>;</span><br>	<span class="hljs-type">int</span> score, hiscore = <span class="hljs-number">0</span>;<br><br>	<span class="hljs-comment">// 遍历哈希桶中的所有套接字，计算每个套接字与目标匹配的得分</span><br>	sk_nulls_for_each_rcu(sk, node, &amp;ilb2-&gt;nulls_head) &#123;<br>		score = compute_score(sk, net, hnum, daddr, dif, sdif);<br>		<span class="hljs-keyword">if</span> (score &gt; hiscore) &#123;<br>			<span class="hljs-comment">// 尝试使用ReusePort特性更新结果套接字，如果成功则直接返回</span><br>			result = inet_lookup_reuseport(net, sk, skb, doff,<br>						       saddr, sport, daddr, hnum, inet_ehashfn);<br>			<span class="hljs-keyword">if</span> (result)<br>				<span class="hljs-keyword">return</span> result;<br><br>			<span class="hljs-comment">// 更新最高得分及对应的套接字</span><br>			result = sk;<br>			hiscore = score;<br>		&#125;<br>	&#125;<br><br>	<span class="hljs-keyword">return</span> result;<br>&#125;<br></code></pre></td></tr></table></figure>
 
 <p>那么重点是2个地方</p>
-<h3 id="4-1、compute-score"><a href="#4-1、compute-score" class="headerlink" title="4.1、compute_score"></a>4.1、compute_score</h3><h4 id="4-1-1、compute-score函数"><a href="#4-1-1、compute-score函数" class="headerlink" title="4.1.1、compute_score函数"></a>4.1.1、<strong>compute_score</strong>函数</h4><p>类似于nginx的轮询算法，算出权重&#x2F;分数，根据 权重&#x2F;分数 分发事件</p>
+<h3 id="4-1、compute-score"><a href="#4-1、compute-score" class="headerlink" title="4.1、compute_score"></a>4.1、compute_score</h3><h4 id="4-1-1、compute-score-函数"><a href="#4-1-1、compute-score-函数" class="headerlink" title="4.1.1、compute_score 函数"></a>4.1.1、compute_score 函数</h4><p><code>compute_score</code> 函数类似于 Nginx 的轮询算法，为每个 socket 计算权重（得分），根据权重&#x2F;分数进行事件分发。</p>
 <figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-comment">/**</span><br><span class="hljs-comment"> * 计算套接字的得分</span><br><span class="hljs-comment"> * </span><br><span class="hljs-comment"> * 本函数用于根据给定的网络套接字、网络、目的网络地址、差异接口和源差异接口信息，计算套接字的得分。</span><br><span class="hljs-comment"> * 得分根据套接字的网络匹配、端口号匹配、IPv4/IPv6类型、绑定的设备接口和接收到的数据包的CPU等条件计算。</span><br><span class="hljs-comment"> * </span><br><span class="hljs-comment"> * @param sk 指向当前套接字的指针。</span><br><span class="hljs-comment"> * @param net 指向当前网络的指针。</span><br><span class="hljs-comment"> * @param hnum 当前套接字的端口号。</span><br><span class="hljs-comment"> * @param daddr 目的网络地址。</span><br><span class="hljs-comment"> * @param dif 当前套接字绑定的差异接口索引。</span><br><span class="hljs-comment"> * @param sdif 源差异接口索引。</span><br><span class="hljs-comment"> * @return 返回套接字的得分，匹配不成功返回-1。</span><br><span class="hljs-comment"> */</span><br><span class="hljs-type">static</span> <span class="hljs-keyword">inline</span> <span class="hljs-type">int</span> <span class="hljs-title function_">compute_score</span><span class="hljs-params">(<span class="hljs-keyword">struct</span> sock *sk, <span class="hljs-keyword">struct</span> net *net,</span><br><span class="hljs-params">				<span class="hljs-type">const</span> <span class="hljs-type">unsigned</span> <span class="hljs-type">short</span> hnum, <span class="hljs-type">const</span> __be32 daddr,</span><br><span class="hljs-params">				<span class="hljs-type">const</span> <span class="hljs-type">int</span> dif, <span class="hljs-type">const</span> <span class="hljs-type">int</span> sdif)</span><br>&#123;<br>	<span class="hljs-type">int</span> score = <span class="hljs-number">-1</span>; <span class="hljs-comment">// 初始化得分为-1分</span><br><br>	<span class="hljs-comment">// 检查套接字所属的网络是否与指定的网络相同，端口号是否匹配，并且套接字不是IPv6 only类型</span><br>	<span class="hljs-keyword">if</span> (net_eq(sock_net(sk), net) &amp;&amp; sk-&gt;sk_num == hnum &amp;&amp;<br>			!ipv6_only_sock(sk)) &#123;<br>		<span class="hljs-comment">// 检查套接字的接收地址是否与目的地址不同</span><br>		<span class="hljs-keyword">if</span> (sk-&gt;sk_rcv_saddr != daddr)<br>			<span class="hljs-keyword">return</span> <span class="hljs-number">-1</span>; <span class="hljs-comment">// 如果不同，直接返回-1</span><br><br>		<span class="hljs-comment">// 检查套接字是否绑定到指定的设备接口，并且设备接口是否匹配差异接口</span><br>		<span class="hljs-keyword">if</span> (!inet_sk_bound_dev_eq(net, sk-&gt;sk_bound_dev_if, dif, sdif))<br>			<span class="hljs-keyword">return</span> <span class="hljs-number">-1</span>; <span class="hljs-comment">// 如果不匹配，返回-1</span><br><br>		<span class="hljs-comment">// 根据套接字是否绑定了设备接口，给予1分或2分的奖励</span><br>		score =  sk-&gt;sk_bound_dev_if ? <span class="hljs-number">2</span> : <span class="hljs-number">1</span>;<br><br>		<span class="hljs-comment">// 如果套接字是IPv4类型，额外加1分</span><br>		<span class="hljs-keyword">if</span> (sk-&gt;sk_family == PF_INET)<br>			score++;<br>		<span class="hljs-comment">// 如果一个socket上次处理它的数据包的CPU与当前CPU相同，额外加1分</span><br>		<span class="hljs-keyword">if</span> (READ_ONCE(sk-&gt;sk_incoming_cpu) == raw_smp_processor_id())<br>			score++;<br>	&#125;<br>	<span class="hljs-keyword">return</span> score; <span class="hljs-comment">// 返回计算出的得分</span><br>&#125;<br></code></pre></td></tr></table></figure>
 
-<p>score是有3个地方会变化，连接会分发给哪个socket，那就是看4个socket哪个点不一样，导致分不一样，也就是4个nginx进程</p>
-<p>1、检查套接字是否绑定到指定的设备接口，并且设备接口是否匹配差异接口</p>
-<p>这个就是网卡，显然对于nginx的4个进程而言，我都是监听所有的网卡，所以这里4个进程的socket得分都是1，也就没有差异</p>
-<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><code class="hljs javascript">server &#123;<br>    listen <span class="hljs-number">38088</span> reuseport;<br>    server_name example.<span class="hljs-property">com</span>;<br><br>    location / &#123;<br>        root /usr/share/nginx/html;<br>        index index.<span class="hljs-property">html</span> index.<span class="hljs-property">htm</span>;<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
-
-<p>2、 如果套接字是IPv4类型，额外加1分<br>这里我只考虑ipv4地址的场景，虽然我也监听了ipv6，因此这里4个进程的socket得分也都加1，没有差异</p>
-<p>3、如果接收到的数据包的CPU与当前CPU相同，额外加1分</p>
-<p>首先先到<strong>sock_reuseport.c</strong>模块，看下<strong>sk_incoming_cpu</strong>的定义</p>
+<p><strong>得分计算逻辑：</strong></p>
+<p><code>score</code> 在 3 个地方会发生变化。连接会分发给哪个 socket，取决于这 4 个 socket 在哪些方面不同，导致得分不同（对应 4 个 Nginx 进程）。</p>
 <ol>
-<li>**<code>sk_incoming_cpu</code>**： 在Linux内核中，<code>sk_incoming_cpu</code>是套接字结构中的一个字段，它记录了最近处理该套接字传入数据的CPU核心。当新的数据包到达时，操作系统会尝试将数据包分配给记录在<code>sk_incoming_cpu</code>中的CPU核心来处理，以此来优化性能。</li>
-</ol>
-<h4 id="4-1-2、CPU和套接字的关系"><a href="#4-1-2、CPU和套接字的关系" class="headerlink" title="4.1.2、CPU和套接字的关系"></a>4.1.2、CPU和套接字的关系</h4><ol>
-<li><strong>数据包到达</strong>： 当一个网络数据包到达时，它首先被网络接口卡（NIC）捕获，并通过中断通知CPU。</li>
-<li><strong>中断处理</strong>： CPU接收到中断后，操作系统的中断处理程序会捕获这个事件，并开始处理数据包。</li>
-<li><strong>套接字绑定</strong>： 操作系统的网络栈会根据数据包的目标地址和端口号，决定将数据包发送到哪个套接字。如果一个套接字已经绑定到了特定的端口，那么所有到达该端口的数据包都会被发送到这个套接字。</li>
-<li><strong>CPU亲和性</strong>： 在多核CPU系统中，操作系统可能会将特定的套接字或网络流量绑定到特定的CPU核心，这种做法称为CPU亲和性（CPU affinity）。这样做的目的是为了提高效率，因为：<ul>
-<li><strong>缓存利用</strong>：如果套接字总是在同一个CPU核心上处理数据，相关的数据结构和状态信息更有可能保留在该核心的CPU缓存中，从而减少内存访问延迟。</li>
-<li><strong>上下文切换</strong>：减少不同CPU核心之间的上下文切换，因为数据包的处理总是在同一个核心上进行。</li>
-<li><strong>负载均衡</strong>：通过将不同的套接字或网络流量分配给不同的CPU核心，可以实现更好的负载均衡。</li>
+<li><p><strong>设备接口绑定检查</strong>：</p>
+<ul>
+<li>检查套接字是否绑定到指定的设备接口，设备接口是否匹配差异接口</li>
+<li>这对应网卡绑定。对于 Nginx 的 4 个进程，如果都监听所有网卡，则 4 个进程的 socket 得分都是 1，无差异</li>
+</ul>
+<figure class="highlight nginx"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><code class="hljs nginx"><span class="hljs-section">server</span> &#123;<br>    <span class="hljs-attribute">listen</span> <span class="hljs-number">38088</span> reuseport;<br>    <span class="hljs-attribute">server_name</span> example.com;<br><br>    <span class="hljs-section">location</span> / &#123;<br>        <span class="hljs-attribute">root</span> /usr/share/nginx/html;<br>        <span class="hljs-attribute">index</span> index.html index.htm;<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
+</li>
+<li><p><strong>IPv4 类型加分</strong>：</p>
+<ul>
+<li>如果套接字是 IPv4 类型，额外加 1 分</li>
+<li>在仅考虑 IPv4 地址的场景下，虽然也监听了 IPv6，但 4 个进程的 socket 得分都加 1，无差异</li>
+</ul>
+</li>
+<li><p><strong>CPU 亲和性加分</strong>：</p>
+<ul>
+<li>如果接收数据包的 CPU 与当前 CPU 相同，额外加 1 分</li>
 </ul>
 </li>
 </ol>
-<p>重要的是第一个网络包达到的时候，那就看看3次握手吧</p>
+<p><strong>sk_incoming_cpu 字段说明：</strong></p>
+<p>在 <code>sock_reuseport.c</code> 模块中，<code>sk_incoming_cpu</code> 是套接字结构中的一个字段，它记录了最近处理该套接字传入数据的 CPU 核心。当新的数据包到达时，操作系统会尝试将数据包分配给记录在 <code>sk_incoming_cpu</code> 中的 CPU 核心来处理，以优化性能。</p>
+<h4 id="4-1-2、CPU-与套接字的关系"><a href="#4-1-2、CPU-与套接字的关系" class="headerlink" title="4.1.2、CPU 与套接字的关系"></a>4.1.2、CPU 与套接字的关系</h4><p><strong>数据包处理流程：</strong></p>
 <ol>
-<li><strong>客户端发送 SYN 包</strong>: 当客户端想要建立与服务端的 TCP 连接时，它会发送一个 SYN（同步）包给服务端，这个包包含客户端的初始序列号。</li>
-<li><strong>服务端接收 SYN 包并创建 socket</strong>: 服务端收到客户端的 SYN 包后，会分配资源并创建一个用于与客户端通信的 socket，并为该连接分配一个序列号，同时为其分配缓冲区等资源。</li>
-<li><strong>服务端发送 SYN-ACK 包</strong>: 接着，服务端会发送一个 SYN-ACK 包给客户端，该包中包含服务端的序列号以及确认号（即客户端序列号加一），表示服务端已经接收到了客户端的 SYN 包，并愿意建立连接。</li>
-<li><strong>客户端接收 SYN-ACK 包并发送 ACK 包</strong>: 客户端收到服务端的 SYN-ACK 包后，会发送一个 ACK（确认）包给服务端，确认服务端的 SYN 包，并携带服务端的序列号加一的确认号。</li>
-<li><strong>连接建立完成</strong>: 当服务端收到客户端发送的 ACK 包后，连接就建立完成了，服务端和客户端之间可以开始进行数据传输。</li>
+<li><strong>数据包到达</strong>：网络数据包到达时，首先被网络接口卡（NIC）捕获，通过中断通知 CPU</li>
+<li><strong>中断处理</strong>：CPU 接收中断后，操作系统的中断处理程序捕获事件并开始处理数据包</li>
+<li><strong>套接字绑定</strong>：网络栈根据数据包的目标地址和端口号，决定将数据包发送到哪个套接字</li>
+<li><strong>CPU 亲和性（CPU Affinity）</strong>：在多核 CPU 系统中，操作系统可能将特定的套接字或网络流量绑定到特定的 CPU 核心，目的包括：<ul>
+<li><strong>缓存利用</strong>：套接字在同一 CPU 核心上处理数据时，相关数据结构和状态信息更可能保留在该核心的 CPU 缓存中，减少内存访问延迟</li>
+<li><strong>减少上下文切换</strong>：数据包处理在同一核心上进行，减少不同 CPU 核心之间的上下文切换</li>
+<li><strong>负载均衡</strong>：将不同的套接字或网络流量分配给不同的 CPU 核心，实现更好的负载均衡</li>
+</ul>
+</li>
 </ol>
-<p><strong>可以看到服务端在接收到客户端的 SYN 包后，会创建一个用于与客户端通信的 socket，这时候就会更新cpu了，也就是sk_incoming_cpu</strong>，下次这个cpu在分配连接的时候，会优先给这个cpu处理过的socket，也就是加一分</p>
+<p><strong>关键时机：TCP 三次握手</strong></p>
+<p>重要的是第一个网络包到达时的处理。让我们看看 TCP 三次握手过程：</p>
+<ol>
+<li><strong>客户端发送 SYN 包</strong>：客户端发送 SYN（同步）包给服务端，包含客户端的初始序列号</li>
+<li><strong>服务端接收 SYN 包并创建 socket</strong>：服务端收到 SYN 包后，分配资源并创建用于与客户端通信的 socket，为该连接分配序列号和缓冲区等资源</li>
+<li><strong>服务端发送 SYN-ACK 包</strong>：服务端发送 SYN-ACK 包给客户端，包含服务端的序列号以及确认号（客户端序列号加一）</li>
+<li><strong>客户端发送 ACK 包</strong>：客户端收到 SYN-ACK 包后，发送 ACK（确认）包给服务端</li>
+<li><strong>连接建立完成</strong>：服务端收到 ACK 包后，连接建立完成，可以开始数据传输</li>
+</ol>
+<p><strong>关键点：</strong> 服务端在接收到客户端的 SYN 包后，会创建用于与客户端通信的 socket，此时会更新 <code>sk_incoming_cpu</code>。下次该 CPU 分配连接时，会优先分配给该 CPU 处理过的 socket，即额外加 1 分。</p>
 <figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-comment">// 如果一个socket上次处理它的数据包的CPU与当前CPU相同，额外加1分</span><br>		<span class="hljs-keyword">if</span> (READ_ONCE(sk-&gt;sk_incoming_cpu) == raw_smp_processor_id())<br>			score++;<br></code></pre></td></tr></table></figure>
 
 <h4 id="4-1-3、更新sk-incoming-cpu"><a href="#4-1-3、更新sk-incoming-cpu" class="headerlink" title="4.1.3、更新sk_incoming_cpu"></a>4.1.3、更新sk_incoming_cpu</h4><p>重要的是<strong>reuseport_update_incoming_cpu</strong>，如何设置和更新sk_incoming_cpu</p>
 <figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-type">void</span> <span class="hljs-title function_">reuseport_update_incoming_cpu</span><span class="hljs-params">(<span class="hljs-keyword">struct</span> sock *sk, <span class="hljs-type">int</span> val)</span><br>&#123;<br>	<span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">sock_reuseport</span> *<span class="hljs-title">reuse</span>;</span><br>	<span class="hljs-type">int</span> old_sk_incoming_cpu;<br><br>	<span class="hljs-comment">// 如果reuseport选项未启用，直接更新sk_incoming_cpu值。</span><br>	<span class="hljs-keyword">if</span> (unlikely(!rcu_access_pointer(sk-&gt;sk_reuseport_cb))) &#123;<br>		WRITE_ONCE(sk-&gt;sk_incoming_cpu, val);<br>		<span class="hljs-keyword">return</span>;<br>	&#125;<br><br>	<span class="hljs-comment">// 加锁以保护对reuseport相关资源的访问。</span><br>	spin_lock_bh(&amp;reuseport_lock);<br><br>	<span class="hljs-comment">// 在加锁保护下更新sk_incoming_cpu值，以避免并发问题。</span><br>	old_sk_incoming_cpu = sk-&gt;sk_incoming_cpu;<br>	WRITE_ONCE(sk-&gt;sk_incoming_cpu, val);                <span class="hljs-comment">//这里做更新</span><br><br>	<span class="hljs-comment">// 安全地访问reuseport_cb，考虑了锁的依赖关系。</span><br>	reuse = rcu_dereference_protected(sk-&gt;sk_reuseport_cb,<br>					  lockdep_is_held(&amp;reuseport_lock));<br><br>	<span class="hljs-comment">// 如果reuseport_cb变为NULL，说明套接字已关闭，直接解锁退出。</span><br>	<span class="hljs-keyword">if</span> (!reuse)<br>		<span class="hljs-keyword">goto</span> out;<br><br>	<span class="hljs-comment">// 根据incoming_cpu值的正负变化，调整计数。</span><br>	<span class="hljs-keyword">if</span> (old_sk_incoming_cpu &lt; <span class="hljs-number">0</span> &amp;&amp; val &gt;= <span class="hljs-number">0</span>)<br>		__reuseport_get_incoming_cpu(reuse);<br>	<span class="hljs-keyword">else</span> <span class="hljs-keyword">if</span> (old_sk_incoming_cpu &gt;= <span class="hljs-number">0</span> &amp;&amp; val &lt; <span class="hljs-number">0</span>)<br>		__reuseport_put_incoming_cpu(reuse);<br><br>out:<br>	<span class="hljs-comment">// 释放锁。</span><br>	spin_unlock_bh(&amp;reuseport_lock);<br>&#125;<br></code></pre></td></tr></table></figure>
 
-<p>理解了sk_incoming_cpu，其实就可以理解得分,但是事实上开启了SO_REUSEPORT后，选择的函数是<strong>inet_lookup_reuseport</strong>。</p>
+<p>理解了 <code>sk_incoming_cpu</code> 后，就可以理解得分计算机制。但事实上，开启 <code>SO_REUSEPORT</code> 后，socket 选择的核心函数是 <code>inet_lookup_reuseport</code>。</p>
 <h3 id="4-2、inet-lookup-reuseport"><a href="#4-2、inet-lookup-reuseport" class="headerlink" title="4.2、inet_lookup_reuseport"></a>4.2、inet_lookup_reuseport</h3><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-comment">// 尝试使用ReusePort特性更新结果套接字，如果成功则直接返回</span><br>			result = inet_lookup_reuseport(net, sk, skb, doff,<br>						       saddr, sport, daddr, hnum, inet_ehashfn);<br>			<span class="hljs-keyword">if</span> (result)<br>				<span class="hljs-keyword">return</span> result;<br></code></pre></td></tr></table></figure>
 
-<p>得分完，如果找到了socket，那就直接返回了，让我们看下<strong>inet_lookup_reuseport</strong>做了什么</p>
+<p>计算完得分后，如果找到了匹配的 socket，则直接返回。接下来分析 <code>inet_lookup_reuseport</code> 的实现。</p>
 <h4 id="4-2-1、inet-lookup-reuseport源码"><a href="#4-2-1、inet-lookup-reuseport源码" class="headerlink" title="4.2.1、inet_lookup_reuseport源码"></a>4.2.1、inet_lookup_reuseport源码</h4><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-keyword">struct</span> sock *<span class="hljs-title function_">inet_lookup_reuseport</span><span class="hljs-params">(<span class="hljs-keyword">struct</span> net *net, <span class="hljs-keyword">struct</span> sock *sk,</span><br><span class="hljs-params">				   <span class="hljs-keyword">struct</span> sk_buff *skb, <span class="hljs-type">int</span> doff,</span><br><span class="hljs-params">				   __be32 saddr, __be16 sport,</span><br><span class="hljs-params">				   __be32 daddr, <span class="hljs-type">unsigned</span> <span class="hljs-type">short</span> hnum,</span><br><span class="hljs-params">				   <span class="hljs-type">inet_ehashfn_t</span> *ehashfn)</span><br>&#123;<br>	<span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">sock</span> *<span class="hljs-title">reuse_sk</span> =</span> <span class="hljs-literal">NULL</span>; <span class="hljs-comment">/* 默认返回NULL，表示没有找到可重用的套接字 */</span><br>	u32 phash;<br><br>	<span class="hljs-comment">/* 如果当前套接字允许端口复用，则计算哈希值并尝试选择一个可重用的套接字 */</span><br>	<span class="hljs-keyword">if</span> (sk-&gt;sk_reuseport) &#123;<br>		<span class="hljs-comment">/* 根据提供的函数指针调用相应的哈希函数计算端口哈希值 */</span><br>		phash = INDIRECT_CALL_2(ehashfn, udp_ehashfn, inet_ehashfn,<br>					net, daddr, hnum, saddr, sport);<br>		<span class="hljs-comment">/* 使用计算得到的哈希值从哈希表中选择一个合适的套接字 */</span><br>		reuse_sk = reuseport_select_sock(sk, phash, skb, doff);<br>	&#125;<br>	<span class="hljs-keyword">return</span> reuse_sk;<br>&#125;<br></code></pre></td></tr></table></figure>
 
 <p>最后是调用了<strong>reuseport_select_sock</strong></p>
@@ -488,38 +570,58 @@
 <p>实际的选择</p>
 <figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-comment">/**</span><br><span class="hljs-comment"> * reuseport_select_sock_by_hash - 根据哈希值选择一个合适的socket</span><br><span class="hljs-comment"> * @reuse: 指向reuseport结构的指针，包含要搜索的socket数组</span><br><span class="hljs-comment"> * @hash: 用于选择socket的哈希值</span><br><span class="hljs-comment"> * @num_socks: socket数组中的socket数量</span><br><span class="hljs-comment"> * </span><br><span class="hljs-comment"> * 描述:</span><br><span class="hljs-comment"> * 此函数用于在给定的socket数组中，根据特定的哈希值选择一个处于TCP_ESTABLISHED状态的socket。</span><br><span class="hljs-comment"> * 如果没有处于该状态的socket，则返回第一个找到的非TCP_ESTABLISHED状态的socket。</span><br><span class="hljs-comment"> * </span><br><span class="hljs-comment"> * 返回值:</span><br><span class="hljs-comment"> * 返回一个指向选择的socket的指针。如果没有找到合适的socket，则返回NULL。</span><br><span class="hljs-comment"> */</span><br><span class="hljs-type">static</span> <span class="hljs-keyword">struct</span> sock *<span class="hljs-title function_">reuseport_select_sock_by_hash</span><span class="hljs-params">(<span class="hljs-keyword">struct</span> sock_reuseport *reuse,</span><br><span class="hljs-params">						  u32 hash, u16 num_socks)</span><br>&#123;<br>	<span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">sock</span> *<span class="hljs-title">first_valid_sk</span> =</span> <span class="hljs-literal">NULL</span>; <span class="hljs-comment">/* 用于存储第一个找到的有效（非TCP_ESTABLISHED）socket */</span><br>	<span class="hljs-type">int</span> i, j;<br><br>	i = j = reciprocal_scale(hash, num_socks); <span class="hljs-comment">/* 使用哈希值和socket数量计算起始索引 */</span><br>	<span class="hljs-keyword">do</span> &#123;<br>		<span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">sock</span> *<span class="hljs-title">sk</span> =</span> reuse-&gt;socks[i]; <span class="hljs-comment">/* 获取当前索引位置的socket */</span><br><br>		<span class="hljs-comment">/* 如果socket状态不是TCP_ESTABLISHED，则进行进一步判断 */</span><br>		<span class="hljs-keyword">if</span> (sk-&gt;sk_state != TCP_ESTABLISHED) &#123;<br>			<span class="hljs-comment">/* 如果没有设置incoming_cpu，表示没有活动的连接请求，则返回当前socket */</span><br>			<span class="hljs-keyword">if</span> (!READ_ONCE(reuse-&gt;incoming_cpu))<br>				<span class="hljs-keyword">return</span> sk;<br><br>			<span class="hljs-comment">/* 如果当前socket的incoming_cpu与当前CPU一致，表示有活动的连接请求，则返回当前socket */</span><br>			<span class="hljs-keyword">if</span> (READ_ONCE(sk-&gt;sk_incoming_cpu) == raw_smp_processor_id())<br>				<span class="hljs-keyword">return</span> sk;<br><br>			<span class="hljs-comment">/* 如果还没有找到第一个有效的socket，则将当前socket设置为第一个有效socket */</span><br>			<span class="hljs-keyword">if</span> (!first_valid_sk)<br>				first_valid_sk = sk;<br>		&#125;<br><br>		i++; <span class="hljs-comment">/* 移动到下一个socket */</span><br>		<span class="hljs-keyword">if</span> (i &gt;= num_socks)<br>			i = <span class="hljs-number">0</span>; <span class="hljs-comment">/* 如果超出范围，则从头开始 */</span><br>	&#125; <span class="hljs-keyword">while</span> (i != j); <span class="hljs-comment">/* 如果当前索引与起始索引不同，继续循环 */</span><br><br>	<span class="hljs-keyword">return</span> first_valid_sk; <span class="hljs-comment">/* 返回第一个有效的socket，如果没有找到则返回NULL */</span><br>&#125;<br></code></pre></td></tr></table></figure>
 
-<p>reuse-&gt;socks[i]，是一个指针数组，它存储了一系列 <code>struct sock</code> 指针。每个 <code>struct sock</code> 指针代表一个网络套接字，这些套接字都绑定到了同一个端口上，并且启用了 <code>SO_REUSEPORT</code> 特性。</p>
-<p><code>num_socks;</code> 字段表示 <code>socks</code> 数组中当前有效的套接字（<code>struct sock</code> 指针）的数量。这个字段用于跟踪监听同一个端口并启用了 <code>SO_REUSEPORT</code> 特性的套接字数量。</p>
-<h4 id="4-2-2、总结"><a href="#4-2-2、总结" class="headerlink" title="4.2.2、总结"></a>4.2.2、总结</h4><ol>
-<li>根据<code>net</code>、<code>daddr</code>、<code>hnum</code>、<code>saddr</code> 和 <code>sport</code> 这几个参数计算一个hash值</li>
-<li>使用哈希值和socket数量计算<strong>reuse-&gt;socks</strong>数组的起始索引</li>
-<li>判断当前socket是否有连接请求在处理，如果没有，说明这个监听socket目前空闲，所以选择这个</li>
-<li>如果上面没有返回，再判断<strong>sk_incoming_cpu</strong>，如果这个socket的上一次数据是当前cpu处理的，那么就选这个socket</li>
-<li>如果这个socket不满足条件，那么作为保底，将这个socket设置为保底选择</li>
-<li>循环3-5步骤</li>
-<li>遍历完<strong>reuse-&gt;socks</strong>数组中的socket后，返回第一个有效的socket，如果没有找到则返回NULL</li>
+<p><strong>数据结构说明：</strong></p>
+<ul>
+<li><code>reuse-&gt;socks[i]</code>：一个指针数组，存储一系列 <code>struct sock</code> 指针。每个指针代表一个网络套接字，这些套接字都绑定到同一端口并启用了 <code>SO_REUSEPORT</code> 特性</li>
+<li><code>num_socks</code>：表示 <code>socks</code> 数组中当前有效的套接字（<code>struct sock</code> 指针）数量，用于跟踪监听同一端口并启用 <code>SO_REUSEPORT</code> 特性的套接字数量</li>
+</ul>
+<h4 id="4-2-2、选择算法总结"><a href="#4-2-2、选择算法总结" class="headerlink" title="4.2.2、选择算法总结"></a>4.2.2、选择算法总结</h4><p><code>reuseport_select_sock_by_hash</code> 函数的执行流程：</p>
+<ol>
+<li><strong>计算哈希值</strong>：根据 <code>net</code>、<code>daddr</code>、<code>hnum</code>、<code>saddr</code> 和 <code>sport</code> 参数计算哈希值</li>
+<li><strong>计算起始索引</strong>：使用哈希值和 socket 数量计算 <code>reuse-&gt;socks</code> 数组的起始索引</li>
+<li><strong>检查空闲状态</strong>：判断当前 socket 是否有连接请求在处理。如果没有，说明该监听 socket 目前空闲，选择该 socket</li>
+<li><strong>检查 CPU 亲和性</strong>：如果步骤 3 未返回，判断 <code>sk_incoming_cpu</code>。如果该 socket 上一次数据是当前 CPU 处理的，则选择该 socket</li>
+<li><strong>保底选择</strong>：如果该 socket 不满足条件，将其设置为保底选择</li>
+<li><strong>循环处理</strong>：循环执行步骤 3-5</li>
+<li><strong>返回结果</strong>：遍历完 <code>reuse-&gt;socks</code> 数组中的所有 socket 后，返回第一个有效的 socket；如果未找到，返回 NULL</li>
 </ol>
-<h2 id="5、总结"><a href="#5、总结" class="headerlink" title="5、总结"></a>5、总结</h2><h3 id="5-1、原理总结"><a href="#5-1、原理总结" class="headerlink" title="5.1、原理总结"></a>5.1、原理总结</h3><p>对于内核而言，整个过程处于传输层，它不需要关注应用层，因此对于连接的分配，会最大化的优化处理速度，只考虑传输层的属性。主要点在于优先使用空闲的监听socket，并且使监听socket尽量在一个cpu处理，这样有利于cpu缓存的利用。</p>
-<p>因此当开启<code>SO_REUSEPORT</code> 特性后，一个socket是否能拿到连接，取决于3个点</p>
-<p>1、根据哈希值和socket数量计算<strong>reuse-&gt;socks</strong>数组的起始值是多少，第一个当然有优先优势</p>
-<p>2、取决于当前socket是否处于空闲</p>
-<p>3、上一次处理这个socket的数据的cpu，是否是当前cpu</p>
-<h3 id="5-2、均匀吗？"><a href="#5-2、均匀吗？" class="headerlink" title="5.2、均匀吗？"></a>5.2、均匀吗？</h3><h4 id="5-1-1、不会绝对均匀"><a href="#5-1-1、不会绝对均匀" class="headerlink" title="5.1.1、不会绝对均匀"></a>5.1.1、不会绝对均匀</h4><p>当同一个客户端和同一个nginx建立64条长连接时，上面1中的<strong>哈希值和socket数量</strong>是一样的，所以<strong>数组的起始下标</strong>是一样的。</p>
-<p>那么连接分配给哪个进程就取决于2、3。当64条连接<strong>绝对同时</strong>来临时，且nginx的socket此时并没有其它连接来时，也就是处于空闲时，那么第2步会保证每个socket拿到1条连接，但是问题是绝对同时？还要保证没有连接到这些socket，这是不可能的。</p>
-<p>因为连接总会有先后时间，即数据包会先后到，第一个socket处理完第一个连接后，它就又处于空闲了，所以它还会拿到连接，没办法它有优势，起始值算的。</p>
-<h4 id="5-1-2、会发生极限场景吗"><a href="#5-1-2、会发生极限场景吗" class="headerlink" title="5.1.2、会发生极限场景吗"></a>5.1.2、会发生极限场景吗</h4><p>nginx开启64个进程，只有几个进程能拿到连接？</p>
-<p><strong>可能性几乎为0</strong>，因为连接虽然有先后，但是时间差会非常小，所以都会在2中分发。除非客户端隔一段时间发一个请求，事实上客户端如果建立连接会”同时”发的，但是因为有时间差，前面的socket会拿到更多的连接</p>
-<p>同时当连接数量级足够大，那么会近似均匀，但是当只有几十个连接时，也会是近似均匀，但是看着差距会比较大，毕竟有的socket拿不到连接，也就是nginx的进程拿不到连接</p>
-<h4 id="5-1-3、如果想在应用层保证连接数均匀可以实现吗"><a href="#5-1-3、如果想在应用层保证连接数均匀可以实现吗" class="headerlink" title="5.1.3、如果想在应用层保证连接数均匀可以实现吗"></a>5.1.3、如果想在应用层保证连接数均匀可以实现吗</h4><p>这是一个非常意思的想法，我们从2点考虑，可行性与性能。</p>
-<p>1、可行性</p>
-<p>​    最直接的想法，应用层怎么判断进程现在拥有多少个长连接，以及长连接就是T2&#x2F;T3，而不是websocket这种长连接？</p>
-<p>2、性能</p>
-<p>如果每次建立连接都需要判断是否是长连接，且均匀分发到各个进程，性能会断崖式下降</p>
-<p><strong>结论：所以不可能做的到，也没有意义。</strong></p>
-<h4 id="5-1-4、目前这种情况，有必要做连接的均匀分发吗"><a href="#5-1-4、目前这种情况，有必要做连接的均匀分发吗" class="headerlink" title="5.1.4、目前这种情况，有必要做连接的均匀分发吗"></a>5.1.4、目前这种情况，有必要做连接的均匀分发吗</h4><p>​     依据上次实际的统计来看，64个进程会有39个进程拿到连接，也就是39个进程会工作。</p>
-<p>所以cpu只会利用39个？</p>
-<p>根本不是的，因为work进程使用cpu是会切换的，这也是压测到极限，cpu的利用率会超过100%，有些java服务甚至会达到几千。因此cpu的利用率，nginx是最大化的，只不过存在cpu切换的损耗，基本可以忽略不计。</p>
-<p>​     所以，当压力到达nginx极限时，不同的进程的cpu利用率会有不同，但是一定会利用到所有的cpu，也就是可以发挥机器的最大性能。</p>
+<h2 id="5、总结"><a href="#5、总结" class="headerlink" title="5、总结"></a>5、总结</h2><h3 id="5-1、原理总结"><a href="#5-1、原理总结" class="headerlink" title="5.1、原理总结"></a>5.1、原理总结</h3><p>对于内核而言，整个连接分配过程处于传输层，无需关注应用层。内核会最大化优化处理速度，仅考虑传输层属性。主要优化点包括：</p>
+<ul>
+<li><strong>优先使用空闲的监听 socket</strong></li>
+<li><strong>使监听 socket 尽量在同一 CPU 处理</strong>，有利于 CPU 缓存的利用</li>
+</ul>
+<p><strong>开启 <code>SO_REUSEPORT</code> 后，socket 能否获得连接取决于 3 个因素：</strong></p>
+<ol>
+<li><strong>哈希起始位置</strong>：根据哈希值和 socket 数量计算 <code>reuse-&gt;socks</code> 数组的起始索引，起始位置的 socket 具有优先优势</li>
+<li><strong>空闲状态</strong>：当前 socket 是否处于空闲状态</li>
+<li><strong>CPU 亲和性</strong>：上一次处理该 socket 数据的 CPU 是否是当前 CPU</li>
+</ol>
+<h3 id="5-2、连接分配是否均匀？"><a href="#5-2、连接分配是否均匀？" class="headerlink" title="5.2、连接分配是否均匀？"></a>5.2、连接分配是否均匀？</h3><h4 id="5-2-1、不会绝对均匀"><a href="#5-2-1、不会绝对均匀" class="headerlink" title="5.2.1、不会绝对均匀"></a>5.2.1、不会绝对均匀</h4><p>当同一个客户端与同一个 Nginx 建立 64 条长连接时，上述因素 1 中的<strong>哈希值和 socket 数量</strong>是相同的，因此<strong>数组的起始索引</strong>是相同的。</p>
+<p>连接分配给哪个进程取决于因素 2 和 3。当 64 条连接<strong>绝对同时</strong>到达，且 Nginx 的 socket 此时没有其他连接（处于空闲状态）时，因素 2 会保证每个 socket 拿到 1 条连接。但问题是：<strong>绝对同时？还要保证没有连接到这些 socket？这是不可能的。</strong></p>
+<p>因为连接总会有先后顺序，即数据包会先后到达。第一个 socket 处理完第一个连接后，又处于空闲状态，因此它还会继续获得连接。这是因为它具有优势（起始索引计算的结果）。</p>
+<h4 id="5-2-2、会发生极限场景吗？"><a href="#5-2-2、会发生极限场景吗？" class="headerlink" title="5.2.2、会发生极限场景吗？"></a>5.2.2、会发生极限场景吗？</h4><p><strong>问题：</strong> Nginx 开启 64 个进程，是否会出现只有几个进程能拿到连接的情况？</p>
+<p><strong>答案：可能性几乎为 0。</strong> 因为连接虽然有先后，但时间差非常小，所以都会在因素 2 中分发。除非客户端每隔一段时间发送一个请求。实际上，客户端建立连接时会”同时”发送，但由于存在时间差，前面的 socket 会拿到更多的连接。</p>
+<p><strong>补充说明：</strong> 当连接数量级足够大时，分配会近似均匀。但当只有几十个连接时，虽然也是近似均匀，但差距看起来会比较大，毕竟有些 socket 拿不到连接，即有些 Nginx 进程拿不到连接。</p>
+<h4 id="5-2-3、应用层保证连接数均匀的可行性"><a href="#5-2-3、应用层保证连接数均匀的可行性" class="headerlink" title="5.2.3、应用层保证连接数均匀的可行性"></a>5.2.3、应用层保证连接数均匀的可行性</h4><p><strong>问题：</strong> 如果想在应用层保证连接数均匀，可以实现吗？</p>
+<p><strong>分析：</strong> 从可行性和性能两个角度考虑：</p>
+<ol>
+<li><p><strong>可行性</strong>：</p>
+<ul>
+<li>应用层如何判断进程当前拥有多少个长连接？</li>
+<li>如何区分真正的长连接（TCP 层）和 WebSocket 这种应用层长连接？</li>
+</ul>
+</li>
+<li><p><strong>性能</strong>：</p>
+<ul>
+<li>如果每次建立连接都需要判断是否是长连接，并均匀分发到各个进程，性能会断崖式下降</li>
+</ul>
+</li>
+</ol>
+<p><strong>结论：</strong> 无法实现，也没有意义。</p>
+<h4 id="5-2-4、是否需要做连接的均匀分发？"><a href="#5-2-4、是否需要做连接的均匀分发？" class="headerlink" title="5.2.4、是否需要做连接的均匀分发？"></a>5.2.4、是否需要做连接的均匀分发？</h4><p><strong>实际情况：</strong> 根据实际统计，64 个进程中有 39 个进程拿到连接，即 39 个进程在工作。</p>
+<p><strong>问题：</strong> CPU 只会利用 39 个核心吗？</p>
+<p><strong>答案：不是的。</strong> 因为 Worker 进程使用 CPU 时会切换。这也是压测到极限时，CPU 利用率会超过 100%（某些 Java 服务甚至会达到几千）。因此，Nginx 的 CPU 利用率是最大化的，只不过存在 CPU 切换的损耗，基本可以忽略不计。</p>
+<p><strong>结论：</strong> 当压力达到 Nginx 极限时，不同进程的 CPU 利用率会有差异，但一定会利用到所有 CPU，即可以发挥机器的最大性能。</p>
 
                 
               </div>

@@ -306,7 +306,7 @@
       
       <a class="index-excerpt index-excerpt__noimg" href="/2025/06/08/%E7%83%AD%E6%9B%B4%E6%96%B0-%E5%8A%A8%E6%80%81%E8%B7%AF%E7%94%B1/" target="_self">
         <div>
-          前言在传统微服务体系中，热更新是一个非常重要的功能，可以在网关运行，不重启的情况下，动态修改配置并生效。我们可以把路由分为三种模式  nginx&#x2F;openresty支持的静态路由，本质是修改nginx.conf，重启nginx生效 服务自动发现 热更新  热更新最重要的是可以动态的更新upstream，Tengine提供的第三方模块nginxngx_http_dyups_module允许
+          前言在传统微服务体系中，热更新是一个非常重要的功能，可以在网关运行，不重启的情况下，动态修改配置并生效。我们可以把路由分为三种模式  nginx&#x2F;openresty支持的静态路由，本质是修改nginx.conf，重启nginx生效 服务自动发现 热更新  热更新最重要的是可以动态的更新 upstream，Tengine 提供的第三方模块 ngx_http_dyups_module 允许在
         </div>
       </a>
 
@@ -326,7 +326,7 @@
             
               <a href="/tags/nginx/">#nginx</a>
             
-              <a href="/tags/work/">#work</a>
+              <a href="/tags/worker/">#worker</a>
             
               <a href="/tags/zookeeper/">#zookeeper</a>
             
@@ -525,14 +525,14 @@
       <h2 class="index-header">
         
         <a href="/2025/04/19/%E6%9C%8D%E5%8A%A1%E8%87%AA%E5%8A%A8%E5%8F%91%E7%8E%B0/" target="_self">
-          服务自动发现
+          Nginx 服务自动发现与配置热更新架构
         </a>
       </h2>
 
       
       <a class="index-excerpt index-excerpt__noimg" href="/2025/04/19/%E6%9C%8D%E5%8A%A1%E8%87%AA%E5%8A%A8%E5%8F%91%E7%8E%B0/" target="_self">
         <div>
-          Nginx 采用 master–worker 多进程模型，其中 master 进程负责管理和信号交互，worker 进程执行网络 I&#x2F;O、定时器和延迟队列事件循环 。 1、nginx的原理1.1、配置解析与端口初始化1 Master 进程：解析配置与打开监听端口  配置解析：在 main() 中，master 进程首先调用 ngx_init_cycle()，该函数基于 ngx_conf_
+          Nginx 服务自动发现与配置热更新架构Nginx 采用 master-worker 多进程模型，其中：  Master 进程：负责配置解析、进程管理和信号交互 Worker 进程：执行网络 I&#x2F;O、定时器和延迟队列的事件循环  本文深入分析 Nginx 如何与 ZooKeeper 集成实现服务自动发现和配置热更新，以及如何通过引入 Manage 进程优化架构设计。  1、Nginx 多
         </div>
       </a>
 
@@ -552,9 +552,13 @@
             
               <a href="/tags/nginx/">#nginx</a>
             
-              <a href="/tags/work/">#work</a>
+              <a href="/tags/worker/">#worker</a>
             
               <a href="/tags/zookeeper/">#zookeeper</a>
+            
+              <a href="/tags/%E9%85%8D%E7%BD%AE%E7%AE%A1%E7%90%86/">#配置管理</a>
+            
+              <a href="/tags/%E7%83%AD%E6%9B%B4%E6%96%B0/">#热更新</a>
             
           </div>
         
@@ -576,7 +580,7 @@
       
       <a class="index-excerpt index-excerpt__noimg" href="/2025/02/26/chrome-netERR_CONTENT_LENGTH_MISMATCH/" target="_self">
         <div>
-          【现象】 最近有用户反馈，在使用 浏览器 访问系统时，部分静态资源请求出现 net::ERR_CONTENT_LENGTH_MISMATCH 错误。具体现象：  页面请求 多个静态资源（HTML&#x2F;JS&#x2F;CSS），但部分请求随机失败。 每次刷新，失败的资源 不固定，但问题持续发生。  【排查】 介入排查后，发现几个问题  使用 Chrome 131 及以下版本、Edge、Fire
+          问题现象最近有用户反馈，在使用浏览器访问系统时，部分静态资源请求出现 net::ERR_CONTENT_LENGTH_MISMATCH 错误。具体表现如下：  页面请求多个静态资源（HTML&#x2F;JS&#x2F;CSS），但部分请求随机失败 每次刷新页面时，失败的资源不固定，但问题持续发生  问题排查介入排查后，发现以下关键信息：  使用 Chrome 131 及以下版本、Edge、Fire
         </div>
       </a>
 
@@ -618,7 +622,7 @@
       
       <a class="index-excerpt index-excerpt__noimg" href="/2025/02/12/linux%E5%AF%B9%E4%BA%8Eio_uring%E7%9A%84%E5%BA%94%E7%94%A8/" target="_self">
         <div>
-          1、内核支持io_uring最近发现linux新增了2个补丁，关于支持io_uring，事实上linux在5.1版本就引入了io_uring，有点好奇这次的补丁是实现什么功能 https://git.kernel.org/pub/scm/linux/kernel/git/netdev/net-next.git/commit/?id=71f0dd5a3293d75d26d405ffbaedfdda4
+          1、内核支持 io_uring最近发现 Linux 新增了 2 个补丁，关于支持 io_uring。事实上 Linux 在 5.1 版本就引入了 io_uring，有点好奇这次的补丁是实现什么功能。 相关补丁链接：  https://git.kernel.org/pub/scm/linux/kernel/git/netdev/net-next.git/commit/?id=71f0dd5a3293
         </div>
       </a>
 
@@ -655,14 +659,14 @@
       <h2 class="index-header">
         
         <a href="/2024/11/29/%E7%BD%91%E7%BB%9CIO/" target="_self">
-          网络部分-epoll分析
+          网络 IO 与 epoll 深入分析
         </a>
       </h2>
 
       
       <a class="index-excerpt index-excerpt__noimg" href="/2024/11/29/%E7%BD%91%E7%BB%9CIO/" target="_self">
         <div>
-          1、内核如何接收数据不同主机通过网卡进行数据的交互，网卡将电磁波转换为模拟信号，再转换为数字信号，再由OSI模型传到应用层，变成人可以识别的数据。信号转换属于通信相关的知识，所以从接收到数字信号开始分析数据的流转。  首先当数据帧从网线到达网卡上的时候，第一站是网卡的接收队列。网卡在分配给自己的RingBuffer中寻找可用的内存位置，找到后DMA引擎会把数据DMA到网卡之前关联的内存里，这个时候
+          网络 IO 与 epoll 深入分析本文深入分析 Linux 内核网络数据接收流程、socket 机制、惊群效应及其解决方案，以及 epoll 的实现原理和 Nginx 的 IO 复用实践。  1、内核如何接收网络数据不同主机通过网卡进行数据交互。网卡将电磁波转换为模拟信号，再转换为数字信号，最后由 OSI 模型逐层传递到应用层，变成应用程序可以处理的数据。本节从接收到数字信号开始分析数据的流转过
         </div>
       </a>
 
@@ -685,6 +689,8 @@
               <a href="/tags/epoll/">#epoll</a>
             
               <a href="/tags/socket/">#socket</a>
+            
+              <a href="/tags/%E7%BD%91%E7%BB%9C%E7%BC%96%E7%A8%8B/">#网络编程</a>
             
           </div>
         

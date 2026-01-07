@@ -16,18 +16,18 @@
   <meta name="author" content="张三疯">
   <meta name="keywords" content="nginx,openresty,网关,HTTP/HTTPS,Websocket">
   
-    <meta name="description" content="前言在传统微服务体系中，热更新是一个非常重要的功能，可以在网关运行，不重启的情况下，动态修改配置并生效。我们可以把路由分为三种模式  nginx&#x2F;openresty支持的静态路由，本质是修改nginx.conf，重启nginx生效 服务自动发现 热更新  热更新最重要的是可以动态的更新upstream，Tengine提供的第三方模块nginxngx_http_dyups_module允许">
+    <meta name="description" content="前言在传统微服务体系中，热更新是一个非常重要的功能，可以在网关运行，不重启的情况下，动态修改配置并生效。我们可以把路由分为三种模式  nginx&#x2F;openresty支持的静态路由，本质是修改nginx.conf，重启nginx生效 服务自动发现 热更新  热更新最重要的是可以动态的更新 upstream，Tengine 提供的第三方模块 ngx_http_dyups_module 允许在">
 <meta property="og:type" content="article">
 <meta property="og:title" content="热更新-动态路由">
 <meta property="og:url" content="https://zjfans.github.io/2025/06/08/%E7%83%AD%E6%9B%B4%E6%96%B0-%E5%8A%A8%E6%80%81%E8%B7%AF%E7%94%B1/index.html">
 <meta property="og:site_name" content="ZJfans Blog">
-<meta property="og:description" content="前言在传统微服务体系中，热更新是一个非常重要的功能，可以在网关运行，不重启的情况下，动态修改配置并生效。我们可以把路由分为三种模式  nginx&#x2F;openresty支持的静态路由，本质是修改nginx.conf，重启nginx生效 服务自动发现 热更新  热更新最重要的是可以动态的更新upstream，Tengine提供的第三方模块nginxngx_http_dyups_module允许">
+<meta property="og:description" content="前言在传统微服务体系中，热更新是一个非常重要的功能，可以在网关运行，不重启的情况下，动态修改配置并生效。我们可以把路由分为三种模式  nginx&#x2F;openresty支持的静态路由，本质是修改nginx.conf，重启nginx生效 服务自动发现 热更新  热更新最重要的是可以动态的更新 upstream，Tengine 提供的第三方模块 ngx_http_dyups_module 允许在">
 <meta property="og:locale" content="zh_CN">
 <meta property="article:published_time" content="2025-06-08T08:40:06.034Z">
-<meta property="article:modified_time" content="2025-06-08T09:56:16.227Z">
+<meta property="article:modified_time" content="2026-01-07T07:30:23.351Z">
 <meta property="article:author" content="张三疯">
 <meta property="article:tag" content="nginx">
-<meta property="article:tag" content="work">
+<meta property="article:tag" content="worker">
 <meta property="article:tag" content="zookeeper">
 <meta property="article:tag" content="dyups">
 <meta property="article:tag" content="manage">
@@ -253,7 +253,7 @@
       <span class="post-meta mr-2">
         <i class="iconfont icon-chart"></i>
         
-          6.7k 字
+          7k 字
         
       </span>
     
@@ -264,7 +264,7 @@
         
         
         
-          57 分钟
+          59 分钟
         
       </span>
     
@@ -312,12 +312,39 @@
 <li>服务自动发现</li>
 <li>热更新</li>
 </ol>
-<p>热更新最重要的是可以动态的更新upstream，Tengine提供的第三方模块<code>nginxngx_http_dyups_module</code>允许在运行时通过 HTTP 接口添加、删除或修改 upstream 配置，无需重启 Nginx。</p>
+<p>热更新最重要的是可以动态的更新 upstream，Tengine 提供的第三方模块 <code>ngx_http_dyups_module</code> 允许在运行时通过 HTTP 接口添加、删除或修改 upstream 配置，无需重启 Nginx。</p>
 <h2 id="1、ngx-http-dyups-module模块"><a href="#1、ngx-http-dyups-module模块" class="headerlink" title="1、ngx_http_dyups_module模块"></a>1、ngx_http_dyups_module模块</h2><ul>
 <li><code>ngx_http_dyups_module</code> 最初由阿里巴巴基于 Tengine 分支开发，目标是在不重启或重载 Nginx&#x2F;Tengine 进程的情况下，实现对 <code>upstream</code> 集群的动态管理（增删、更新、查询）。</li>
 <li>传统 Nginx 要更新 <code>upstream</code> 配置，需要修改配置文件后执行 <code>nginx -s reload</code>，过程中会有瞬间连接中断风险，而 dyups 模块则提供了一个 “在线” 接口，能够在 HTTP 运行时通过 RESTful 或 Lua API 对 <code>upstream</code> 进行增删改查</li>
 </ul>
-<h3 id="1-1、主要数据结构与共享内存设计"><a href="#1-1、主要数据结构与共享内存设计" class="headerlink" title="1.1、主要数据结构与共享内存设计"></a>1.1、主要数据结构与共享内存设计</h3><p>​	<strong>全局上下文：<code>ngx_dyups_global_ctx</code></strong></p>
+<h3 id="架构图"><a href="#架构图" class="headerlink" title="架构图"></a>架构图</h3><pre><code class=" mermaid">graph TB
+    Client[客户端&lt;br/&gt;HTTP请求]
+    Worker1[Worker进程1]
+    Worker2[Worker进程2]
+    WorkerN[Worker进程N]
+    
+    Shm[共享内存&lt;br/&gt;dyups_shm_zone]
+    MsgQueue[消息队列&lt;br/&gt;msg_queue]
+    Status[Worker状态数组&lt;br/&gt;status[]]
+    
+    Shm --&gt; MsgQueue
+    Shm --&gt; Status
+    
+    Client --&gt;|更新upstream| Worker1
+    Worker1 --&gt;|写入消息| MsgQueue
+    Worker1 --&gt;|更新本地内存| Worker1
+    
+    MsgQueue --&gt;|定时器读取| Worker2
+    MsgQueue --&gt;|定时器读取| WorkerN
+    
+    Worker2 --&gt;|同步更新| Worker2
+    WorkerN --&gt;|同步更新| WorkerN
+    
+    style Shm fill:#fff4e1
+    style MsgQueue fill:#e1f5ff
+</code></pre>
+
+<h3 id="1-1、主要数据结构与共享内存设计"><a href="#1-1、主要数据结构与共享内存设计" class="headerlink" title="1.1、主要数据结构与共享内存设计"></a>1.1、主要数据结构与共享内存设计</h3><p><strong>全局上下文：<code>ngx_dyups_global_ctx</code></strong></p>
 <ul>
 <li>在初始化（<code>init_module</code>）阶段，模块通过 <code>ngx_shared_memory_add(&quot;dyups_shm_zone&quot;, size, &amp;ngx_http_dyups_module)</code> 分配一块共享内存。该内存段映射到主进程和所有 Worker，共同维护以下重要字段：<ul>
 <li><code>shpool</code>（类型为 <code>ngx_slab_pool_t *</code>）：专用于分配共享内存中的消息节点和字符串副本；</li>
@@ -325,7 +352,7 @@
 </ul>
 </li>
 </ul>
-<p>​	<strong>消息节点：<code>ngx_dyups_msg_t</code></strong></p>
+<p><strong>消息节点：<code>ngx_dyups_msg_t</code></strong></p>
 <ul>
 <li><p>每条对 <code>upstream</code> 的增删改查动作最终会被封装成一个 <code>ngx_dyups_msg_t</code> 节点，写入共享内存中的链表：</p>
 <figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-keyword">typedef</span> <span class="hljs-class"><span class="hljs-keyword">struct</span> &#123;</span><br>    <span class="hljs-type">ngx_queue_t</span>        <span class="hljs-built_in">queue</span>;    <span class="hljs-comment">// 链表节点</span><br>    <span class="hljs-type">ngx_uint_t</span>         type;     <span class="hljs-comment">// 操作类型：ADD / DELETE / UPDATE</span><br>    <span class="hljs-type">ngx_str_t</span>          name;     <span class="hljs-comment">// 上游名称</span><br>    <span class="hljs-type">ngx_str_t</span>          content;  <span class="hljs-comment">// 包含实际 server 列表的字符串</span><br>    <span class="hljs-type">pid_t</span>             pid[NGX_MAX_WORKERS];  <span class="hljs-comment">// 标记哪些 Worker 已处理</span><br>    <span class="hljs-type">ngx_uint_t</span>        count;    <span class="hljs-comment">// 已处理 Worker 数目</span><br>&#125; <span class="hljs-type">ngx_dyups_msg_t</span>;<br></code></pre></td></tr></table></figure>
@@ -333,7 +360,7 @@
 <li><p><code>pid[]</code> 用来记录各 Worker 进程对该消息的处理状态；当 <code>count</code> 达到当前 <code>worker_processes</code> 数量时，表示所有 Worker 均已读取该消息，无需再转发或保留。</p>
 </li>
 </ul>
-<p>​	<strong>Worker 状态数组：<code>sh-&gt;status[]</code></strong></p>
+<p><strong>Worker 状态数组：<code>sh-&gt;status[]</code></strong></p>
 <ul>
 <li><p><code>shctx-&gt;status</code> 是一个长度等于 <code>worker_processes</code> 的数组，每个元素为：</p>
 <figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><code class="hljs cpp"><span class="hljs-keyword">typedef</span> <span class="hljs-keyword">struct</span> &#123;<br>    <span class="hljs-type">pid_t</span>    pid;    <span class="hljs-comment">// Worker 进程号</span><br>    <span class="hljs-type">time_t</span>   time;   <span class="hljs-comment">// 最后一次心跳时间戳</span><br>&#125; <span class="hljs-type">ngx_dyups_status_t</span>;<br></code></pre></td></tr></table></figure>
@@ -345,7 +372,7 @@
 </ol>
 </li>
 </ul>
-<p>**	共享内存分配粒度**</p>
+<p><strong>共享内存分配粒度</strong></p>
 <ul>
 <li>共享内存池由 <code>ngx_slab_pool_t</code> 管理，所有对消息节点和动态存储 <code>upstream</code> 字符串的分配都来自该 Slab。这样可以避免不同进程使用各自的堆内存，确保跨进程可见。</li>
 <li>默认 <code>dyups_shm_zone_size 2M</code> 时，可能一次只能发送有限大小的 <code>upstream</code> 信息；对于包含大量 <code>server</code> 的集群，需要调大该参数以防止分配失败。</li>
@@ -437,21 +464,21 @@
 <li>在 <code>ngx_http_dyups_read_msg_locked</code> 开头，Worker 会先尝试在 <code>shctx-&gt;status[]</code> 中找到或注册自己的 <code>pid</code>，并更新对应 <code>time = now</code>。</li>
 <li>若某些 <code>status[].pid</code> 长时间无 “心跳” 更新（超时），模块会认为对应 Worker 已崩溃或退出，并在后续清理过程中剔除它对消息的未处理计数，以避免死消息永久挂起。</li>
 </ul>
-<h3 id="1-4、锁机制与并发控制（阻塞与非阻塞模式）"><a href="#1-4、锁机制与并发控制（阻塞与非阻塞模式）" class="headerlink" title="1.4、锁机制与并发控制（阻塞与非阻塞模式）"></a>1.4、锁机制与并发控制（阻塞与非阻塞模式）</h3><p>​	<strong>锁保护范围</strong></p>
+<h3 id="1-4、锁机制与并发控制（阻塞与非阻塞模式）"><a href="#1-4、锁机制与并发控制（阻塞与非阻塞模式）" class="headerlink" title="1.4、锁机制与并发控制（阻塞与非阻塞模式）"></a>1.4、锁机制与并发控制（阻塞与非阻塞模式）</h3><p><strong>锁保护范围</strong></p>
 <ul>
 <li>每次写入或读取共享内存时，都必须先调用 <code>ngx_shmtx_lock(&amp;shpool-&gt;mutex)</code>；在写操作（如 <code>ngx_http_dyups_update_upstream</code>）中，整个流程包括读取旧消息、沙箱验证、正式更新、消息写入共享内存，全部在同一把锁内完成，保证对共享内存的原子性与一致性。</li>
 </ul>
-<p>​	<strong>阻塞锁（默认模式）</strong></p>
+<p><strong>阻塞锁（默认模式）</strong></p>
 <ul>
 <li>当一个 Worker 开始更新时，其它尝试更新或读取消息的 Worker 都会在 <code>ngx_shmtx_lock</code> 处阻塞；在长时间更新（如包含大量节点的 <code>upstream</code>）期间，可能导致多个 Worker 长时间处于挂起状态，无法处理新来的业务请求。 </li>
 <li>这种场景在后文性能章节还会详细分析。</li>
 </ul>
-<p>​	<strong>非阻塞锁（<code>dyups_trylock on</code>）</strong></p>
+<p><strong>非阻塞锁（<code>dyups_trylock on</code>）</strong></p>
 <ul>
 <li>若设置 <code>dyups_trylock on;</code>，写操作中改用 <code>ngx_shmtx_trylock</code>，若锁被占用则立即返回 <code>NGX_HTTP_CONFLICT (409)</code>，上层接口告知客户端 “wait and try again”，无需 Worker 长时间阻塞。</li>
 <li>但 <strong>定时器读取消息</strong> 的路径仍是阻塞式 <code>ngx_shmtx_lock</code>，若锁被占用则轮询线程仍要等到锁空闲才能继续同步，可能短暂挂起业务。</li>
 </ul>
-<p>​	<strong>锁粒度优化思考</strong></p>
+<p><strong>锁粒度优化思考</strong></p>
 <ul>
 <li>将锁粒度最小化：沙箱验证、实际更新、消息写入间尽量迅速；</li>
 <li>调整 <code>dyups_read_msg_timeout</code> 周期：过小会频繁抢锁，过大则延迟配置同步；</li>
@@ -475,7 +502,36 @@
 </ul>
 <figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-type">ngx_int_t</span><br><span class="hljs-title function_">ngx_dyups_update_upstream</span><span class="hljs-params">(<span class="hljs-type">ngx_str_t</span> *name, <span class="hljs-type">ngx_buf_t</span> *buf, <span class="hljs-type">ngx_str_t</span> *rv)</span><br>&#123;<br>    <span class="hljs-type">ngx_int_t</span>                    status;          <br>    <span class="hljs-type">ngx_event_t</span>                 *timer;          <br>    <span class="hljs-type">ngx_slab_pool_t</span>             *shpool;     <br>    <span class="hljs-type">ngx_http_dyups_main_conf_t</span>  *dmcf;     <br>    <br>    dmcf = ngx_http_cycle_get_module_main_conf(ngx_cycle,<br>                                               ngx_http_dyups_module);<br> <br><br>     .......................<br>    <span class="hljs-comment">// 获取共享内存锁</span><br>     <span class="hljs-keyword">if</span> (!dmcf-&gt;trylock) &#123;<br>        ngx_shmtx_lock(&amp;shpool-&gt;mutex);           <span class="hljs-comment">// 阻塞方式获取锁</span><br>    &#125; <span class="hljs-keyword">else</span> &#123;<br>        <span class="hljs-keyword">if</span> (!ngx_shmtx_trylock(&amp;shpool-&gt;mutex)) &#123; <span class="hljs-comment">// 非阻塞方式尝试获取锁</span><br>            ngx_str_set(rv, <span class="hljs-string">&quot;wait and try again\n&quot;</span>);<br>            <span class="hljs-keyword">return</span> NGX_HTTP_CONFLICT;  <br>        &#125;<br>    &#125;<br>    <span class="hljs-comment">// 读取共享内存中的消息</span><br>    ngx_http_dyups_read_msg_locked(timer);<br><br>    <span class="hljs-comment">// 在沙箱中测试更新</span><br>    status = ngx_dyups_sandbox_update(buf, rv);<br>   .......................<br>       <br>    <span class="hljs-comment">// 执行实际的上游更新操作</span><br>    status = ngx_dyups_do_update(name, buf, rv);<br>    <span class="hljs-keyword">if</span> (status == NGX_HTTP_OK) &#123;<br>        <span class="hljs-comment">// 同步更新消息到其他进程</span><br>        <span class="hljs-keyword">if</span> (ngx_http_dyups_send_msg(name, buf, NGX_DYUPS_ADD)) &#123;<br>            .......................<br>        &#125;<br>    &#125;<br>        .......................<br>&#125;<br></code></pre></td></tr></table></figure>
 
-<h2 id="2、ingress-nginx的热更新实现"><a href="#2、ingress-nginx的热更新实现" class="headerlink" title="2、ingress-nginx的热更新实现"></a>2、ingress-nginx的热更新实现</h2><p>对于一个功能，一定要多学习借鉴同层次产品的实现。ingress-nginx也实现了热更新，但是是通过lua层面实现的，有一篇文章总结的非常好 <a target="_blank" rel="noopener" href="https://xiaorui.cc/archives/7342">https://xiaorui.cc/archives/7342</a></p>
+<h2 id="2、ingress-nginx的热更新实现"><a href="#2、ingress-nginx的热更新实现" class="headerlink" title="2、ingress-nginx的热更新实现"></a>2、ingress-nginx的热更新实现</h2><p>对于一个功能，一定要多学习借鉴同层次产品的实现。ingress-nginx 也实现了热更新，但是是通过 lua 层面实现的，有一篇文章总结的非常好：<a target="_blank" rel="noopener" href="https://xiaorui.cc/archives/7342">https://xiaorui.cc/archives/7342</a></p>
+<h3 id="架构图-1"><a href="#架构图-1" class="headerlink" title="架构图"></a>架构图</h3><pre><code class=" mermaid">graph TB
+    K8sController[K8s Controller&lt;br/&gt;监控Ingress/Service/Endpoint]
+    OpenResty[OpenResty&lt;br/&gt;Nginx + Lua]
+    Worker1[Worker进程1]
+    Worker2[Worker进程2]
+    WorkerN[Worker进程N]
+    
+    LuaShm[Lua共享内存&lt;br/&gt;dynamic_upstreams]
+    
+    Client[客户端请求]
+    
+    K8sController --&gt;|主动推送&lt;br/&gt;POST /configuration/backends| OpenResty
+    OpenResty --&gt;|写入配置| LuaShm
+    
+    Worker1 --&gt;|定时器拉取&lt;br/&gt;1秒周期| K8sController
+    Worker2 --&gt;|定时器拉取&lt;br/&gt;1秒周期| K8sController
+    WorkerN --&gt;|定时器拉取&lt;br/&gt;1秒周期| K8sController
+    
+    Worker1 --&gt;|读取配置| LuaShm
+    Worker2 --&gt;|读取配置| LuaShm
+    WorkerN --&gt;|读取配置| LuaShm
+    
+    Client --&gt;|请求到达| Worker1
+    Worker1 --&gt;|balancer_by_lua&lt;br/&gt;动态路由| Client
+    
+    style LuaShm fill:#fff4e1
+    style K8sController fill:#e8f5e9
+</code></pre>
+
 <ol>
 <li><strong>Lua 负载均衡</strong>：在 <code>balancer_by_lua_block</code> 中使用 <code>lua-resty-balancer</code>，在共享内存中根据算法选取可用后端。</li>
 <li><strong>主动推送</strong>：当 Kubernetes 集群中 Ingress&#x2F;Service&#x2F;Endpoint 变更时，Control-Plane 通过 HTTP POST 将新的后端 JSON 发送到 OpenResty 内部接口 <code>/configuration/backends</code> 。</li>
@@ -613,7 +669,7 @@
 <p>1个zookeeper集群</p>
 <h3 id="3-1、整体架构"><a href="#3-1、整体架构" class="headerlink" title="3.1、整体架构"></a>3.1、整体架构</h3><p>很明显，2台为网关的配置需要一致，整体需要考虑集群和多进程的更新</p>
 <p>1、客户端调用A网关，变更dyups的配置，A网关更新后，同步到zk。 然后B网关定时感知到变更，然后进行更新。</p>
-<p>2、单独抽一个0号进程，专注于配置更新，而work专注于业务请求的处理。</p>
+<p>2、单独抽一个0号进程，专注于配置更新，而worker专注于业务请求的处理。</p>
 <p>3、通过共享内存进行数据的共享，进行变更</p>
 <h3 id="3-2、具体设计"><a href="#3-2、具体设计" class="headerlink" title="3.2、具体设计"></a>3.2、具体设计</h3><p>主要的链路分为2种</p>
 <ul>
@@ -626,19 +682,19 @@
 <p>3、0号进程更新完数据后，将数据更新到zk，同时也要更新zk的版本号  </p>
 <p>4、0号进程开启定时器，比对zk的版本号与共享内存的版本号是否一致，不一致则进行变更</p>
 <p>5、0号进程获取zk最新的数据，更新本地文件、共享内存的版本号、配置数据写入共享内存</p>
-<p>6、work进程开启定时器，比对共享内存的版本号与本地内存中的版本号，不一致则进程更新</p>
+<p>6、worker进程开启定时器，比对共享内存的版本号与本地内存中的版本号，不一致则进程更新</p>
 <h3 id="3-3、需要考虑的问题"><a href="#3-3、需要考虑的问题" class="headerlink" title="3.3、需要考虑的问题"></a>3.3、需要考虑的问题</h3><p>涉及到多台网关就需要考虑竞争关系，还好nginx是多进程，考虑过很多类似的问题，2者的情况类似</p>
 <p>1、2台网关同时主动式更新</p>
 <p>假设配置的版本号为10，A网关被主动式调用，版本号为11，配置写到zk，此时修改zk的版本号为11</p>
 <p>接着，B网关也被主动式调用，版本号也改为11，此时也要写到zk，这时就会存在问题，配置被覆盖了</p>
 <p>所以实际网关在写配置到zk时，需要先获取一下版本号，是否相等，如果相等说明没有其他网关更新，然后再加一，更新到zk</p>
 <p>2、多进程更新</p>
-<p>事实上，只有0号进程会修改配置，work只是读而已，所以不存在竞争关系。但是0号进程也会有问题，因为他不仅要从zk读取数据（其他网关的变更），他也会被主动式调用，修改数据，所以存在竞争关系，其实又回到了第1个问题。</p>
+<p>事实上，只有0号进程会修改配置，worker只是读而已，所以不存在竞争关系。但是0号进程也会有问题，因为他不仅要从zk读取数据（其他网关的变更），他也会被主动式调用，修改数据，所以存在竞争关系，其实又回到了第1个问题。</p>
 <p>其实就是模仿ngx_dyups_update_upstream的逻辑，修改数据之前，先获取一下zk的版本号，确认当前拿到的是最新的数据，然后再进行主动式的更新。</p>
 <p>如果zk的数据已经变更，那本次主动式调用，需要返回失败。同时要提示客户端，需要先拿到最新的数据，才能进程主动式调用更新。</p>
 <h2 id="4、主动式调用"><a href="#4、主动式调用" class="headerlink" title="4、主动式调用"></a>4、主动式调用</h2><p>upstream只是一个很基础的路由属性，实际上复杂的业务需要很多属性，比如uri，uri+upstream，可以组成一个路由的基本单元，即客户端请求到业务服务端的映射。当然还有权重、负载策略、失败重试等等属性，有些属性是nginx本身具有的，有些属性需要嵌入ngixn模块开发，或者重新实现模块实现。但总的思想是，虚拟一个路由对象，然后进行动态路由更新。</p>
 <p>相比于ngx_dyups_update_upstream，也只是属性的不一样而已，所以按照同样的方式实现，其实就可以。当然实际实现起来，是有一些难度的。</p>
-<p>编写一个完整的http模块，接收post请求，解析json的body，组装为特定数据格式，在检查过配置的正确性后，分别调用多个路由模块的更新，实现共享内存内存更新，然后更新配置文件。而实际的work通过定时器从共享内存更新最新的路由信息。</p>
+<p>编写一个完整的http模块，接收post请求，解析json的body，组装为特定数据格式，在检查过配置的正确性后，分别调用多个路由模块的更新，实现共享内存内存更新，然后更新配置文件。而实际的worker通过定时器从共享内存更新最新的路由信息。</p>
 <h2 id="5、资料"><a href="#5、资料" class="headerlink" title="5、资料"></a>5、资料</h2><p>参考：</p>
 <p>官方文档：<a target="_blank" rel="noopener" href="https://www.bookstack.cn/read/nginx-official-doc/5.md">https://www.bookstack.cn/read/nginx-official-doc/5.md</a></p>
 <p>GitHub仓库：<a target="_blank" rel="noopener" href="https://github.com/yzprofile/ngx_http_dyups_module">https://github.com/yzprofile/ngx_http_dyups_module</a></p>
@@ -657,7 +713,7 @@
       
         <a href="/tags/nginx/" class="print-no-link">#nginx</a>
       
-        <a href="/tags/work/" class="print-no-link">#work</a>
+        <a href="/tags/worker/" class="print-no-link">#worker</a>
       
         <a href="/tags/zookeeper/" class="print-no-link">#zookeeper</a>
       

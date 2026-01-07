@@ -25,7 +25,7 @@
 <meta property="og:locale" content="zh_CN">
 <meta property="og:image" content="https://zjfans.github.io/img/NGINX%E5%A6%82%E4%BD%95%E6%A0%B9%E6%8D%AE%E5%AE%A2%E6%88%B7%E7%AB%AF%E5%8D%8F%E8%AE%AE%E6%9E%84%E9%80%A0%E5%B9%B6%E8%BF%94%E5%9B%9E%E5%93%8D%E5%BA%94-01.png">
 <meta property="article:published_time" content="2025-05-15T03:14:47.495Z">
-<meta property="article:modified_time" content="2025-06-08T09:37:43.019Z">
+<meta property="article:modified_time" content="2026-01-07T07:57:28.104Z">
 <meta property="article:author" content="张三疯">
 <meta property="article:tag" content="nginx">
 <meta property="article:tag" content="HTTP1">
@@ -327,8 +327,7 @@
 <li><code>ngx_http_send_header(r)</code> 会触发从 <code>ngx_http_top_header_filter</code> 开始的 header filter 链，每个 filter 调用下一个，直到最终的 HTTP&#x2F;1.x 或 HTTP&#x2F;2 的 header_filter 执行完毕</li>
 <li>响应体部分则由 <code>ngx_http_output_filter(r, cl)</code> 依次经过 body filter，最终输出到客户端</li>
 </ul>
-<p>协议差异详解</p>
-<table>
+<h3 id="协议差异详解"><a href="#协议差异详解" class="headerlink" title="协议差异详解"></a>协议差异详解</h3><table>
 <thead>
 <tr>
 <th>步骤</th>
@@ -371,16 +370,13 @@
 <li>HTTP&#x2F;1.x 在 <code>ngx_http_header_filter()</code> 中按 RFC 7230 拼接纯文本头部，并调用写过滤器输出</li>
 <li>HTTP&#x2F;2 则在 <code>ngx_http_v2_header_filter()</code> 中将 <code>headers_out</code> 转为 HPACK 编码，并封装为 <code>HEADERS</code> 帧发送</li>
 </ul>
-<p>核心代码</p>
-<p>HTTP&#x2F;1.x 的 header filter</p>
-<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-type">static</span> <span class="hljs-type">ngx_int_t</span><br><span class="hljs-title function_">ngx_http_header_filter</span><span class="hljs-params">(<span class="hljs-type">ngx_http_request_t</span> *r)</span><br>&#123;<br>    <span class="hljs-comment">// 构造状态行和头部文本</span><br>    <span class="hljs-comment">// 写入 r-&gt;headers_out.headers</span><br>    <span class="hljs-keyword">return</span> ngx_http_next_header_filter(r);<br>&#125;<br></code></pre></td></tr></table></figure>
+<h3 id="核心代码实现"><a href="#核心代码实现" class="headerlink" title="核心代码实现"></a>核心代码实现</h3><h4 id="HTTP-1-x-的-header-filter"><a href="#HTTP-1-x-的-header-filter" class="headerlink" title="HTTP&#x2F;1.x 的 header filter"></a>HTTP&#x2F;1.x 的 header filter</h4><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-type">static</span> <span class="hljs-type">ngx_int_t</span><br><span class="hljs-title function_">ngx_http_header_filter</span><span class="hljs-params">(<span class="hljs-type">ngx_http_request_t</span> *r)</span><br>&#123;<br>    <span class="hljs-comment">// 构造状态行和头部文本</span><br>    <span class="hljs-comment">// 写入 r-&gt;headers_out.headers</span><br>    <span class="hljs-keyword">return</span> ngx_http_next_header_filter(r);<br>&#125;<br></code></pre></td></tr></table></figure>
 
-<p>HTTP&#x2F;2 的 header filter</p>
-<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-type">static</span> <span class="hljs-type">ngx_int_t</span><br><span class="hljs-title function_">ngx_http_v2_header_filter</span><span class="hljs-params">(<span class="hljs-type">ngx_http_request_t</span> *r)</span><br>&#123;<br>    <span class="hljs-comment">// HPACK 编码 headers_out</span><br>    <span class="hljs-comment">// 封装为 HEADERS 帧发送</span><br>    <span class="hljs-keyword">return</span> ngx_http_next_header_filter(r);<br>&#125;<br></code></pre></td></tr></table></figure>
+<h4 id="HTTP-2-的-header-filter"><a href="#HTTP-2-的-header-filter" class="headerlink" title="#### HTTP&#x2F;2 的 header filter"></a>#### HTTP&#x2F;2 的 header filter</h4><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-type">static</span> <span class="hljs-type">ngx_int_t</span><br><span class="hljs-title function_">ngx_http_v2_header_filter</span><span class="hljs-params">(<span class="hljs-type">ngx_http_request_t</span> *r)</span><br>&#123;<br>    <span class="hljs-comment">// HPACK 编码 headers_out</span><br>    <span class="hljs-comment">// 封装为 HEADERS 帧发送</span><br>    <span class="hljs-keyword">return</span> ngx_http_next_header_filter(r);<br>&#125;<br></code></pre></td></tr></table></figure>
 
 <hr>
 <blockquote>
-<p><strong>Nginx 通过统一的 filter 链机制，在尾部根据 <code>r-&gt;http_version</code> 或 <code>r-&gt;stream</code> 判断客户端协议，选择合适的 <code>header_filter</code>（文本 vs 帧格式）构造响应头，再由 output filter 发送响应体。</strong></p>
+<p><strong>总结</strong>：Nginx 通过统一的 filter 链机制，在尾部根据 <code>r-&gt;http_version</code> 或 <code>r-&gt;stream</code> 判断客户端协议，选择合适的 <code>header_filter</code>（文本 vs 帧格式）构造响应头，再由 output filter 发送响应体。</p>
 </blockquote>
 <h2 id="2、body"><a href="#2、body" class="headerlink" title="2、body"></a>2、body</h2><p>Nginx 如何根据客户端协议生成并发送响应体</p>
 <p>整体流程</p>

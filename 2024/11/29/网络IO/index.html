@@ -16,21 +16,22 @@
   <meta name="author" content="张三疯">
   <meta name="keywords" content="nginx,openresty,网关,HTTP/HTTPS,Websocket">
   
-    <meta name="description" content="1、内核如何接收数据不同主机通过网卡进行数据的交互，网卡将电磁波转换为模拟信号，再转换为数字信号，再由OSI模型传到应用层，变成人可以识别的数据。信号转换属于通信相关的知识，所以从接收到数字信号开始分析数据的流转。  首先当数据帧从网线到达网卡上的时候，第一站是网卡的接收队列。网卡在分配给自己的RingBuffer中寻找可用的内存位置，找到后DMA引擎会把数据DMA到网卡之前关联的内存里，这个时候">
+    <meta name="description" content="网络 IO 与 epoll 深入分析本文深入分析 Linux 内核网络数据接收流程、socket 机制、惊群效应及其解决方案，以及 epoll 的实现原理和 Nginx 的 IO 复用实践。  1、内核如何接收网络数据不同主机通过网卡进行数据交互。网卡将电磁波转换为模拟信号，再转换为数字信号，最后由 OSI 模型逐层传递到应用层，变成应用程序可以处理的数据。本节从接收到数字信号开始分析数据的流转过">
 <meta property="og:type" content="article">
-<meta property="og:title" content="网络部分-epoll分析">
+<meta property="og:title" content="网络 IO 与 epoll 深入分析">
 <meta property="og:url" content="https://zjfans.github.io/2024/11/29/%E7%BD%91%E7%BB%9CIO/index.html">
 <meta property="og:site_name" content="ZJfans Blog">
-<meta property="og:description" content="1、内核如何接收数据不同主机通过网卡进行数据的交互，网卡将电磁波转换为模拟信号，再转换为数字信号，再由OSI模型传到应用层，变成人可以识别的数据。信号转换属于通信相关的知识，所以从接收到数字信号开始分析数据的流转。  首先当数据帧从网线到达网卡上的时候，第一站是网卡的接收队列。网卡在分配给自己的RingBuffer中寻找可用的内存位置，找到后DMA引擎会把数据DMA到网卡之前关联的内存里，这个时候">
+<meta property="og:description" content="网络 IO 与 epoll 深入分析本文深入分析 Linux 内核网络数据接收流程、socket 机制、惊群效应及其解决方案，以及 epoll 的实现原理和 Nginx 的 IO 复用实践。  1、内核如何接收网络数据不同主机通过网卡进行数据交互。网卡将电磁波转换为模拟信号，再转换为数字信号，最后由 OSI 模型逐层传递到应用层，变成应用程序可以处理的数据。本节从接收到数字信号开始分析数据的流转过">
 <meta property="og:locale" content="zh_CN">
 <meta property="og:image" content="https://zjfans.github.io/img/%E5%BC%80%E5%90%AFreuseport.png">
 <meta property="og:image" content="https://zjfans.github.io/img/%E5%A4%9A%E8%BF%9B%E7%A8%8B%E7%9B%91%E5%90%AC%E4%B8%80%E4%B8%AAsocket.png">
 <meta property="article:published_time" content="2024-11-29T13:58:25.570Z">
-<meta property="article:modified_time" content="2025-06-08T09:39:02.635Z">
+<meta property="article:modified_time" content="2026-01-07T08:10:06.698Z">
 <meta property="article:author" content="张三疯">
 <meta property="article:tag" content="nginx">
 <meta property="article:tag" content="epoll">
 <meta property="article:tag" content="socket">
+<meta property="article:tag" content="网络编程">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:image" content="https://zjfans.github.io/img/%E5%BC%80%E5%90%AFreuseport.png">
   
@@ -38,7 +39,7 @@
     <meta name="referrer" content="no-referrer-when-downgrade">
   
   
-  <title>网络部分-epoll分析 - ZJfans Blog</title>
+  <title>网络 IO 与 epoll 深入分析 - ZJfans Blog</title>
 
   <link  rel="stylesheet" href="https://lib.baomitu.com/twitter-bootstrap/4.6.1/css/bootstrap.min.css" />
 
@@ -231,7 +232,7 @@
       <div class="banner-text text-center fade-in-up">
         <div class="h2">
           
-            <span id="subtitle" data-typed-text="网络部分-epoll分析"></span>
+            <span id="subtitle" data-typed-text="网络 IO 与 epoll 深入分析"></span>
           
         </div>
 
@@ -254,7 +255,7 @@
       <span class="post-meta mr-2">
         <i class="iconfont icon-chart"></i>
         
-          6.7k 字
+          6.2k 字
         
       </span>
     
@@ -265,7 +266,7 @@
         
         
         
-          56 分钟
+          52 分钟
         
       </span>
     
@@ -302,192 +303,514 @@
       <div class="container nopadding-x-md" id="board-ctn">
         <div id="board">
           <article class="post-content mx-auto">
-            <h1 id="seo-header">网络部分-epoll分析</h1>
+            <h1 id="seo-header">网络 IO 与 epoll 深入分析</h1>
             
             
               <div class="markdown-body">
                 
-                <h2 id="1、内核如何接收数据"><a href="#1、内核如何接收数据" class="headerlink" title="1、内核如何接收数据"></a>1、内核如何接收数据</h2><p>不同主机通过网卡进行数据的交互，网卡将电磁波转换为模拟信号，再转换为数字信号，再由OSI模型传到应用层，变成人可以识别的数据。信号转换属于通信相关的知识，所以从接收到数字信号开始分析数据的流转。</p>
-<ol>
-<li>首先当数据帧从网线到达网卡上的时候，第一站是网卡的接收队列。网卡在分配给自己的RingBuffer中寻找可用的内存位置，找到后DMA引擎会把数据DMA到网卡之前关联的内存里，这个时候CPU都是无感的。当DMA操作完成以后，网卡会像CPU发起一个硬中断，通知CPU有数据到达。</li>
-<li>Linux在硬中断里只完成简单必要的工作，剩下的大部分的处理都是转交给软中断的，硬中断处理过程真的是非常短。只是记录了一个寄存器，修改了一下下CPU的poll_list，然后发出个软中断。</li>
-<li>软中断和硬中断中调用了同一个函数<code>local_softirq_pending</code>。使用方式不同的是硬中断位置是为了写入标记，这里仅仅只是读取这个标记。</li>
-<li>把数据帧从RingBuffer上取下来，数据包将被送到协议栈中，ip  -&gt;   tcp&#x2F;udp，tcpdump就是在这里获取数据包</li>
-<li>对应的协议栈将数据送往对应的socket，socket通知对应的进程</li>
-</ol>
-<h2 id="2、socket的概念"><a href="#2、socket的概念" class="headerlink" title="2、socket的概念"></a>2、socket的概念</h2><h3 id="2-1、通过socket唤醒各个进程"><a href="#2-1、通过socket唤醒各个进程" class="headerlink" title="2.1、通过socket唤醒各个进程"></a>2.1、通过socket唤醒各个进程</h3><p>用户进程可以通过socket接口与内核进行数据的交互，当一个进程想要listen一个端口时，首先需要创建一个socket绑定这个端口，当这个端口收到数据时，内核先将数据送往对应的协议栈，协议栈主要做2个事情</p>
-<ul>
-<li>保存数据到socket的接收缓冲队列</li>
-<li>唤醒队列上的进程</li>
-</ul>
-<p>拿多进程举例子，如果master监听了某端口后，会创建对应的socket，后续fork时，子进程也共享这个打开的socket，也会”监听”这个socket（当某个进程调用 accept() 时，内核会动态地将该进程注册到 socket 的等待队列中），这就导致socket的等待队列会有多个work进程阻塞在这里，也就是说socket的等待队列存在多个进程。</p>
-<p>​                                                                                                  多进程共享一个socket，但是进程各自有epoll</p>
-<p>在唤醒进程时，如果唤醒所有的进程，就会引发惊群效应。有了epoll后，每个进程都会有自己的epoll，相当于会唤醒所有的epoll ，唤醒本质就是调用epoll注册的回调函数。</p>
-<h3 id="2-2、通过epoll唤醒各个进程"><a href="#2-2、通过epoll唤醒各个进程" class="headerlink" title="2.2、通过epoll唤醒各个进程"></a>2.2、通过epoll唤醒各个进程</h3><p>根据socket等待队列中的元素，找到对应的epoll和epitem，这个回调函数第一时间会把epitem放到epoll对象的就绪链表里面，后续epoll_wait就会从就绪链表读取事件进行处理。</p>
-<p>同样唤醒时可以选择唤醒一个进程还是多个</p>
-<p>​                                                                                                   多进程共享一个epoll</p>
-<h2 id="3、惊群效应"><a href="#3、惊群效应" class="headerlink" title="3、惊群效应"></a>3、惊群效应</h2><p>当讨论到惊群效应，其实要分层次讨论，因为socket和epoll都会有惊群效应。简单来说先fork再epoll_create()，socket的等待队列会存在多个””进程”; 先epoll_create()再fork，epoll的等待队列会有多个进程；</p>
-<h3 id="3-1、socket的惊群效应"><a href="#3-1、socket的惊群效应" class="headerlink" title="3.1、socket的惊群效应"></a>3.1、socket的惊群效应</h3><p>多个进程共享一个socket，即主进程create、bind、listen，然后fork子进程后，多个进程共享一个socket，进行accept的场景，这时候socket的等待队列会存在多个进程。</p>
-<p>当使用epoll时，那就意味着socket的等待队列存在多个epoll。比如nginx的每个work都会有自己的epoll，会把这个socket注册到epoll，相应的注册回调到socket的等待队列，相当于把本进程注册到socket。</p>
-<p>当数据被送到socket时，socket会”唤醒”等待队列的各个进程（其实是调用epoll注册的回调函数），这时候如果唤醒所有的进程，就会引发惊群效应，因为只有一个进程会accept成功。</p>
-<p>解决办法</p>
-<ol>
-<li>使用WQ_FLAG_EXCLUSIVE，在唤醒进程时，不会唤醒所有的进程，只会唤醒一个进程，但是解决不了epoll的场景。（ Linux 2.6 版本中引入）</li>
-<li>使用SO_REUSEPORT，每个进程都有自己的socket，大家不共享socket，由内核负载socket。 （Linux 3.9 版本中引入）</li>
-<li>使用锁，在应用层解决竞争关系，只有拿到锁的进程才能accept，nginx早期就是这么做的</li>
-</ol>
-<p>对于epoll，用户层可以调用的EPOLLEXCLUSIVE，实际使用的就是WQ_FLAG_EXCLUSIVE，使用EPOLLEXCLUSIVE ，添加事件时，epoll 会将对应的 epitem 节点标记为“独占模式” ，带有 EPOLLEXCLUSIVE 的监听者会被加入独占等待队列中，而非普通等待队列。如果有多个监听者，只会唤醒等待队列中第一个处于 EPOLLEXCLUSIVE 模式的监听者。如果没有 EPOLLEXCLUSIVE 模式监听者，唤醒其他普通监听者。（Linux 4.5 版本中引入）</p>
-<h3 id="3-2、epoll的惊群效应"><a href="#3-2、epoll的惊群效应" class="headerlink" title="3.2、epoll的惊群效应"></a>3.2、epoll的惊群效应</h3><p>多进程共享一个epoll，即多个进程共享一个epoll的对象。一个主进程先epoll_create()，然后再fork() 创建多个进程。其实这种模式常见于多线程(其实也不常见吧，应该不会有人会这么设计吧？)，使用pthread_create()创建线程，本质上和fork没区别，实际上进程和进程也没区别，都会调用到 kernel_clone()，区别在于传入的参数不一样，这个函数会根据参数的不同，执行不同的逻辑，结果就是子进程会不会与父进程共享地址等等。</p>
-<p>各个进程调用epoll_wait时，会把自己注册到epoll的等待队列，这会导致epoll的等待队列存在多个进程。</p>
-<p>当socket执行到epoll的回调函数时，epoll首先会把自己的epitem放到就绪链表，然后唤醒等待队列的进程，其实就是执行等待队列元素的回调函数。如果唤醒所有的进程，那就会引发惊群效应。</p>
-<p>解决办法</p>
-<ol>
-<li><p>实际查看linux代码，epoll_wait会默认设置独占模式。用户调用 epoll_wait 进入阻塞状态，如果没有事件，就阻塞自己，把当前进程写入到epoll元素的等待队列中，并设置WQ_FLAG_EXCLUSIVE。那其实就意味着这种场景没有惊群效应。</p>
-<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-type">static</span> <span class="hljs-keyword">inline</span> <span class="hljs-type">void</span><br>__add_wait_queue_exclusive(<span class="hljs-keyword">struct</span> wait_queue_head *wq_head, <span class="hljs-keyword">struct</span> wait_queue_entry *wq_entry)<br>&#123;<br>	wq_entry-&gt;flags |= WQ_FLAG_EXCLUSIVE;  <span class="hljs-comment">//设置WQ_FLAG_EXCLUSIVE</span><br>	__add_wait_queue(wq_head, wq_entry);<br>&#125;<br></code></pre></td></tr></table></figure></li>
-</ol>
-<p>不过一般多线程的架构设计不会这么设计，一般会主线程负责accept，在创建新的socket连接后，交由work线程，work会把这个新的socket加到自己的epoll，然后处理后续的事件。</p>
-<p>不过多进程共享一个epoll绝对是不好的设计。</p>
-<h3 id="3-3、各个属性分析"><a href="#3-3、各个属性分析" class="headerlink" title="3.3、各个属性分析"></a>3.3、各个属性分析</h3><p>1、WQ_FLAG_EXCLUSIVE</p>
-<ol>
-<li>减少惊群效应：<code>WQ_FLAG_EXCLUSIVE</code> 主要用于减少多个进程或进程同时被唤醒的情况，即惊群效应。当多个进程或进程等待同一个socket上的事件时，一个新连接的到来会导致所有阻塞在该socket上的进程或进程都被唤醒，但最终只有一个能处理这个连接，其余的进程或进程会重新进入等待状态。</li>
-<li>内核层面的优化：<code>WQ_FLAG_EXCLUSIVE</code> 通过内核排他性唤醒机制，确保一次只唤醒一个等待队列中的进程，从而减少不必要的上下文切换和性能损耗。</li>
-</ol>
-<p>2、SO_REUSEPORT</p>
-<ol>
-<li>端口复用：<code>SO_REUSEPORT</code> 允许多个进程或进程绑定到同一端口上，每个进程或进程独立处理收到的数据。这在传统的socket编程中是不允许的，因为一个端口只能被一个进程绑定。</li>
-<li>负载均衡：<code>SO_REUSEPORT</code> 不仅允许多个进程绑定到同一端口，还能在内核层面实现负载均衡，将新连接均匀分配给不同的进程或进程，从而提高多核系统的并行处理能力和整体性能。</li>
-</ol>
-<p>区别和联系</p>
-<ul>
-<li>作用层面：<code>WQ_FLAG_EXCLUSIVE</code> 主要是在内核层面减少不必要的进程唤醒，而 <code>SO_REUSEPORT</code> 是在应用层面允许多个进程或进程共享同一个端口，并在内核层面实现负载均衡。</li>
-<li>应用场景：<code>WQ_FLAG_EXCLUSIVE</code> 更适用于单个进程内部的进程间协作，减少进程间的唤醒竞争；而 <code>SO_REUSEPORT</code> 更适用于多个进程间共享端口资源，提高系统的并发处理能力。</li>
-<li>性能优化：<code>WQ_FLAG_EXCLUSIVE</code> 通过减少不必要的进程唤醒来优化性能；<code>SO_REUSEPORT</code> 通过负载均衡和多进程&#x2F;进程处理来提高性能。</li>
-</ul>
-<h3 id="3-4、源码分析"><a href="#3-4、源码分析" class="headerlink" title="3.4、源码分析"></a>3.4、源码分析</h3><p>1、对于socket</p>
-<p>到达协议栈后，最终会调用__wake_up_sync_key唤醒进程</p>
-<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-type">void</span> __wake_up_sync_key(<span class="hljs-keyword">struct</span> wait_queue_head *wq_head, <span class="hljs-type">unsigned</span> <span class="hljs-type">int</span> mode,<br>			<span class="hljs-type">void</span> *key)<br>&#123;<br>    <span class="hljs-keyword">if</span> (unlikely(!wq_head))<br>        <span class="hljs-keyword">return</span>;<br>    <br>    __wake_up_common_lock(wq_head, mode, <span class="hljs-number">1</span>, WF_SYNC, key);   <span class="hljs-comment">//这里的参数传了1</span><br>&#125;<br></code></pre></td></tr></table></figure>
-
-<p>调用到wake_up_common_lock  -&gt; __wake_up_common，其中nr_exclusive传了1</p>
-<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-type">static</span> <span class="hljs-type">int</span> __wake_up_common(<span class="hljs-keyword">struct</span> wait_queue_head *wq_head, <span class="hljs-type">unsigned</span> <span class="hljs-type">int</span> mode,<br>			<span class="hljs-type">int</span> nr_exclusive, <span class="hljs-type">int</span> wake_flags, <span class="hljs-type">void</span> *key)<br>&#123;<br>	<span class="hljs-type">wait_queue_entry_t</span> *curr, *next;<br>	lockdep_assert_held(&amp;wq_head-&gt;lock);<br>	curr = list_first_entry(&amp;wq_head-&gt;head, <span class="hljs-type">wait_queue_entry_t</span>, entry);<br><br>	<span class="hljs-comment">// 如果列表为空，则直接返回未使用的独占型进程唤醒名额</span><br>	<span class="hljs-keyword">if</span> (&amp;curr-&gt;entry == &amp;wq_head-&gt;head)<br>		<span class="hljs-keyword">return</span> nr_exclusive;<br><br>	<span class="hljs-comment">// 安全地遍历等待队列</span><br>	list_for_each_entry_safe_from(curr, next, &amp;wq_head-&gt;head, entry) &#123;<br>		<span class="hljs-type">unsigned</span> flags = curr-&gt;flags;<br>		<span class="hljs-type">int</span> ret;<br>		<span class="hljs-comment">// 调用当前队列项的唤醒函数</span><br>		ret = curr-&gt;func(curr, mode, wake_flags, key);<br>		<span class="hljs-comment">// 如果唤醒函数返回负值，则停止遍历</span><br>		<span class="hljs-keyword">if</span> (ret &lt; <span class="hljs-number">0</span>)<br>			<span class="hljs-keyword">break</span>;<br>		<span class="hljs-comment">// 如果唤醒成功且当前队列项是独占型的，则减少剩余的独占型进程唤醒名额</span><br>		<span class="hljs-keyword">if</span> (ret &amp;&amp; (flags &amp; WQ_FLAG_EXCLUSIVE) &amp;&amp; !--nr_exclusive)      <span class="hljs-comment">//关键在这里</span><br>			<span class="hljs-keyword">break</span>;<br>	&#125;<br>	<span class="hljs-comment">// 返回未使用的独占型进程唤醒名额</span><br>	<span class="hljs-keyword">return</span> nr_exclusive;<br>&#125;<br></code></pre></td></tr></table></figure>
-
-<p>重点在于</p>
-<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-keyword">if</span> (ret &amp;&amp; (flags &amp; WQ_FLAG_EXCLUSIVE) &amp;&amp; !--nr_exclusive)<br>			<span class="hljs-keyword">break</span>;<br></code></pre></td></tr></table></figure>
-
-<ul>
-<li><strong><code>ret</code></strong>: 唤醒操作是否成功。如果为 <code>true</code>，表示有进程被成功唤醒。</li>
-<li><strong><code>flags &amp; WQ_FLAG_EXCLUSIVE</code></strong>: 检查当前队列项是否为独占型。<code>WQ_FLAG_EXCLUSIVE</code> 是一个标志位，表示该队列项是独占型的。</li>
-<li><strong><code>!--nr_exclusive</code></strong>: 减少剩余的独占型进程唤醒名额，并检查是否已经用完所有名额。<code>--nr_exclusive</code> 先将 <code>nr_exclusive</code> 减 1，然后取其值。如果减 1 后 <code>nr_exclusive</code> 变为 0，则 <code>!</code> 运算符将其转换为 <code>true</code>。</li>
-</ul>
-<p>代码逻辑分析</p>
-<ol>
-<li>唤醒成功：<code>ret</code> 为 <code>true</code>，表示有进程被成功唤醒。</li>
-<li>独占型队列项：<code>flags &amp; WQ_FLAG_EXCLUSIVE</code> 为 <code>true</code>，表示当前队列项是独占型的。</li>
-<li>减少独占型唤醒名额：<code>--nr_exclusive</code> 将 <code>nr_exclusive</code> 减 1。</li>
-<li>检查名额是否用完：如果 <code>nr_exclusive</code> 减 1 后变为 0，则 <code>!</code> 运算符将其转换为 <code>true</code>，执行 <code>break</code> 语句，跳出循环。</li>
-</ol>
-<p>通常nr_exclusive为1，也就是唤醒独占型的1个进程。但是会不会发生下面的场景呢？非独占型的进程在前面，独占型的进程在后面</p>
-<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-comment">/*假设队列为：A（非独占） → B（独占） → C（独占） → D（非独占）</span><br><span class="hljs-comment">任务 A（非独占）：</span><br><span class="hljs-comment"></span><br><span class="hljs-comment">被唤醒（ret = 1），继续遍历。</span><br><span class="hljs-comment">任务 B（独占）：</span><br><span class="hljs-comment"></span><br><span class="hljs-comment">被唤醒（ret = 1），nr_exclusive--。</span><br><span class="hljs-comment">此时 nr_exclusive = 0，触发 break。</span><br><span class="hljs-comment">循环终止，任务 C 和任务 D 不会被处理。*/</span><br></code></pre></td></tr></table></figure>
-
-<p>但是实际linux在添加进程时，会优先把独占型的进程添加到头部，新的独占型总会加到独占型的最后一个，如果没有他就会第一个，例如</p>
-<ul>
-<li>A（非独占）B（独占）C（独占）D（非独占）</li>
-</ul>
-<p>A</p>
-<p>B-&gt;A</p>
-<p>B-&gt;C-&gt;A</p>
-<p>B-&gt;C-&gt;A-&gt;D</p>
-<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-type">static</span> <span class="hljs-keyword">inline</span> <span class="hljs-type">void</span> __add_wait_queue(<span class="hljs-keyword">struct</span> wait_queue_head *wq_head, <span class="hljs-keyword">struct</span> wait_queue_entry *wq_entry)<br>&#123;<br>    <span class="hljs-comment">// 获取等待队列头部的列表头指针。</span><br>    <span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">list_head</span> *<span class="hljs-title">head</span> =</span> &amp;wq_head-&gt;head;<br>    <span class="hljs-comment">// 定义一个等待队列项指针，用于遍历等待队列。</span><br>    <span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">wait_queue_entry</span> *<span class="hljs-title">wq</span>;</span><br><br>    <span class="hljs-comment">// 遍历等待队列头部中的所有等待队列项。</span><br>    list_for_each_entry(wq, &amp;wq_head-&gt;head, entry) &#123;<br>        <span class="hljs-comment">// 检查当前等待队列项是否具有优先级标志。</span><br>        <span class="hljs-keyword">if</span> (!(wq-&gt;flags &amp; WQ_FLAG_PRIORITY))<br>            <span class="hljs-keyword">break</span>;<br>        <span class="hljs-comment">// 如果当前项有优先级标志，则更新列表头指针为当前项的列表入口。</span><br>        head = &amp;wq-&gt;entry;<br>    &#125;<br>    <span class="hljs-comment">// 将新的等待队列项添加到找到的位置之前。</span><br>    list_add(&amp;wq_entry-&gt;entry, head);<br>&#125;<br></code></pre></td></tr></table></figure>
-
-<p>所以如果有独占型的进程，那确实不会唤醒其他非独占型的进程，WQ_FLAG_PRIORITY和nr_exclusive决定了最终唤醒的结果，让我们分析下4种组合的情况</p>
+                <h1 id="网络-IO-与-epoll-深入分析"><a href="#网络-IO-与-epoll-深入分析" class="headerlink" title="网络 IO 与 epoll 深入分析"></a>网络 IO 与 epoll 深入分析</h1><p>本文深入分析 Linux 内核网络数据接收流程、socket 机制、惊群效应及其解决方案，以及 epoll 的实现原理和 Nginx 的 IO 复用实践。</p>
 <hr>
+<h2 id="1、内核如何接收网络数据"><a href="#1、内核如何接收网络数据" class="headerlink" title="1、内核如何接收网络数据"></a>1、内核如何接收网络数据</h2><p>不同主机通过网卡进行数据交互。网卡将电磁波转换为模拟信号，再转换为数字信号，最后由 OSI 模型逐层传递到应用层，变成应用程序可以处理的数据。本节从接收到数字信号开始分析数据的流转过程。</p>
+<h3 id="数据接收流程"><a href="#数据接收流程" class="headerlink" title="数据接收流程"></a>数据接收流程</h3><pre><code class=" mermaid">sequenceDiagram
+    participant NIC as 网卡
+    participant DMA as DMA 引擎
+    participant CPU as CPU
+    participant Kernel as 内核协议栈
+    participant Socket as Socket
+    participant App as 应用进程
+
+    NIC-&gt;&gt;DMA: 1. 数据到达网卡
+    DMA-&gt;&gt;DMA: 2. DMA 拷贝到 RingBuffer
+    DMA-&gt;&gt;CPU: 3. 发起硬中断
+    CPU-&gt;&gt;CPU: 4. 硬中断处理（设置标记）
+    CPU-&gt;&gt;Kernel: 5. 触发软中断
+    Kernel-&gt;&gt;Kernel: 6. 从 RingBuffer 取数据
+    Kernel-&gt;&gt;Socket: 7. 协议栈处理（IP → TCP/UDP）
+    Socket-&gt;&gt;App: 8. 唤醒等待进程
+</code></pre>
+
+<p><strong>详细步骤说明</strong>：</p>
+<ol>
+<li><strong>数据到达网卡</strong>：当数据帧从网线到达网卡时，首先进入网卡的接收队列</li>
+<li><strong>DMA 传输</strong>：网卡在分配给自己的 RingBuffer 中寻找可用的内存位置，找到后 DMA 引擎会把数据直接拷贝到网卡关联的内存中。<strong>这个过程 CPU 完全无感知</strong></li>
+<li><strong>硬中断通知</strong>：DMA 操作完成后，网卡向 CPU 发起一个硬中断，通知 CPU 有数据到达</li>
+<li><strong>硬中断处理</strong>：Linux 在硬中断中只完成简单必要的工作（记录寄存器、修改 CPU 的 <code>poll_list</code>），然后发出软中断。硬中断处理过程非常短暂</li>
+<li><strong>软中断处理</strong>：软中断和硬中断都调用 <code>local_softirq_pending</code> 函数，区别在于硬中断用于写入标记，软中断用于读取标记</li>
+<li><strong>协议栈处理</strong>：从 RingBuffer 取出数据帧，送入协议栈处理（IP → TCP&#x2F;UDP）。**<code>tcpdump</code> 就是在这一层捕获数据包**</li>
+<li><strong>通知应用进程</strong>：协议栈将数据送往对应的 socket，socket 通知对应的进程</li>
+</ol>
+<hr>
+<h2 id="2、Socket-概念与进程唤醒机制"><a href="#2、Socket-概念与进程唤醒机制" class="headerlink" title="2、Socket 概念与进程唤醒机制"></a>2、Socket 概念与进程唤醒机制</h2><h3 id="2-1、Socket-与进程的关系"><a href="#2-1、Socket-与进程的关系" class="headerlink" title="2.1、Socket 与进程的关系"></a>2.1、Socket 与进程的关系</h3><p>用户进程通过 socket 接口与内核进行数据交互。当一个进程想要监听（listen）某个端口时，首先需要创建一个 socket 并绑定该端口。当该端口收到数据时，内核会将数据送往对应的协议栈，协议栈主要做两件事：</p>
+<ol>
+<li><strong>保存数据</strong>：将数据保存到 socket 的接收缓冲队列</li>
+<li><strong>唤醒进程</strong>：唤醒等待队列上的进程</li>
+</ol>
+<h3 id="2-2、多进程场景下的-Socket-共享"><a href="#2-2、多进程场景下的-Socket-共享" class="headerlink" title="2.2、多进程场景下的 Socket 共享"></a>2.2、多进程场景下的 Socket 共享</h3><p>以多进程模型为例：</p>
+<pre><code class=" mermaid">graph TD
+    Master[Master 进程] --&gt;|fork| Worker1[Worker 进程 1]
+    Master --&gt;|fork| Worker2[Worker 进程 2]
+    Master --&gt;|fork| WorkerN[Worker 进程 N]
+    
+    Socket[共享 Socket&lt;br&gt;等待队列] --&gt; Worker1
+    Socket --&gt; Worker2
+    Socket --&gt; WorkerN
+    
+    Worker1 --&gt;|各自拥有| Epoll1[epoll 实例 1]
+    Worker2 --&gt;|各自拥有| Epoll2[epoll 实例 2]
+    WorkerN --&gt;|各自拥有| EpollN[epoll 实例 N]
+</code></pre>
+
+<ul>
+<li>Master 进程监听某端口后，会创建对应的 socket</li>
+<li>后续 <code>fork()</code> 时，子进程共享这个已打开的 socket</li>
+<li>当某个进程调用 <code>accept()</code> 时，内核会动态地将该进程注册到 socket 的等待队列中</li>
+<li>这导致 <strong>socket 的等待队列中存在多个进程</strong></li>
+</ul>
+<p><strong>关键点</strong>：多进程共享一个 socket，但每个进程各自拥有独立的 epoll 实例。</p>
+<h3 id="2-3、唤醒机制与惊群效应"><a href="#2-3、唤醒机制与惊群效应" class="headerlink" title="2.3、唤醒机制与惊群效应"></a>2.3、唤醒机制与惊群效应</h3><p>当数据到达时，如果唤醒所有进程，就会引发<strong>惊群效应</strong>（Thundering Herd）。</p>
+<p><strong>使用 epoll 时的唤醒流程</strong>：</p>
+<ol>
+<li>根据 socket 等待队列中的元素，找到对应的 epoll 和 epitem</li>
+<li>回调函数会把 epitem 放到 epoll 对象的<strong>就绪链表</strong>中</li>
+<li>后续 <code>epoll_wait</code> 从就绪链表读取事件进行处理</li>
+</ol>
+<p><strong>两种共享模式</strong>：</p>
+<ul>
+<li><strong>多进程共享一个 socket</strong>：每个进程有自己的 epoll（常见模式）</li>
+<li><strong>多进程共享一个 epoll</strong>：较少使用，设计上不推荐</li>
+</ul>
+<hr>
+<h2 id="3、惊群效应（Thundering-Herd）"><a href="#3、惊群效应（Thundering-Herd）" class="headerlink" title="3、惊群效应（Thundering Herd）"></a>3、惊群效应（Thundering Herd）</h2><p>讨论惊群效应需要<strong>分层次讨论</strong>，因为 socket 层和 epoll 层都可能产生惊群效应：</p>
 <table>
 <thead>
 <tr>
-<th><strong>场景</strong></th>
-<th><strong>队列中是否有 <code>WQ_FLAG_EXCLUSIVE</code></strong></th>
-<th><strong><code>nr_exclusive</code></strong></th>
-<th><strong>结果</strong></th>
-<th><strong>返回值</strong></th>
+<th>场景</th>
+<th>惊群发生位置</th>
 </tr>
 </thead>
 <tbody><tr>
-<td><strong>1</strong> 无独占任务</td>
-<td>否</td>
-<td>1</td>
-<td>所有非独占任务被唤醒；<code>nr_exclusive</code> 不减少</td>
-<td>1</td>
+<td>先 <code>fork()</code> 再 <code>epoll_create()</code></td>
+<td>socket 的等待队列</td>
 </tr>
 <tr>
-<td><strong>2</strong> 无独占任务</td>
-<td>否</td>
-<td>0</td>
-<td>所有非独占任务被唤醒；<code>nr_exclusive</code> 不减少</td>
-<td>0</td>
-</tr>
-<tr>
-<td><strong>3</strong> 有独占任务</td>
-<td>是</td>
-<td>1</td>
-<td>唤醒一个独占任务后退出；</td>
-<td>0</td>
-</tr>
-<tr>
-<td><strong>4</strong> 有独占任务</td>
-<td>是</td>
-<td>0</td>
-<td>所有任务（独占和非独占）都被唤醒；<code>nr_exclusive</code> 递减到负数</td>
-<td>负数（最终值）</td>
+<td>先 <code>epoll_create()</code> 再 <code>fork()</code></td>
+<td>epoll 的等待队列</td>
 </tr>
 </tbody></table>
-<hr>
-<p>其实socket的处理过程中，nr_exclusive一直是1，所以到底唤醒一个进程还是多个，由用户层决定，毕竟WQ_FLAG_EXCLUSIVE是可以设置的。</p>
-<p>2、对于epoll</p>
-<p>epoll在唤醒它的等待队列中的元素时，依次调用了 wake_up_locked() -&gt; __wake_up_locked -&gt; wake_up_common</p>
-<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-meta">#<span class="hljs-keyword">define</span> wake_up_locked(x)		__wake_up_locked((x), TASK_NORMAL, 1)</span><br><span class="hljs-meta">#<span class="hljs-keyword">define</span> wake_up_all_locked(x)		__wake_up_locked((x), TASK_NORMAL, 0)</span><br></code></pre></td></tr></table></figure>
-
-<p>wake_up_locked() 和 wake_up_all_locked() 都是用于唤醒等待队列中的进程的宏，最后都调用了 wake_up_common，原理也如上述所示。</p>
-<p>但是因为epoll_wait，将进程设置到epoll的等待链表时，会默认设置WQ_FLAG_EXCLUSIVE（要明白，这里区别于socket的等待队列，因为socket设置时并不会默认设置WQ_FLAG_EXCLUSIVE），且nr_exclusive传了1，按照组合的情况，只会唤醒一个独占进程。</p>
-<h2 id="4、epoll实现原理"><a href="#4、epoll实现原理" class="headerlink" title="4、epoll实现原理"></a>4、epoll实现原理</h2><p>epoll主要涉及3个接口</p>
+<h3 id="3-1、Socket-层的惊群效应"><a href="#3-1、Socket-层的惊群效应" class="headerlink" title="3.1、Socket 层的惊群效应"></a>3.1、Socket 层的惊群效应</h3><p><strong>场景描述</strong>：多个进程共享一个 socket，即主进程 <code>create</code> → <code>bind</code> → <code>listen</code>，然后 <code>fork</code> 子进程。多个进程共享同一个 socket 进行 <code>accept</code>。</p>
+<p><strong>问题分析</strong>：</p>
 <ul>
-<li>epoll_create：创建一个 epoll 对象</li>
-<li>epoll_ctl：向 epoll 对象中添加要管理的连接</li>
-<li>epoll_wait：等待其管理的连接上的 IO 事件</li>
+<li>当使用 epoll 时，socket 的等待队列中存在多个 epoll 实例</li>
+<li>以 Nginx 为例，每个 worker 都有自己的 epoll，会把共享的 socket 注册到各自的 epoll</li>
+<li>相应地，epoll 的回调函数会注册到 socket 的等待队列</li>
+<li>当数据到达 socket 时，会”唤醒”等待队列的各个进程（调用 epoll 注册的回调函数）</li>
+<li><strong>问题</strong>：如果唤醒所有进程，就会引发惊群效应，因为只有一个进程能 <code>accept</code> 成功</li>
 </ul>
-<h3 id="4-1、epoll-create"><a href="#4-1、epoll-create" class="headerlink" title="4.1、epoll_create"></a>4.1、epoll_create</h3><p>在用户进程调用 epoll_create 时，内核会创建一个 struct eventpoll 的内核对象</p>
-<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">eventpoll</span> &#123;</span><br><br>    <span class="hljs-comment">//sys_epoll_wait用到的等待队列</span><br>    <span class="hljs-type">wait_queue_head_t</span> wq;<br><br>    <span class="hljs-comment">//接收就绪的描述符都会放到这里</span><br>    <span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">list_head</span> <span class="hljs-title">rdllist</span>;</span><br><br>    <span class="hljs-comment">//每个epoll对象中都有一颗红黑树</span><br>    <span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">rb_root</span> <span class="hljs-title">rbr</span>;</span><br><br>    ......<br>&#125;<br></code></pre></td></tr></table></figure>
-
-<p>eventpoll 这个结构体中的几个成员的含义如下：</p>
+<h3 id="解决方案"><a href="#解决方案" class="headerlink" title="解决方案"></a>解决方案</h3><table>
+<thead>
+<tr>
+<th>方案</th>
+<th>原理</th>
+<th>Linux 版本</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>WQ_FLAG_EXCLUSIVE</code></td>
+<td>唤醒时只唤醒一个进程，但无法解决 epoll 场景</td>
+<td>2.6</td>
+</tr>
+<tr>
+<td><code>SO_REUSEPORT</code></td>
+<td>每个进程有独立 socket，内核负责负载均衡</td>
+<td>3.9</td>
+</tr>
+<tr>
+<td>应用层加锁</td>
+<td>只有拿到锁的进程才能 accept（Nginx 早期方案）</td>
+<td>-</td>
+</tr>
+<tr>
+<td><code>EPOLLEXCLUSIVE</code></td>
+<td>epoll 层的独占唤醒机制</td>
+<td>4.5</td>
+</tr>
+</tbody></table>
+<p><strong><code>EPOLLEXCLUSIVE</code> 详解</strong>：</p>
 <ul>
-<li><strong>wq：</strong> 等待队列链表。软中断数据就绪的时候会通过 wq 来找到阻塞在 epoll 对象上的用户进程。</li>
-<li><strong>rbr：</strong> 一棵红黑树。为了支持对海量连接的高效查找、插入和删除，eventpoll 内部使用了一棵红黑树。通过这棵树来管理用户进程下添加进来的所有 socket 连接。</li>
-<li><strong>rdllist：</strong> 就绪的描述符的链表。当有的连接就绪的时候，内核会把就绪的连接放到 rdllist 链表里。这样应用进程只需要判断链表就能找出就绪进程，而不用去遍历整棵树。</li>
+<li>用户层可通过 <code>EPOLLEXCLUSIVE</code> 标志启用独占模式</li>
+<li>底层使用 <code>WQ_FLAG_EXCLUSIVE</code> 实现</li>
+<li>添加事件时，epoll 会将对应的 epitem 节点标记为”独占模式”</li>
+<li>带有 <code>EPOLLEXCLUSIVE</code> 的监听者会被加入独占等待队列</li>
+<li>唤醒时只唤醒第一个处于 <code>EPOLLEXCLUSIVE</code> 模式的监听者</li>
 </ul>
-<h3 id="4-2、epoll-ctl"><a href="#4-2、epoll-ctl" class="headerlink" title="4.2、epoll_ctl"></a>4.2、epoll_ctl</h3><p>使用 epoll_ctl 注册每一个 socket 的时候，内核会做如下三件事情</p>
+<h3 id="3-2、Epoll-层的惊群效应"><a href="#3-2、Epoll-层的惊群效应" class="headerlink" title="3.2、Epoll 层的惊群效应"></a>3.2、Epoll 层的惊群效应</h3><p><strong>场景描述</strong>：多个进程&#x2F;线程共享一个 epoll 对象。主进程先 <code>epoll_create()</code>，然后 <code>fork()</code> 创建多个子进程。</p>
+<blockquote>
+<p><strong>补充说明</strong>：这种模式在多线程中更常见。使用 <code>pthread_create()</code> 创建线程，本质上和 <code>fork()</code> 没有区别，都会调用 <code>kernel_clone()</code>，区别在于传入的参数不同，决定子进程是否与父进程共享地址空间等资源。</p>
+</blockquote>
+<p><strong>问题分析</strong>：</p>
+<ol>
+<li>各个进程调用 <code>epoll_wait</code> 时，会把自己注册到 epoll 的等待队列</li>
+<li>导致 epoll 的等待队列存在多个进程</li>
+<li>当 socket 执行 epoll 的回调函数时，epoll 会把 epitem 放到就绪链表，然后唤醒等待队列的进程</li>
+<li>如果唤醒所有进程，就会引发惊群效应</li>
+</ol>
+<h3 id="解决方案-1"><a href="#解决方案-1" class="headerlink" title="解决方案"></a>解决方案</h3><p>查看 Linux 内核代码，<code>epoll_wait</code> 会<strong>默认设置独占模式</strong>：</p>
+   <figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-type">static</span> <span class="hljs-keyword">inline</span> <span class="hljs-type">void</span><br>__add_wait_queue_exclusive(<span class="hljs-keyword">struct</span> wait_queue_head *wq_head, <span class="hljs-keyword">struct</span> wait_queue_entry *wq_entry)<br>&#123;<br> wq_entry-&gt;flags |= WQ_FLAG_EXCLUSIVE;  <span class="hljs-comment">// 设置独占标志</span><br>	__add_wait_queue(wq_head, wq_entry);<br>&#125;<br></code></pre></td></tr></table></figure>
+
+<p>用户调用 <code>epoll_wait</code> 进入阻塞状态时，如果没有事件，会把当前进程写入 epoll 的等待队列，并设置 <code>WQ_FLAG_EXCLUSIVE</code>。这意味着<strong>这种场景下 Linux 内核已经解决了惊群效应</strong>。</p>
+<h3 id="推荐架构设计"><a href="#推荐架构设计" class="headerlink" title="推荐架构设计"></a>推荐架构设计</h3><p>一般多线程架构<strong>不会采用共享 epoll</strong> 的设计，而是：</p>
+<ol>
+<li>主线程负责 <code>accept</code></li>
+<li>创建新的 socket 连接后，交由 worker 线程</li>
+<li>Worker 线程把新 socket 加到自己的 epoll，处理后续事件</li>
+</ol>
+<blockquote>
+<p><strong>注意</strong>：多进程共享一个 epoll 是<strong>不推荐的设计模式</strong>。</p>
+</blockquote>
+<h3 id="3-3、关键属性详解"><a href="#3-3、关键属性详解" class="headerlink" title="3.3、关键属性详解"></a>3.3、关键属性详解</h3><h4 id="3-3-1、WQ-FLAG-EXCLUSIVE"><a href="#3-3-1、WQ-FLAG-EXCLUSIVE" class="headerlink" title="3.3.1、WQ_FLAG_EXCLUSIVE"></a>3.3.1、WQ_FLAG_EXCLUSIVE</h4><p><strong>作用</strong>：</p>
 <ul>
-<li>1.分配一个红黑树节点对象 epitem，</li>
-<li>2.添加等待事件到 socket 的等待队列中，其回调函数是 ep_poll_callback</li>
-<li>3.将 epitem 插入到 epoll 对象的红黑树里</li>
+<li><strong>减少惊群效应</strong>：当多个进程等待同一个 socket 上的事件时，新连接到来会导致所有阻塞的进程都被唤醒，但最终只有一个能处理这个连接，其余进程会重新进入等待状态</li>
+<li><strong>内核层面优化</strong>：通过内核排他性唤醒机制，确保一次只唤醒一个等待队列中的进程，减少不必要的上下文切换和性能损耗</li>
 </ul>
-<p>对于每一个 socket，调用 epoll_ctl 的时候，都会为之分配一个 epitem。该结构的主要数据如下：</p>
-<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-comment">//file: fs/eventpoll.c</span><br><span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">epitem</span> &#123;</span><br><br>    <span class="hljs-comment">//红黑树节点</span><br>    <span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">rb_node</span> <span class="hljs-title">rbn</span>;</span><br><br>    <span class="hljs-comment">//socket文件描述符信息</span><br>    <span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">epoll_filefd</span> <span class="hljs-title">ffd</span>;</span><br><br>    <span class="hljs-comment">//所归属的 eventpoll 对象</span><br>    <span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">eventpoll</span> *<span class="hljs-title">ep</span>;</span><br><br>    <span class="hljs-comment">//等待队列</span><br>    <span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">list_head</span> <span class="hljs-title">pwqlist</span>;</span><br>&#125;<br></code></pre></td></tr></table></figure>
+<h4 id="3-3-2、SO-REUSEPORT"><a href="#3-3-2、SO-REUSEPORT" class="headerlink" title="3.3.2、SO_REUSEPORT"></a>3.3.2、SO_REUSEPORT</h4><p><strong>作用</strong>：</p>
+<ul>
+<li><strong>端口复用</strong>：允许多个进程绑定到同一端口，每个进程独立处理收到的数据（传统 socket 编程中，一个端口只能被一个进程绑定）</li>
+<li><strong>内核负载均衡</strong>：内核层面实现负载均衡，将新连接均匀分配给不同的进程，提高多核系统的并行处理能力</li>
+</ul>
+<h4 id="3-3-3、对比分析"><a href="#3-3-3、对比分析" class="headerlink" title="3.3.3、对比分析"></a>3.3.3、对比分析</h4><table>
+<thead>
+<tr>
+<th>对比维度</th>
+<th><code>WQ_FLAG_EXCLUSIVE</code></th>
+<th><code>SO_REUSEPORT</code></th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>作用层面</strong></td>
+<td>内核层面减少不必要的进程唤醒</td>
+<td>应用层面允许多进程共享端口 + 内核负载均衡</td>
+</tr>
+<tr>
+<td><strong>应用场景</strong></td>
+<td>减少进程间的唤醒竞争</td>
+<td>多进程共享端口，提高并发处理能力</td>
+</tr>
+<tr>
+<td><strong>性能优化方式</strong></td>
+<td>减少不必要的进程唤醒</td>
+<td>负载均衡 + 多进程并行处理</td>
+</tr>
+</tbody></table>
+<h4 id="3-3-4、SO-REUSEPORT-vs-EPOLLEXCLUSIVE-详细对比"><a href="#3-3-4、SO-REUSEPORT-vs-EPOLLEXCLUSIVE-详细对比" class="headerlink" title="3.3.4、SO_REUSEPORT vs EPOLLEXCLUSIVE 详细对比"></a>3.3.4、SO_REUSEPORT vs EPOLLEXCLUSIVE 详细对比</h4><table>
+<thead>
+<tr>
+<th>特性</th>
+<th><strong>SO_REUSEPORT</strong></th>
+<th><strong>EPOLLEXCLUSIVE</strong></th>
+</tr>
+</thead>
+<tbody><tr>
+<td>所属层</td>
+<td>Socket 层（内核 TCP&#x2F;IP 协议栈）</td>
+<td>Epoll 层（事件通知机制）</td>
+</tr>
+<tr>
+<td>作用对象</td>
+<td>监听 socket（listen fd）</td>
+<td>epoll 实例中的事件注册项</td>
+</tr>
+<tr>
+<td>控制粒度</td>
+<td>每个 socket</td>
+<td>每个 epoll 实例 + FD 组合</td>
+</tr>
+<tr>
+<td>设计目的</td>
+<td>多 socket 绑定同一端口、分散新连接</td>
+<td>多个进程监听同一 socket 时避免惊群</td>
+</tr>
+<tr>
+<td>主要用途</td>
+<td>多个进程各自有独立 listen fd</td>
+<td>多个进程共享同一个 listen fd</td>
+</tr>
+<tr>
+<td>是否均衡连接分配</td>
+<td><strong>是</strong>，由内核 hash 决定</td>
+<td><strong>否</strong>，依赖队列顺序，需应用层辅助均衡</td>
+</tr>
+<tr>
+<td>相互影响</td>
+<td>相互独立</td>
+<td>相互独立</td>
+</tr>
+</tbody></table>
+<p><strong>总结</strong>：</p>
+<ul>
+<li><strong>SO_REUSEPORT</strong>：内核将多个 socket 进行负载均衡，只唤醒一个 socket（一个 socket 对应一个进程）</li>
+<li><strong>EPOLLEXCLUSIVE</strong>：只存在一个 socket，但等待队列中有多个进程（epoll），只唤醒一个进程</li>
+</ul>
+<p><strong>重要区别</strong>：<code>SO_REUSEPORT</code> 可以保证多个进程获得的连接<strong>近似均匀</strong>，而 <code>EPOLLEXCLUSIVE</code> 无法保证，需要应用层辅助实现（详见 5.2 小节）。</p>
+<h3 id="3-4、内核源码分析"><a href="#3-4、内核源码分析" class="headerlink" title="3.4、内核源码分析"></a>3.4、内核源码分析</h3><h4 id="3-4-1、Socket-层的唤醒机制"><a href="#3-4-1、Socket-层的唤醒机制" class="headerlink" title="3.4.1、Socket 层的唤醒机制"></a>3.4.1、Socket 层的唤醒机制</h4><p>数据到达协议栈后，最终会调用 <code>__wake_up_sync_key</code> 唤醒进程：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-type">void</span> __wake_up_sync_key(<span class="hljs-keyword">struct</span> wait_queue_head *wq_head, <span class="hljs-type">unsigned</span> <span class="hljs-type">int</span> mode,<br>			<span class="hljs-type">void</span> *key)<br>&#123;<br>    <span class="hljs-keyword">if</span> (unlikely(!wq_head))<br>        <span class="hljs-keyword">return</span>;<br>    <br>    __wake_up_common_lock(wq_head, mode, <span class="hljs-number">1</span>, WF_SYNC, key);  <span class="hljs-comment">// nr_exclusive = 1</span><br>&#125;<br></code></pre></td></tr></table></figure>
 
-<p>在创建 epitem 并初始化之后，ep_insert 中第二件事情就是设置 socket 对象上的等待任务队列。并把函数 fs&#x2F;eventpoll.c 文件下的 ep_poll_callback 设置为数据就绪时候的回调函数。</p>
-<p>在这个函数里它获取了 sock 对象下的等待队列列表头 wait_queue_head_t，待会等待队列项就插入这里。这里稍微注意下，是 socket 的等待队列，不是 epoll 对象的</p>
-<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-comment">//file:include/linux/wait.h</span><br><span class="hljs-type">static</span> <span class="hljs-keyword">inline</span> <span class="hljs-type">void</span> <span class="hljs-title function_">init_waitqueue_func_entry</span><span class="hljs-params">(</span><br><span class="hljs-params">    <span class="hljs-type">wait_queue_t</span> *q, <span class="hljs-type">wait_queue_func_t</span> func)</span><br>&#123;<br>    q-&gt;flags = <span class="hljs-number">0</span>;<br>    q-&gt;private = <span class="hljs-literal">NULL</span>;<br><br>    <span class="hljs-comment">//ep_poll_callback 注册到 wait_queue_t对象上</span><br>    <span class="hljs-comment">//有数据到达的时候调用 q-&gt;func</span><br>    q-&gt;func = func;   <br>&#125;<br></code></pre></td></tr></table></figure>
+<p>调用链：<code>__wake_up_common_lock</code> → <code>__wake_up_common</code></p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-type">static</span> <span class="hljs-type">int</span> __wake_up_common(<span class="hljs-keyword">struct</span> wait_queue_head *wq_head, <span class="hljs-type">unsigned</span> <span class="hljs-type">int</span> mode,<br>			<span class="hljs-type">int</span> nr_exclusive, <span class="hljs-type">int</span> wake_flags, <span class="hljs-type">void</span> *key)<br>&#123;<br>	<span class="hljs-type">wait_queue_entry_t</span> *curr, *next;<br>	lockdep_assert_held(&amp;wq_head-&gt;lock);<br>	curr = list_first_entry(&amp;wq_head-&gt;head, <span class="hljs-type">wait_queue_entry_t</span>, entry);<br><br>    <span class="hljs-comment">// 如果列表为空，返回未使用的独占型唤醒名额</span><br>	<span class="hljs-keyword">if</span> (&amp;curr-&gt;entry == &amp;wq_head-&gt;head)<br>		<span class="hljs-keyword">return</span> nr_exclusive;<br><br>    <span class="hljs-comment">// 遍历等待队列</span><br>	list_for_each_entry_safe_from(curr, next, &amp;wq_head-&gt;head, entry) &#123;<br>		<span class="hljs-type">unsigned</span> flags = curr-&gt;flags;<br>		<span class="hljs-type">int</span> ret;<br>        <br>		<span class="hljs-comment">// 调用当前队列项的唤醒函数</span><br>		ret = curr-&gt;func(curr, mode, wake_flags, key);<br>		<span class="hljs-keyword">if</span> (ret &lt; <span class="hljs-number">0</span>)<br>			<span class="hljs-keyword">break</span>;<br>        <br>        <span class="hljs-comment">// 【关键】如果唤醒成功且是独占型，减少名额</span><br>        <span class="hljs-keyword">if</span> (ret &amp;&amp; (flags &amp; WQ_FLAG_EXCLUSIVE) &amp;&amp; !--nr_exclusive)<br>			<span class="hljs-keyword">break</span>;<br>	&#125;<br>	<span class="hljs-keyword">return</span> nr_exclusive;<br>&#125;<br></code></pre></td></tr></table></figure>
 
-<p>分配完 epitem 对象后，紧接着并把它插入到红黑树中</p>
-<h3 id="4-3、epoll-wait"><a href="#4-3、epoll-wait" class="headerlink" title="4.3、epoll_wait"></a>4.3、epoll_wait</h3><p>当它被调用时它观察 eventpoll-&gt;rdllist 链表里有没有数据即可。有数据就返回，没有数据就创建一个等待队列项，将其添加到 eventpoll 的等待队列上，然后把自己阻塞掉。</p>
-<p>再回顾一下，这里添加到 eventpoll 的等待队列上时，会附带WQ_FLAG_EXCLUSIVE属性。</p>
-<h3 id="4-4、接收数据"><a href="#4-4、接收数据" class="headerlink" title="4.4、接收数据"></a>4.4、接收数据</h3><p>当网卡的数据交到tcp协议栈时，协议栈会找到对应的socket，然后回调socket等待队列中的”epoll”们，找到了 socket 等待队列项里注册的函数 ep_poll_callback，软中断接着就会调用它。首先把自己的 epitem 添加到 epoll 的就绪队列中。接着它又会查看 eventpoll 对象上的等待队列里是否有等待项（epoll_wait 执行的时候会设置）。</p>
-<p>在 __wake_up_common里， 调用 curr-&gt;func。这里的 func 是在 epoll_wait 是传入的 default_wake_function 函数。在default_wake_function 中找到等待队列项里的进程描述符，然后唤醒之。将epoll_wait进程推入可运行队列，等待内核重新调度进程。然后epoll_wait对应的这个进程重新运行后，就从 schedule 恢复</p>
-<p>当进程醒来后，继续从 epoll_wait 时暂停的代码继续执行。把 rdlist 中就绪的事件返回给用户进程，用户进程对其进行处理。</p>
+<p><strong>关键代码解析</strong>：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-keyword">if</span> (ret &amp;&amp; (flags &amp; WQ_FLAG_EXCLUSIVE) &amp;&amp; !--nr_exclusive)<br>			<span class="hljs-keyword">break</span>;<br></code></pre></td></tr></table></figure>
+
+<table>
+<thead>
+<tr>
+<th>条件</th>
+<th>含义</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>ret</code></td>
+<td>唤醒操作是否成功（<code>true</code> 表示成功）</td>
+</tr>
+<tr>
+<td><code>flags &amp; WQ_FLAG_EXCLUSIVE</code></td>
+<td>当前队列项是否为独占型</td>
+</tr>
+<tr>
+<td><code>!--nr_exclusive</code></td>
+<td>独占名额减 1 后是否为 0（用完则跳出循环）</td>
+</tr>
+</tbody></table>
+<h4 id="等待队列的排列顺序"><a href="#等待队列的排列顺序" class="headerlink" title="等待队列的排列顺序"></a>等待队列的排列顺序</h4><p><strong>问题</strong>：如果非独占型进程在前，独占型进程在后，会发生什么？</p>
+<figure class="highlight routeros"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><code class="hljs routeros">假设队列：A(非独占) → B(独占) → C(独占) → D(非独占)<br><br>1. A 被唤醒（<span class="hljs-attribute">ret</span>=1），继续遍历<br>2. B 被唤醒（<span class="hljs-attribute">ret</span>=1），nr_exclusive--，此时 <span class="hljs-attribute">nr_exclusive</span>=0，触发 break<br>3. C 和 D 不会被处理<br></code></pre></td></tr></table></figure>
+
+<p><strong>Linux 的解决方案</strong>：添加进程时，独占型进程会被优先添加到队列头部：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-type">static</span> <span class="hljs-keyword">inline</span> <span class="hljs-type">void</span> __add_wait_queue(<span class="hljs-keyword">struct</span> wait_queue_head *wq_head, <br>                                    <span class="hljs-keyword">struct</span> wait_queue_entry *wq_entry)<br>&#123;<br>    <span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">list_head</span> *<span class="hljs-title">head</span> =</span> &amp;wq_head-&gt;head;<br>    <span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">wait_queue_entry</span> *<span class="hljs-title">wq</span>;</span><br><br>    <span class="hljs-comment">// 遍历等待队列，找到优先级标志的边界</span><br>    list_for_each_entry(wq, &amp;wq_head-&gt;head, entry) &#123;<br>        <span class="hljs-keyword">if</span> (!(wq-&gt;flags &amp; WQ_FLAG_PRIORITY))<br>            <span class="hljs-keyword">break</span>;<br>        head = &amp;wq-&gt;entry;<br>    &#125;<br>    <span class="hljs-comment">// 将新项添加到适当位置</span><br>    list_add(&amp;wq_entry-&gt;entry, head);<br>&#125;<br></code></pre></td></tr></table></figure>
+
+<p><strong>添加顺序示例</strong>：</p>
+<figure class="highlight scss"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><code class="hljs scss">添加顺序：<span class="hljs-selector-tag">A</span>(非独占) → <span class="hljs-selector-tag">B</span>(独占) → <span class="hljs-built_in">C</span>(独占) → <span class="hljs-built_in">D</span>(非独占)<br>实际队列：<span class="hljs-selector-tag">B</span> → C → <span class="hljs-selector-tag">A</span> → D<br></code></pre></td></tr></table></figure>
+
+<h4 id="唤醒场景总结"><a href="#唤醒场景总结" class="headerlink" title="唤醒场景总结"></a>唤醒场景总结</h4><table>
+<thead>
+<tr>
+<th>场景</th>
+<th>队列中有独占任务</th>
+<th><code>nr_exclusive</code></th>
+<th>结果</th>
+<th>返回值</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td>否</td>
+<td>1</td>
+<td>所有非独占任务被唤醒</td>
+<td>1</td>
+</tr>
+<tr>
+<td>2</td>
+<td>否</td>
+<td>0</td>
+<td>所有非独占任务被唤醒</td>
+<td>0</td>
+</tr>
+<tr>
+<td>3</td>
+<td>是</td>
+<td>1</td>
+<td>唤醒一个独占任务后退出</td>
+<td>0</td>
+</tr>
+<tr>
+<td>4</td>
+<td>是</td>
+<td>0</td>
+<td>所有任务都被唤醒</td>
+<td>负数</td>
+</tr>
+</tbody></table>
+<p><strong>结论</strong>：Socket 处理过程中 <code>nr_exclusive</code> 始终为 1，是否设置 <code>WQ_FLAG_EXCLUSIVE</code> 由用户层决定。</p>
+<h4 id="3-4-2、Epoll-层的唤醒机制"><a href="#3-4-2、Epoll-层的唤醒机制" class="headerlink" title="3.4.2、Epoll 层的唤醒机制"></a>3.4.2、Epoll 层的唤醒机制</h4><p>Epoll 唤醒等待队列时的调用链：<code>wake_up_locked()</code> → <code>__wake_up_locked</code> → <code>__wake_up_common</code></p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-meta">#<span class="hljs-keyword">define</span> wake_up_locked(x)        __wake_up_locked((x), TASK_NORMAL, 1)</span><br><span class="hljs-meta">#<span class="hljs-keyword">define</span> wake_up_all_locked(x)    __wake_up_locked((x), TASK_NORMAL, 0)</span><br></code></pre></td></tr></table></figure>
+
+<p><strong>关键区别</strong>：</p>
+<ul>
+<li><code>epoll_wait</code> 将进程设置到 epoll 等待链表时，<strong>默认设置</strong> <code>WQ_FLAG_EXCLUSIVE</code></li>
+<li>Socket 的等待队列<strong>不会默认</strong>设置 <code>WQ_FLAG_EXCLUSIVE</code></li>
+<li>且 <code>nr_exclusive</code> 传入 1，根据上述组合分析，<strong>只会唤醒一个独占进程</strong></li>
+</ul>
 <hr>
-<p>我觉得<code>epoll</code> 的关键在于它能够让一个进程同时处理多个 <code>socket</code>，而不需要像传统的阻塞 I&#x2F;O那样每次处理一个 <code>socket</code>，然后进入阻塞睡眠，等到有新事件再唤醒。这种方式显著减少了进程切换的开销，从而提升了处理性能。</p>
-<p>虽然 <code>epoll</code> 本身是通过 <code>epoll_wait</code> 阻塞来等待事件的触发，但它提供了一种非阻塞的方式来处理每个 <code>socket</code> 的 I&#x2F;O 操作。具体来说，<code>socket</code> 可以设置为非阻塞模式，在调用 <code>read</code> 或 <code>write</code> 时，如果没有数据可读或无法立即写入，系统会返回一个错误码，而不是阻塞进程。</p>
-<p>epoll 不负责真正的数据读写，它只是告诉用户程序哪些 <code>socket</code> 可以进行读写操作。在真正的异步 I&#x2F;O 模型（如 <code>io_uring</code> 或 POSIX AIO）中，应用程序发起 I&#x2F;O 操作后立即返回，由内核或驱动完成 I&#x2F;O 操作，并通过回调或信号通知操作结果。所以epoll 的工作方式仍然需要应用程序显式调用处理函数，因此是同步的。</p>
+<h2 id="4、Epoll-实现原理"><a href="#4、Epoll-实现原理" class="headerlink" title="4、Epoll 实现原理"></a>4、Epoll 实现原理</h2><p>Epoll 主要涉及 3 个核心接口：</p>
+<table>
+<thead>
+<tr>
+<th>接口</th>
+<th>功能</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>epoll_create</code></td>
+<td>创建一个 epoll 对象</td>
+</tr>
+<tr>
+<td><code>epoll_ctl</code></td>
+<td>向 epoll 对象中添加&#x2F;修改&#x2F;删除 FD</td>
+</tr>
+<tr>
+<td><code>epoll_wait</code></td>
+<td>等待其管理的连接上的 IO 事件</td>
+</tr>
+</tbody></table>
+<h3 id="4-1、epoll-create-创建-Epoll-对象"><a href="#4-1、epoll-create-创建-Epoll-对象" class="headerlink" title="4.1、epoll_create - 创建 Epoll 对象"></a>4.1、epoll_create - 创建 Epoll 对象</h3><p>用户进程调用 <code>epoll_create</code> 时，内核会创建一个 <code>struct eventpoll</code> 结构体：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">eventpoll</span> &#123;</span><br>    <span class="hljs-type">wait_queue_head_t</span> wq;      <span class="hljs-comment">// 等待队列</span><br>    <span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">list_head</span> <span class="hljs-title">rdllist</span>;</span>  <span class="hljs-comment">// 就绪链表</span><br>    <span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">rb_root</span> <span class="hljs-title">rbr</span>;</span>        <span class="hljs-comment">// 红黑树</span><br>    ......<br>&#125;<br></code></pre></td></tr></table></figure>
+
+<p><strong>核心成员说明</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>成员</th>
+<th>类型</th>
+<th>作用</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>wq</code></td>
+<td><code>wait_queue_head_t</code></td>
+<td>等待队列链表。软中断数据就绪时，通过 wq 找到阻塞在 epoll 上的用户进程</td>
+</tr>
+<tr>
+<td><code>rbr</code></td>
+<td><code>struct rb_root</code></td>
+<td>红黑树。支持对海量连接的高效查找、插入和删除（O(log n)）</td>
+</tr>
+<tr>
+<td><code>rdllist</code></td>
+<td><code>struct list_head</code></td>
+<td>就绪描述符链表。连接就绪时，内核把就绪连接放入此链表</td>
+</tr>
+</tbody></table>
+<p><strong>设计优势</strong>：应用进程只需检查 <code>rdllist</code> 链表即可获取就绪事件，无需遍历整棵红黑树。</p>
+<h3 id="4-2、epoll-ctl-管理监听事件"><a href="#4-2、epoll-ctl-管理监听事件" class="headerlink" title="4.2、epoll_ctl - 管理监听事件"></a>4.2、epoll_ctl - 管理监听事件</h3><p>使用 <code>epoll_ctl</code> 注册 socket 时，内核执行以下三个步骤：</p>
+<ol>
+<li><strong>分配 epitem</strong>：为该 socket 分配一个红黑树节点对象 <code>epitem</code></li>
+<li><strong>注册回调</strong>：添加等待事件到 socket 的等待队列，回调函数为 <code>ep_poll_callback</code></li>
+<li><strong>插入红黑树</strong>：将 <code>epitem</code> 插入到 epoll 对象的红黑树中</li>
+</ol>
+<h4 id="epitem-数据结构"><a href="#epitem-数据结构" class="headerlink" title="epitem 数据结构"></a>epitem 数据结构</h4><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-comment">// file: fs/eventpoll.c</span><br><span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">epitem</span> &#123;</span><br>    <span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">rb_node</span> <span class="hljs-title">rbn</span>;</span>        <span class="hljs-comment">// 红黑树节点</span><br>    <span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">epoll_filefd</span> <span class="hljs-title">ffd</span>;</span>   <span class="hljs-comment">// socket 文件描述符信息</span><br>    <span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">eventpoll</span> *<span class="hljs-title">ep</span>;</span>      <span class="hljs-comment">// 所归属的 eventpoll 对象</span><br>    <span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">list_head</span> <span class="hljs-title">pwqlist</span>;</span>  <span class="hljs-comment">// 等待队列</span><br>&#125;<br></code></pre></td></tr></table></figure>
+
+<h4 id="回调函数注册"><a href="#回调函数注册" class="headerlink" title="回调函数注册"></a>回调函数注册</h4><p>创建并初始化 <code>epitem</code> 后，<code>ep_insert</code> 会设置 socket 对象上的等待任务队列，并将 <code>ep_poll_callback</code> 设置为数据就绪时的回调函数：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-comment">// file: include/linux/wait.h</span><br><span class="hljs-type">static</span> <span class="hljs-keyword">inline</span> <span class="hljs-type">void</span> <span class="hljs-title function_">init_waitqueue_func_entry</span><span class="hljs-params">(</span><br><span class="hljs-params">    <span class="hljs-type">wait_queue_t</span> *q, <span class="hljs-type">wait_queue_func_t</span> func)</span><br>&#123;<br>    q-&gt;flags = <span class="hljs-number">0</span>;<br>    q-&gt;private = <span class="hljs-literal">NULL</span>;<br>    q-&gt;func = func;  <span class="hljs-comment">// 注册 ep_poll_callback 为回调函数</span><br>&#125;<br></code></pre></td></tr></table></figure>
+
+<blockquote>
+<p><strong>注意</strong>：这里是向 <strong>socket 的等待队列</strong> 注册回调，不是 epoll 对象的等待队列。</p>
+</blockquote>
+<p>最后，将 <code>epitem</code> 对象插入到红黑树中完成注册。</p>
+<h3 id="4-3、epoll-wait-等待事件"><a href="#4-3、epoll-wait-等待事件" class="headerlink" title="4.3、epoll_wait - 等待事件"></a>4.3、epoll_wait - 等待事件</h3><p><code>epoll_wait</code> 的工作流程：</p>
+<ol>
+<li>检查 <code>eventpoll-&gt;rdllist</code> 就绪链表是否有数据</li>
+<li><strong>有数据</strong>：立即返回就绪事件</li>
+<li><strong>无数据</strong>：创建等待队列项，添加到 eventpoll 的等待队列，然后阻塞自己</li>
+</ol>
+<blockquote>
+<p><strong>关键点</strong>：添加到 eventpoll 等待队列时，会附带 <code>WQ_FLAG_EXCLUSIVE</code> 属性（独占模式）。</p>
+</blockquote>
+<h3 id="4-4、数据接收流程"><a href="#4-4、数据接收流程" class="headerlink" title="4.4、数据接收流程"></a>4.4、数据接收流程</h3><pre><code class=" mermaid">sequenceDiagram
+    participant NIC as 网卡/协议栈
+    participant Socket as Socket
+    participant Epoll as Epoll 对象
+    participant Process as 用户进程
+
+    NIC-&gt;&gt;Socket: 1. 数据到达协议栈
+    Socket-&gt;&gt;Socket: 2. 找到对应 socket
+    Socket-&gt;&gt;Epoll: 3. 调用 ep_poll_callback
+    Epoll-&gt;&gt;Epoll: 4. 将 epitem 加入就绪链表
+    Epoll-&gt;&gt;Epoll: 5. 检查是否有等待进程
+    Epoll-&gt;&gt;Process: 6. 唤醒 epoll_wait 进程
+    Process-&gt;&gt;Process: 7. 从 schedule 恢复
+    Process-&gt;&gt;Process: 8. 返回就绪事件并处理
+</code></pre>
+
+<p><strong>详细流程</strong>：</p>
+<ol>
+<li>网卡数据交给 TCP 协议栈处理</li>
+<li>协议栈找到对应的 socket</li>
+<li>调用 socket 等待队列中注册的 <code>ep_poll_callback</code> 回调函数</li>
+<li><code>ep_poll_callback</code> 将对应的 <code>epitem</code> 添加到 epoll 的就绪队列</li>
+<li>检查 eventpoll 的等待队列是否有等待项</li>
+<li>调用 <code>__wake_up_common</code>，执行 <code>default_wake_function</code> 唤醒进程</li>
+<li>将 <code>epoll_wait</code> 进程推入可运行队列，等待内核调度</li>
+<li>进程醒来后，从 <code>schedule</code> 恢复，返回就绪事件给用户进程</li>
+</ol>
 <hr>
-<h2 id="5、nginx如何支持IO复用"><a href="#5、nginx如何支持IO复用" class="headerlink" title="5、nginx如何支持IO复用"></a>5、nginx如何支持IO复用</h2><p>Nginx 本质上属于 <strong>异步非阻塞</strong> 模型。在处理请求时，Nginx 不会因为等待某个操作完成（如读取数据）而阻塞当前进程，而是通过事件驱动机制在 I&#x2F;O 操作完成时继续处理请求。虽然 Nginx 使用的是异步方式，但它依赖操作系统（如 <code>epoll</code>）来管理事件的触发和 I&#x2F;O 操作的完成，Nginx 自己并不处理底层的 I&#x2F;O 操作，而是通过事件循环和回调的方式继续处理其他任务。</p>
-<h3 id="5-1、nginx怎么选择IO复用"><a href="#5-1、nginx怎么选择IO复用" class="headerlink" title="5.1、nginx怎么选择IO复用"></a>5.1、nginx怎么选择IO复用</h3><p>nginx在初始化事件模块时，根据系统支持的事件模型（如epoll、devpoll、kqueue、select）选择一个合适的事件模块，支持哪些模型由编译期决定，比如linux支持epoll，windows支持kqueue，因此编译的宏也是不一样的。</p>
+<h3 id="4-5、Epoll-的本质与定位"><a href="#4-5、Epoll-的本质与定位" class="headerlink" title="4.5、Epoll 的本质与定位"></a>4.5、Epoll 的本质与定位</h3><h4 id="Epoll-的核心优势"><a href="#Epoll-的核心优势" class="headerlink" title="Epoll 的核心优势"></a>Epoll 的核心优势</h4><p><strong>传统阻塞 I&#x2F;O</strong>：每次处理一个 socket，没有数据就阻塞睡眠，有新事件才唤醒。</p>
+<p><strong>Epoll 的优势</strong>：让一个进程同时处理多个 socket，显著减少进程切换开销，提升处理性能。</p>
+<h4 id="Epoll-是同步还是异步？"><a href="#Epoll-是同步还是异步？" class="headerlink" title="Epoll 是同步还是异步？"></a>Epoll 是同步还是异步？</h4><table>
+<thead>
+<tr>
+<th>特性</th>
+<th>Epoll</th>
+<th>真正的异步 I&#x2F;O（io_uring、AIO）</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>等待方式</td>
+<td><code>epoll_wait</code> 阻塞等待事件触发</td>
+<td>发起 I&#x2F;O 后立即返回</td>
+</tr>
+<tr>
+<td>数据读写</td>
+<td><strong>不负责</strong>，只告诉哪些 socket 可以读写</td>
+<td>由内核&#x2F;驱动完成 I&#x2F;O 操作</td>
+</tr>
+<tr>
+<td>通知方式</td>
+<td>返回就绪 FD 列表</td>
+<td>通过回调或信号通知操作结果</td>
+</tr>
+<tr>
+<td>本质</td>
+<td><strong>同步 I&#x2F;O 多路复用</strong></td>
+<td><strong>异步 I&#x2F;O</strong></td>
+</tr>
+</tbody></table>
+<p><strong>结论</strong>：</p>
+<ul>
+<li>Epoll 本身通过 <code>epoll_wait</code> <strong>阻塞等待</strong>事件触发</li>
+<li>Socket 可设置为非阻塞模式，<code>read</code>&#x2F;<code>write</code> 时若无数据则立即返回错误码</li>
+<li>Epoll 只是<strong>事件通知机制</strong>，不负责真正的数据读写</li>
+<li>应用程序仍需<strong>显式调用</strong> <code>read</code>&#x2F;<code>write</code>，因此 epoll 本质上是<strong>同步的</strong></li>
+</ul>
+<hr>
+<h2 id="5、Nginx-的-IO-复用实践"><a href="#5、Nginx-的-IO-复用实践" class="headerlink" title="5、Nginx 的 IO 复用实践"></a>5、Nginx 的 IO 复用实践</h2><h3 id="Nginx-的-I-O-模型"><a href="#Nginx-的-I-O-模型" class="headerlink" title="Nginx 的 I&#x2F;O 模型"></a>Nginx 的 I&#x2F;O 模型</h3><p>Nginx 本质上属于<strong>事件驱动的非阻塞 I&#x2F;O</strong> 模型：</p>
+<ul>
+<li><strong>非阻塞</strong>：处理请求时不会因等待 I&#x2F;O 操作（如读取数据）而阻塞当前进程</li>
+<li><strong>事件驱动</strong>：通过事件循环和回调机制，在 I&#x2F;O 操作完成时继续处理请求</li>
+<li><strong>依赖系统调用</strong>：依赖操作系统（如 <code>epoll</code>）管理事件触发</li>
+</ul>
+<h3 id="5-1、Nginx-如何选择-IO-复用机制"><a href="#5-1、Nginx-如何选择-IO-复用机制" class="headerlink" title="5.1、Nginx 如何选择 IO 复用机制"></a>5.1、Nginx 如何选择 IO 复用机制</h3><p>Nginx 在初始化事件模块时，根据系统支持的事件模型（<code>epoll</code>、<code>devpoll</code>、<code>kqueue</code>、<code>select</code>）选择合适的事件模块。支持哪些模型由<strong>编译期</strong>决定：</p>
+<table>
+<thead>
+<tr>
+<th>操作系统</th>
+<th>支持的事件模型</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Linux</td>
+<td>epoll</td>
+</tr>
+<tr>
+<td>BSD&#x2F;macOS</td>
+<td>kqueue</td>
+</tr>
+<tr>
+<td>Solaris</td>
+<td>devpoll</td>
+</tr>
+<tr>
+<td>通用</td>
+<td>select&#x2F;poll</td>
+</tr>
+</tbody></table>
 <figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-meta">#<span class="hljs-keyword">if</span> (NGX_HAVE_EPOLL) &amp;&amp; !(NGX_TEST_BUILD_EPOLL)</span><br><br>    fd = epoll_create(<span class="hljs-number">100</span>);<br><br>    <span class="hljs-keyword">if</span> (fd != <span class="hljs-number">-1</span>) &#123;<br>        (<span class="hljs-type">void</span>) close(fd);<br>        module = &amp;ngx_epoll_module;<br><br>    &#125; <span class="hljs-keyword">else</span> <span class="hljs-keyword">if</span> (ngx_errno != NGX_ENOSYS) &#123;<br>        module = &amp;ngx_epoll_module;<br>    &#125;<br><br><span class="hljs-meta">#<span class="hljs-keyword">endif</span></span><br><br>...........................<br>    <br>    event_module = module-&gt;ctx;<br></code></pre></td></tr></table></figure>
 
 <p>定义ngx_epoll_module_ctx</p>
@@ -496,39 +819,43 @@
 <p>epoll初始化时</p>
 <figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><code class="hljs c">ngx_event_actions = ngx_epoll_module_ctx.actions;<br></code></pre></td></tr></table></figure>
 
-<p>设置事件模块的回调为epoll的函数，如果使用的是poll，那将会是poll的方法</p>
-<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-meta">#<span class="hljs-keyword">define</span> ngx_process_events   ngx_event_actions.process_events</span><br><span class="hljs-meta">#<span class="hljs-keyword">define</span> ngx_done_events      ngx_event_actions.done</span><br><br><span class="hljs-meta">#<span class="hljs-keyword">define</span> ngx_add_event        ngx_event_actions.add</span><br><span class="hljs-meta">#<span class="hljs-keyword">define</span> ngx_del_event        ngx_event_actions.del</span><br><span class="hljs-meta">#<span class="hljs-keyword">define</span> ngx_add_conn         ngx_event_actions.add_conn</span><br><span class="hljs-meta">#<span class="hljs-keyword">define</span> ngx_del_conn         ngx_event_actions.del_conn</span><br><br><span class="hljs-meta">#<span class="hljs-keyword">define</span> ngx_notify           ngx_event_actions.notify</span><br></code></pre></td></tr></table></figure>
+<p>设置事件模块的回调为 epoll 的函数。如果使用的是 poll，则会是 poll 的方法。</p>
+<h4 id="统一的事件接口宏"><a href="#统一的事件接口宏" class="headerlink" title="统一的事件接口宏"></a>统一的事件接口宏</h4><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-meta">#<span class="hljs-keyword">define</span> ngx_process_events   ngx_event_actions.process_events  <span class="hljs-comment">// 处理事件</span></span><br><span class="hljs-meta">#<span class="hljs-keyword">define</span> ngx_done_events      ngx_event_actions.done            <span class="hljs-comment">// 清理</span></span><br><br><span class="hljs-meta">#<span class="hljs-keyword">define</span> ngx_add_event        ngx_event_actions.add             <span class="hljs-comment">// 添加事件</span></span><br><span class="hljs-meta">#<span class="hljs-keyword">define</span> ngx_del_event        ngx_event_actions.del             <span class="hljs-comment">// 删除事件</span></span><br><span class="hljs-meta">#<span class="hljs-keyword">define</span> ngx_add_conn         ngx_event_actions.add_conn        <span class="hljs-comment">// 添加连接</span></span><br><span class="hljs-meta">#<span class="hljs-keyword">define</span> ngx_del_conn         ngx_event_actions.del_conn        <span class="hljs-comment">// 删除连接</span></span><br><br><span class="hljs-meta">#<span class="hljs-keyword">define</span> ngx_notify           ngx_event_actions.notify          <span class="hljs-comment">// 通知</span></span><br></code></pre></td></tr></table></figure>
 
-<h3 id="5-2、EPOLLEXCLUSIVE的问题"><a href="#5-2、EPOLLEXCLUSIVE的问题" class="headerlink" title="5.2、EPOLLEXCLUSIVE的问题"></a>5.2、EPOLLEXCLUSIVE的问题</h3><p>对于epoll，nginx默认就开启了EPOLLEXCLUSIVE，但是存在一个问题，nginx是这么描述的</p>
+<p>这种设计实现了<strong>运行时多态</strong>，使 Nginx 能够在不同平台使用最优的事件机制。</p>
+<hr>
+<h3 id="5-2、EPOLLEXCLUSIVE-的负载均衡问题"><a href="#5-2、EPOLLEXCLUSIVE-的负载均衡问题" class="headerlink" title="5.2、EPOLLEXCLUSIVE 的负载均衡问题"></a>5.2、EPOLLEXCLUSIVE 的负载均衡问题</h3><p>Nginx 默认开启 <code>EPOLLEXCLUSIVE</code>，但存在一个<strong>负载不均衡</strong>的问题：</p>
 <figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-comment">/*</span><br><span class="hljs-comment">    * Linux with EPOLLEXCLUSIVE 通常只通知第一个将监听套接字添加到 epoll 实例的进程。</span><br><span class="hljs-comment">    * 因此，大多数连接都由第一个工作进程处理。为了解决这个问题，我们会定期重新添加套接字，</span><br><span class="hljs-comment">    * 以便其他工作进程也有机会接受连接。</span><br><span class="hljs-comment">    */</span><br></code></pre></td></tr></table></figure>
 
-<p>由3.4可以知道，在添加独占型的进程时，独占型的进程总是处在链表的前面，但是当有多个独占型的进程时，后加的就会排在独占型后面</p>
-<p>A（非独占）B（独占）C（独占）D（非独占）</p>
-<p>A</p>
-<p>B-&gt;A</p>
-<p>B-&gt;C-&gt;A</p>
-<p>B-&gt;C-&gt;A-&gt;D</p>
-<p>这里的C就是后面注册的，这导致连接事件都会被B处理掉，因此nginx做了优化，当一个socket的连接数大于16时，重新将这个socket添加到epoll中。即如果B处理的连接过多，就重新注册B，那么链表的顺序就会变为</p>
-<p>C-&gt;B-&gt;A-&gt;D</p>
+<h4 id="问题分析"><a href="#问题分析" class="headerlink" title="问题分析"></a>问题分析</h4><p>根据 3.4 节的分析，添加独占型进程时，独占型进程总是在链表前面，但<strong>后加的独占型进程会排在前面独占型的后面</strong>：</p>
+<figure class="highlight scss"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><code class="hljs scss">添加顺序：<span class="hljs-selector-tag">A</span>(非独占) → <span class="hljs-selector-tag">B</span>(独占) → <span class="hljs-built_in">C</span>(独占) → <span class="hljs-built_in">D</span>(非独占)<br>实际队列：<span class="hljs-selector-tag">B</span> → C → <span class="hljs-selector-tag">A</span> → D<br></code></pre></td></tr></table></figure>
+
+<p><strong>问题</strong>：C 是后注册的，但排在 B 后面。由于只唤醒第一个独占进程，<strong>所有连接事件都会被 B 处理</strong>，导致负载不均衡。</p>
+<h4 id="Nginx-的解决方案"><a href="#Nginx-的解决方案" class="headerlink" title="Nginx 的解决方案"></a>Nginx 的解决方案</h4><p><strong>当一个 socket 的连接数大于 16 时，重新将该 socket 添加到 epoll 中</strong>：</p>
+<figure class="highlight css"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><code class="hljs css">优化前队列：<span class="hljs-selector-tag">B</span> → C → <span class="hljs-selector-tag">A</span> → D（<span class="hljs-selector-tag">B</span> 总是被唤醒）<br>重新注册 <span class="hljs-selector-tag">B</span> 后：C → <span class="hljs-selector-tag">B</span> → <span class="hljs-selector-tag">A</span> → D（C 获得机会）<br></code></pre></td></tr></table></figure>
+
 <figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-meta">#<span class="hljs-keyword">if</span> (NGX_HAVE_EPOLLEXCLUSIVE)</span><br><br><span class="hljs-type">static</span> <span class="hljs-type">void</span><br><span class="hljs-title function_">ngx_reorder_accept_events</span><span class="hljs-params">(<span class="hljs-type">ngx_listening_t</span> *ls)</span><br>&#123;<br>    <span class="hljs-type">ngx_connection_t</span>  *c;<br>    <br>    <span class="hljs-comment">// 如果没有启用独占接受，则直接返回</span><br>    <span class="hljs-keyword">if</span> (!ngx_use_exclusive_accept) &#123;<br>        <span class="hljs-keyword">return</span>;<br>    &#125;<br><br><span class="hljs-meta">#<span class="hljs-keyword">if</span> (NGX_HAVE_REUSEPORT)</span><br>    <span class="hljs-comment">// 如果启用了端口复用，则直接返回</span><br>    <span class="hljs-keyword">if</span> (ls-&gt;reuseport) &#123;<br>        <span class="hljs-keyword">return</span>;<br>    &#125;<br><span class="hljs-meta">#<span class="hljs-keyword">endif</span></span><br><br>    <span class="hljs-comment">// 获取连接对象</span><br>    c = ls-&gt;connection;<br><br>    <span class="hljs-comment">// 如果请求计数不是 16 的倍数，并且接受禁用计数器小于等于 0，则直接返回</span><br>    <span class="hljs-keyword">if</span> (c-&gt;requests++ % <span class="hljs-number">16</span>!= <span class="hljs-number">0</span><br>        &amp;&amp; ngx_accept_disabled &lt;= <span class="hljs-number">0</span>)<br>    &#123;<br>        <span class="hljs-keyword">return</span>;<br>    &#125;<br><br>    <span class="hljs-comment">// 从 epoll 中删除读事件</span><br>    <span class="hljs-keyword">if</span> (ngx_del_event(c-&gt;read, NGX_READ_EVENT, NGX_DISABLE_EVENT)<br>        == NGX_ERROR)<br>    &#123;<br>        <span class="hljs-keyword">return</span>;<br>    &#125;<br><br>    <span class="hljs-comment">// 将读事件重新添加到 epoll 中，并设置为独占模式</span><br>    <span class="hljs-keyword">if</span> (ngx_add_event(c-&gt;read, NGX_READ_EVENT, NGX_EXCLUSIVE_EVENT)<br>        == NGX_ERROR)<br>    &#123;<br>        <span class="hljs-keyword">return</span>;<br>    &#125;<br>&#125;<br><br><br><span class="hljs-meta">#<span class="hljs-keyword">endif</span></span><br></code></pre></td></tr></table></figure>
 
 
 
-<p>但是有人报告这个补丁使性能下降10%，于是我使用1.27版本做一个性能测试对比</p>
-<p><strong>wrk -t10 -c500 -d10s <a target="_blank" rel="noopener" href="http://127.0.0.1/">http://127.0.0.1:80</a></strong></p>
+<h4 id="性能测试验证"><a href="#性能测试验证" class="headerlink" title="性能测试验证"></a>性能测试验证</h4><p>有人报告这个补丁使性能下降 10%，于是使用 Nginx 1.27 版本做性能测试对比：</p>
+<p><strong>测试命令</strong>：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><code class="hljs bash">wrk -t10 -c500 -d10s http://127.0.0.1:80<br></code></pre></td></tr></table></figure>
+
+<p><strong>参数说明</strong>：</p>
 <ul>
-<li><code>-t10</code>：<code>wrk</code>将使用10个线程来发送HTTP请求。</li>
-<li><code>-c500</code>：每个线程将保持500个HTTP连接。因此，总共会有<code>10*500=5000</code>个HTTP连接。</li>
-<li><code>-d10s</code>：测试将运行10秒钟。</li>
+<li><code>-t10</code>：使用 10 个线程发送 HTTP 请求</li>
+<li><code>-c500</code>：每个线程保持 500 个连接（共 5000 个连接）</li>
+<li><code>-d10s</code>：测试运行 10 秒</li>
 </ul>
-<p>机器性能  <strong>2C2G</strong></p>
-<p>1、正常版本测试</p>
+<p><strong>测试环境</strong>：2C2G</p>
+<h4 id="测试结果对比"><a href="#测试结果对比" class="headerlink" title="测试结果对比"></a>测试结果对比</h4><p><strong>1、带补丁版本（默认）</strong></p>
 <table>
 <thead>
 <tr>
-<th></th>
-<th align="center">请求速率(Requests&#x2F;sec)</th>
-<th align="center">延迟(Avg)&#x2F;ms</th>
+<th>次数</th>
+<th align="center">请求速率 (Requests&#x2F;sec)</th>
+<th align="center">延迟 (Avg)&#x2F;ms</th>
 </tr>
 </thead>
 <tbody><tr>
@@ -577,18 +904,18 @@
 <td align="center">40.91</td>
 </tr>
 <tr>
-<td>平均</td>
-<td align="center">17521.06</td>
-<td align="center">38.65</td>
+<td><strong>平均</strong></td>
+<td align="center"><strong>17521.06</strong></td>
+<td align="center"><strong>38.65</strong></td>
 </tr>
 </tbody></table>
-<p>2、去掉补丁</p>
+<p><strong>2、去掉补丁版本</strong></p>
 <table>
 <thead>
 <tr>
-<th></th>
-<th align="center">请求速率(Requests&#x2F;sec)</th>
-<th align="center">延迟(Avg)&#x2F;ms</th>
+<th>次数</th>
+<th align="center">请求速率 (Requests&#x2F;sec)</th>
+<th align="center">延迟 (Avg)&#x2F;ms</th>
 </tr>
 </thead>
 <tbody><tr>
@@ -637,45 +964,99 @@
 <td align="center">57.01</td>
 </tr>
 <tr>
-<td>平均</td>
-<td align="center">16009.01</td>
-<td align="center">45.67</td>
+<td><strong>平均</strong></td>
+<td align="center"><strong>16009.01</strong></td>
+<td align="center"><strong>45.67</strong></td>
 </tr>
 </tbody></table>
-<p>事实上性能并没有下降，还有提升，这个补丁会提升9.44%的QPS。</p>
-<h3 id="5-3、SO-REUSEPORT属性"><a href="#5-3、SO-REUSEPORT属性" class="headerlink" title="5.3、SO_REUSEPORT属性"></a>5.3、SO_REUSEPORT属性</h3><p>首先在进程初始化解析配置时，会判断一个端口是否开启了reuseport，如果开启了，套接字 <code>nls[n]</code> 的 <code>reuseport</code> 标志为真</p>
-<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-meta">#<span class="hljs-keyword">if</span> (NGX_HAVE_REUSEPORT)</span><br>                    <span class="hljs-keyword">if</span> (nls[n].reuseport &amp;&amp; !ls[i].reuseport) &#123;<br>                        nls[n].add_reuseport = <span class="hljs-number">1</span>;  <span class="hljs-comment">//</span><br>                    &#125;<br><span class="hljs-meta">#<span class="hljs-keyword">endif</span></span><br></code></pre></td></tr></table></figure>
+<p><strong>结论</strong>：性能不仅没有下降，反而有提升。该补丁可提升约 <strong>9.44% 的 QPS</strong>，同时降低平均延迟。</p>
+<hr>
+<h3 id="5-3、SO-REUSEPORT-实现详解"><a href="#5-3、SO-REUSEPORT-实现详解" class="headerlink" title="5.3、SO_REUSEPORT 实现详解"></a>5.3、SO_REUSEPORT 实现详解</h3><h4 id="配置解析阶段"><a href="#配置解析阶段" class="headerlink" title="配置解析阶段"></a>配置解析阶段</h4><p>进程初始化解析配置时，会判断端口是否开启了 <code>reuseport</code>：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-meta">#<span class="hljs-keyword">if</span> (NGX_HAVE_REUSEPORT)</span><br>    <span class="hljs-keyword">if</span> (nls[n].reuseport &amp;&amp; !ls[i].reuseport) &#123;<br>        nls[n].add_reuseport = <span class="hljs-number">1</span>;  <span class="hljs-comment">// 标记需要添加 reuseport</span><br>    &#125;<br><span class="hljs-meta">#<span class="hljs-keyword">endif</span></span><br></code></pre></td></tr></table></figure>
 
-<p>每个进程初始化event模块配置时</p>
-<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-meta">#<span class="hljs-keyword">if</span> (NGX_HAVE_REUSEPORT)</span><br><br>    <span class="hljs-comment">// 获取核心配置结构体</span><br>    ccf = (<span class="hljs-type">ngx_core_conf_t</span> *) ngx_get_conf(cycle-&gt;conf_ctx, ngx_core_module);<br><br>    <span class="hljs-comment">// 如果不是测试配置且master进程存在，则进行端口复用处理</span><br>    <span class="hljs-keyword">if</span> (!ngx_test_config &amp;&amp; ccf-&gt;master) &#123;<br><br>        <span class="hljs-comment">// 获取监听套接字数组</span><br>        ls = cycle-&gt;listening.elts;<br>        <span class="hljs-comment">// 遍历所有监听套接字</span><br>        <span class="hljs-keyword">for</span> (i = <span class="hljs-number">0</span>; i &lt; cycle-&gt;listening.nelts; i++) &#123;<br><br>            <span class="hljs-comment">// 跳过未启用reuseport或worker不为0的监听套接字</span><br>            <span class="hljs-keyword">if</span> (!ls[i].reuseport || ls[i].worker != <span class="hljs-number">0</span>) &#123;<br>                <span class="hljs-keyword">continue</span>;<br>            &#125;<br><br>            <span class="hljs-comment">// 克隆监听套接字，如果克隆失败，则返回配置错误</span><br>            <span class="hljs-keyword">if</span> (ngx_clone_listening(cycle, &amp;ls[i]) != NGX_OK) &#123;<br>                <span class="hljs-keyword">return</span> NGX_CONF_ERROR;<br>            &#125;<br><br>            <span class="hljs-comment">// 克隆操作可能更改cycle-&gt;listening.elts指针，因此重新获取指针</span><br>            ls = cycle-&gt;listening.elts;<br>        &#125;<br>    &#125;<br><br><span class="hljs-meta">#<span class="hljs-keyword">endif</span></span><br></code></pre></td></tr></table></figure>
+<h4 id="事件模块初始化阶段"><a href="#事件模块初始化阶段" class="headerlink" title="事件模块初始化阶段"></a>事件模块初始化阶段</h4><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-meta">#<span class="hljs-keyword">if</span> (NGX_HAVE_REUSEPORT)</span><br><br>    <span class="hljs-comment">// 获取核心配置结构体</span><br>    ccf = (<span class="hljs-type">ngx_core_conf_t</span> *) ngx_get_conf(cycle-&gt;conf_ctx, ngx_core_module);<br><br>    <span class="hljs-comment">// 如果不是测试配置且master进程存在，则进行端口复用处理</span><br>    <span class="hljs-keyword">if</span> (!ngx_test_config &amp;&amp; ccf-&gt;master) &#123;<br><br>        <span class="hljs-comment">// 获取监听套接字数组</span><br>        ls = cycle-&gt;listening.elts;<br>        <span class="hljs-comment">// 遍历所有监听套接字</span><br>        <span class="hljs-keyword">for</span> (i = <span class="hljs-number">0</span>; i &lt; cycle-&gt;listening.nelts; i++) &#123;<br><br>            <span class="hljs-comment">// 跳过未启用reuseport或worker不为0的监听套接字</span><br>            <span class="hljs-keyword">if</span> (!ls[i].reuseport || ls[i].worker != <span class="hljs-number">0</span>) &#123;<br>                <span class="hljs-keyword">continue</span>;<br>            &#125;<br><br>            <span class="hljs-comment">// 克隆监听套接字，如果克隆失败，则返回配置错误</span><br>            <span class="hljs-keyword">if</span> (ngx_clone_listening(cycle, &amp;ls[i]) != NGX_OK) &#123;<br>                <span class="hljs-keyword">return</span> NGX_CONF_ERROR;<br>            &#125;<br><br>            <span class="hljs-comment">// 克隆操作可能更改cycle-&gt;listening.elts指针，因此重新获取指针</span><br>            ls = cycle-&gt;listening.elts;<br>        &#125;<br>    &#125;<br><br><span class="hljs-meta">#<span class="hljs-keyword">endif</span></span><br></code></pre></td></tr></table></figure>
 
-<p>关键是ngx_clone_listening：克隆当前监听套接字，为每个 <code>worker</code> 进程创建一个独立的监听实例，并设置其worker属性</p>
+<p>**关键函数 <code>ngx_clone_listening</code>**：克隆当前监听套接字，为每个 worker 进程创建独立的监听实例。</p>
+<p><strong>作用</strong>：</p>
 <ul>
-<li>每个克隆的监听套接字会分配给一个 <code>worker</code>，并具有独立的监听队列。</li>
-<li>这样每个进程能独立处理自己的客户端连接，避免锁争用，提高性能。</li>
+<li>每个克隆的监听套接字分配给一个 worker，拥有独立的监听队列</li>
+<li>每个进程能独立处理自己的客户端连接，避免锁争用，提高性能</li>
 </ul>
-<p>每个进程初始化时，确保每个工作进程（worker）只保留属于自己的监听套接字，关闭那些不属于自己的套接字</p>
+<h4 id="Worker-进程初始化"><a href="#Worker-进程初始化" class="headerlink" title="Worker 进程初始化"></a>Worker 进程初始化</h4><p>每个 worker 进程初始化时，只保留属于自己的监听套接字，关闭其他套接字：</p>
 <figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-meta">#<span class="hljs-keyword">if</span> (NGX_HAVE_REUSEPORT)</span><br>        <span class="hljs-comment">// 检查当前监听套接字是否启用了reuseport选项并且不是当前工作进程的</span><br>        <span class="hljs-keyword">if</span> (ls[i].reuseport &amp;&amp; ls[i].worker != ngx_worker) &#123;<br>            <span class="hljs-comment">// 如果是，记录调试信息并关闭该套接字</span><br>            ngx_log_debug2(NGX_LOG_DEBUG_CORE, cycle-&gt;<span class="hljs-built_in">log</span>, <span class="hljs-number">0</span>,<br>                           <span class="hljs-string">&quot;closing unused fd:%d listening on %V&quot;</span>,<br>                           ls[i].fd, &amp;ls[i].addr_text);<br><br>            <span class="hljs-comment">// 关闭套接字并检查是否成功</span><br>            <span class="hljs-keyword">if</span> (ngx_close_socket(ls[i].fd) == <span class="hljs-number">-1</span>) &#123;<br>                <span class="hljs-comment">// 如果关闭失败，记录错误信息</span><br>                ngx_log_error(NGX_LOG_EMERG, cycle-&gt;<span class="hljs-built_in">log</span>, ngx_socket_errno,<br>                              ngx_close_socket_n <span class="hljs-string">&quot; %V failed&quot;</span>,<br>                              &amp;ls[i].addr_text);<br>            &#125;<br><br>            <span class="hljs-comment">// 将套接字描述符设置为无效值</span><br>            ls[i].fd = (<span class="hljs-type">ngx_socket_t</span>) <span class="hljs-number">-1</span>;<br><br>            <span class="hljs-comment">// 继续处理下一个监听套接字</span><br>            <span class="hljs-keyword">continue</span>;<br>        &#125;<br><span class="hljs-meta">#<span class="hljs-keyword">endif</span></span><br></code></pre></td></tr></table></figure>
 
-<p>最后看一下将epoll注册到socket内核中，ngx_add_event  -&gt;  epoll_ctl</p>
-<ul>
-<li>开启了reuseport时，将本进程的epoll注册到socket</li>
-<li>开启了EPOLLEXCLUSIVE时，将本进程的epoll独占式的注册到socket</li>
-<li>如果什么都没开启，则将本进程的epoll注册到socket</li>
-</ul>
-<p>其中<br>c &#x3D; rev-&gt;-&gt;data</p>
-<p>c-&gt;fd就是本进程监听的socket，在上面已经设置过了</p>
+<h4 id="注册-Epoll-到-Socket"><a href="#注册-Epoll-到-Socket" class="headerlink" title="注册 Epoll 到 Socket"></a>注册 Epoll 到 Socket</h4><p>最后看一下将 epoll 注册到 socket 内核中的流程：<code>ngx_add_event</code> → <code>epoll_ctl</code></p>
+<p><strong>三种注册模式</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>条件</th>
+<th>注册方式</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>开启 <code>reuseport</code></td>
+<td>将本进程的 epoll 注册到自己的 socket</td>
+</tr>
+<tr>
+<td>开启 <code>EPOLLEXCLUSIVE</code></td>
+<td>将本进程的 epoll <strong>独占式</strong>注册到共享 socket</td>
+</tr>
+<tr>
+<td>都未开启</td>
+<td>普通方式注册到共享 socket</td>
+</tr>
+</tbody></table>
+<blockquote>
+<p><strong>说明</strong>：<code>c = rev-&gt;data</code>，<code>c-&gt;fd</code> 就是本进程监听的 socket（在上面的步骤中已设置）。</p>
+</blockquote>
 <figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-comment">// 如果定义了NGX_HAVE_REUSEPORT宏</span><br><span class="hljs-meta">#<span class="hljs-keyword">if</span> (NGX_HAVE_REUSEPORT)</span><br><br>        <span class="hljs-comment">// 如果当前监听套接字启用了reuseport选项</span><br>        <span class="hljs-keyword">if</span> (ls[i].reuseport) &#123;<br>            <span class="hljs-comment">// 尝试为读事件添加epoll事件，如果不成功则返回错误</span><br>            <span class="hljs-keyword">if</span> (ngx_add_event(rev, NGX_READ_EVENT, <span class="hljs-number">0</span>) == NGX_ERROR) &#123;<br>                <span class="hljs-keyword">return</span> NGX_ERROR;<br>            &#125;<br><br>            <span class="hljs-comment">// 继续处理下一个监听套接字</span><br>            <span class="hljs-keyword">continue</span>;<br>        &#125;<br><br><span class="hljs-meta">#<span class="hljs-keyword">endif</span></span><br><br>        <span class="hljs-comment">// 如果使用了accept mutex机制，则跳过添加epoll事件</span><br>        <span class="hljs-keyword">if</span> (ngx_use_accept_mutex) &#123;<br>            <span class="hljs-keyword">continue</span>;<br>        &#125;<br><br><span class="hljs-comment">// 如果定义了NGX_HAVE_EPOLLEXCLUSIVE宏</span><br><span class="hljs-meta">#<span class="hljs-keyword">if</span> (NGX_HAVE_EPOLLEXCLUSIVE)</span><br><br>        <span class="hljs-comment">// 如果使用了epoll事件模型且配置了多个工作进程</span><br>        <span class="hljs-keyword">if</span> ((ngx_event_flags &amp; NGX_USE_EPOLL_EVENT)<br>            &amp;&amp; ccf-&gt;worker_processes &gt; <span class="hljs-number">1</span>)<br>        &#123;<br>            <span class="hljs-comment">// 启用exclusive accept模式</span><br>            ngx_use_exclusive_accept = <span class="hljs-number">1</span>;<br><br>            <span class="hljs-comment">// 尝试以独占方式为读事件添加epoll事件，如果不成功则返回错误</span><br>            <span class="hljs-keyword">if</span> (ngx_add_event(rev, NGX_READ_EVENT, NGX_EXCLUSIVE_EVENT)<br>                == NGX_ERROR)<br>            &#123;<br>                <span class="hljs-keyword">return</span> NGX_ERROR;<br>            &#125;<br><br>            <span class="hljs-comment">// 继续处理下一个监听套接字</span><br>            <span class="hljs-keyword">continue</span>;<br>        &#125;<br><br><span class="hljs-meta">#<span class="hljs-keyword">endif</span></span><br><br>        <span class="hljs-comment">// 如果上述条件都不满足，尝试为读事件添加epoll事件，如果不成功则返回错误</span><br>        <span class="hljs-keyword">if</span> (ngx_add_event(rev, NGX_READ_EVENT, <span class="hljs-number">0</span>) == NGX_ERROR) &#123;<br>            <span class="hljs-keyword">return</span> NGX_ERROR;<br>        &#125;<br></code></pre></td></tr></table></figure>
 
-<p>最后再看下不使用reuseport，常规使用锁的情况</p>
+<h4 id="使用-accept-mutex-锁的传统方式"><a href="#使用-accept-mutex-锁的传统方式" class="headerlink" title="使用 accept_mutex 锁的传统方式"></a>使用 accept_mutex 锁的传统方式</h4><p>当不使用 <code>reuseport</code> 时，Nginx 通过 <code>accept_mutex</code> 锁来避免惊群效应：</p>
 <figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><code class="hljs c"><span class="hljs-comment">// 检查是否需要使用接受互斥锁</span><br><span class="hljs-keyword">if</span> (ngx_use_accept_mutex) &#123;<br>    <span class="hljs-comment">// 如果接受互斥锁被禁用，则递减禁用计数器</span><br>    <span class="hljs-keyword">if</span> (ngx_accept_disabled &gt; <span class="hljs-number">0</span>) &#123;<br>        ngx_accept_disabled--;<br><br>    &#125; <span class="hljs-keyword">else</span> &#123;<br>        <span class="hljs-comment">// 尝试获取接受互斥锁</span><br>        <span class="hljs-keyword">if</span> (ngx_trylock_accept_mutex(cycle) == NGX_ERROR) &#123;<br>            <span class="hljs-keyword">return</span>;<br>        &#125;<br><br>        <span class="hljs-comment">// 根据互斥锁是否已被持有来决定事件的处理方式</span><br>        <span class="hljs-keyword">if</span> (ngx_accept_mutex_held) &#123;<br>            flags |= NGX_POST_EVENTS;<br><br>        &#125; <span class="hljs-keyword">else</span> &#123;<br>            <span class="hljs-comment">// 调整定时器以适应接受互斥锁的延迟</span><br>            <span class="hljs-keyword">if</span> (timer == NGX_TIMER_INFINITE<br>                || timer &gt; ngx_accept_mutex_delay)<br>            &#123;<br>                timer = ngx_accept_mutex_delay;<br>            &#125;<br>        &#125;<br>    &#125;<br>&#125;<br></code></pre></td></tr></table></figure>
 
-<h3 id="5-4、实际操作"><a href="#5-4、实际操作" class="headerlink" title="5.4、实际操作"></a>5.4、实际操作</h3><p>nginx开启了1个master，2个work，且开启了reuseport</p>
+<hr>
+<h3 id="5-4、实际效果对比"><a href="#5-4、实际效果对比" class="headerlink" title="5.4、实际效果对比"></a>5.4、实际效果对比</h3><h4 id="开启-reuseport"><a href="#开启-reuseport" class="headerlink" title="开启 reuseport"></a>开启 reuseport</h4><p>配置：1 个 Master + 2 个 Worker，开启 <code>reuseport</code></p>
 <p><img src="/img/%E5%BC%80%E5%90%AFreuseport.png" srcset="/img/loading.gif" lazyload alt="开启reuseport"></p>
-<p>来看下没有启用reuseport的情况</p>
-<p><img src="/img/%E5%A4%9A%E8%BF%9B%E7%A8%8B%E7%9B%91%E5%90%AC%E4%B8%80%E4%B8%AAsocket.png" srcset="/img/loading.gif" lazyload alt="多进程监听一个socket"></p>
-<p>可以明显看到开启reuseport后，不同的work会监听自己的socket。而根据实际的性能测试来看，开启reuseport可以明显提升性能。</p>
-<h2 id="参考"><a href="#参考" class="headerlink" title="参考"></a>参考</h2><p>参考自：《深入理解linux网络》第三章<br>linux版本：6.12<br>nginx代码：1.27</p>
+<h4 id="未开启-reuseport"><a href="#未开启-reuseport" class="headerlink" title="未开启 reuseport"></a>未开启 reuseport</h4><p><img src="/img/%E5%A4%9A%E8%BF%9B%E7%A8%8B%E7%9B%91%E5%90%AC%E4%B8%80%E4%B8%AAsocket.png" srcset="/img/loading.gif" lazyload alt="多进程监听一个socket"></p>
+<p><strong>对比结论</strong>：</p>
+<ul>
+<li>开启 <code>reuseport</code> 后，<strong>不同的 worker 监听各自独立的 socket</strong></li>
+<li>内核负责负载均衡，将连接分配给不同的 worker</li>
+<li>实际性能测试表明，<strong>开启 <code>reuseport</code> 可以明显提升性能</strong></li>
+</ul>
+<hr>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><table>
+<thead>
+<tr>
+<th>特性</th>
+<th>作用</th>
+<th>推荐场景</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>SO_REUSEPORT</code></td>
+<td>内核级负载均衡，每个进程独立 socket</td>
+<td><strong>高性能生产环境首选</strong></td>
+</tr>
+<tr>
+<td><code>EPOLLEXCLUSIVE</code></td>
+<td>独占唤醒，避免惊群</td>
+<td>不支持 reuseport 时的替代方案</td>
+</tr>
+<tr>
+<td><code>accept_mutex</code></td>
+<td>应用层锁，只有拿到锁的进程才能 accept</td>
+<td>Nginx 早期方案，现已不推荐</td>
+</tr>
+</tbody></table>
+<p><strong>最佳实践</strong>：在 Linux 3.9+ 环境下，推荐使用 <code>SO_REUSEPORT</code> 获得最佳性能。</p>
+<hr>
+<h2 id="参考资料"><a href="#参考资料" class="headerlink" title="参考资料"></a>参考资料</h2><ul>
+<li>《深入理解 Linux 网络》第三章</li>
+<li>Linux 内核版本：6.12</li>
+<li>Nginx 版本：1.27</li>
+</ul>
 
                 
               </div>
@@ -694,6 +1075,8 @@
       
         <a href="/tags/socket/" class="print-no-link">#socket</a>
       
+        <a href="/tags/%E7%BD%91%E7%BB%9C%E7%BC%96%E7%A8%8B/" class="print-no-link">#网络编程</a>
+      
     </div>
   
 </div>
@@ -704,7 +1087,7 @@
 
   <div class="license-box my-3">
     <div class="license-title">
-      <div>网络部分-epoll分析</div>
+      <div>网络 IO 与 epoll 深入分析</div>
       <div>https://zjfans.github.io/2024/11/29/网络IO/</div>
     </div>
     <div class="license-meta">
